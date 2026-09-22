@@ -4,6 +4,7 @@ import { Login } from "./auth/Login";
 import { isSupabaseConfigured, supabase } from "./supabaseClient";
 import { CreateClub } from "./team/CreateClub";
 import { CreateTeam } from "./team/CreateTeam";
+import { Roster } from "./team/Roster";
 import { useCurrentClub } from "./team/useCurrentClub";
 import { useCurrentTeam } from "./team/useCurrentTeam";
 
@@ -88,9 +89,8 @@ function ClubApp({ session, clubId, clubName }: { session: Session; clubId: stri
       <p style={{ color: "#666" }}>Clube: {clubName}</p>
       <h1 style={{ fontSize: 20 }}>{team?.teamName}</h1>
       <p style={{ color: "#666" }}>Papel: {team ? ROLE_LABELS[team.role] ?? team.role : ""}</p>
-      <p style={{ color: "#666", marginTop: 24 }}>
-        Próximo passo: plantel, formato de jogo e importação de calendário.
-      </p>
+
+      {team && <Roster teamId={team.teamId} canManage={team.role === "team_admin"} />}
     </div>
   );
 }
