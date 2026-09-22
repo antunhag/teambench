@@ -10,6 +10,7 @@ import { MatchFormats } from "./team/MatchFormats";
 import { Roster } from "./team/Roster";
 import { useCurrentClub } from "./team/useCurrentClub";
 import { useCurrentTeam } from "./team/useCurrentTeam";
+import { useOutboxSync } from "./sync/useOutboxSync";
 
 const ROLE_LABELS: Record<string, string> = {
   team_admin: "Admin da Equipa",
@@ -55,6 +56,9 @@ export function App() {
 
 function AuthenticatedApp({ session }: { session: Session }) {
   const club = useCurrentClub(session);
+  // Roda em segundo plano assim que há sessão — independente de qual tela
+  // está aberta, e sobrevive a trocar de tela/clube/equipa.
+  const sync = useOutboxSync();
 
   if (club.status === "loading") {
     return <p style={{ textAlign: "center", marginTop: 64 }}>A carregar clube...</p>;
@@ -67,10 +71,20 @@ function AuthenticatedApp({ session }: { session: Session }) {
   }
 
   // club.status === "has-club" a partir daqui — club.club nunca é null.
-  return <ClubApp session={session} clubId={club.club!.clubId} clubName={club.club!.clubName} />;
+  return <ClubApp session={session} clubId={club.club!.clubId} clubName={club.club!.clubName} sync={sync} />;
 }
 
-function ClubApp({ session, clubId, clubName }: { session: Session; clubId: string; clubName: string }) {
+function ClubApp({
+  session,
+  clubId,
+  clubName,
+  sync,
+}: {
+  session: Session;
+  clubId: string;
+  clubName: string;
+  sync: ReturnType<typeof useOutboxSync>;
+}) {
   const { status, team, errorMessage, refresh } = useCurrentTeam(session);
   const [activeMatch, setActiveMatch] = useState<{ id: string; opponent: string | null } | null>(null);
 
@@ -94,6 +108,7 @@ function ClubApp({ session, clubId, clubName }: { session: Session; clubId: stri
           matchId={activeMatch.id}
           opponent={activeMatch.opponent}
           onExit={() => setActiveMatch(null)}
+          sync={sync}
         />
       ) : (
         <>
@@ -101,6 +116,11 @@ function ClubApp({ session, clubId, clubName }: { session: Session; clubId: stri
             Sessão iniciada como <strong>{session.user.email}</strong>.{" "}
             <button type="button" onClick={() => supabase.auth.signOut()}>Sair</button>
           </p>
+          {sync.pending > 0 && (
+            <p style={{ fontSize: 12, color: "#a60" }}>
+              {sync.syncing ? "A sincronizar..." : `${sync.pending} evento(s) por sincronizar`}
+            </p>
+          )}
           <p style={{ color: "#666" }}>Clube: {clubName}</p>
           <h1 style={{ fontSize: 20 }}>{team?.teamName}</h1>
           <p style={{ color: "#666" }}>Papel: {team ? ROLE_LABELS[team.role] ?? team.role : ""}</p>

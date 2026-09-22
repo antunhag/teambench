@@ -21,6 +21,10 @@ export function createEvent(
 ): MatchEvent {
   return {
     id: uid(),
+    // UUID real gerado já na criação — é a chave de idempotência que a
+    // sincronização usa (upsert onConflict: client_event_id), permitindo
+    // reenviar com segurança se a conexão cair a meio de uma resposta.
+    clientEventId: crypto.randomUUID(),
     type,
     playerId,
     ms,

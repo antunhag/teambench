@@ -1,12 +1,13 @@
 import * as engine from "@teambench/engine";
 import { useEffect, useRef, useState } from "preact/hooks";
+import { enqueue, removeByClientEventIds } from "../sync/outbox";
 
 const STORAGE_PREFIX = "teambench.liveMatch.";
 
-// O relógio de jogo é sempre a fonte de verdade — este estado local é
-// exatamente o que futuramente vai para a fila de sincronização (Fase 2,
-// parte 2). Por agora fica só no localStorage do telemóvel, igual ao
-// banco.html original, mas já construído sobre o motor modular e testado.
+// O relógio de jogo é sempre a fonte de verdade — este estado local é o que
+// vale durante o jogo. Cada evento novo entra também na fila de
+// sincronização (ver ../sync/), que envia para o Supabase em segundo plano
+// quando há rede — sem exigir conexão nenhuma para o jogo continuar.
 function loadState(matchId: string): engine.LiveMatchState {
   try {
     const raw = localStorage.getItem(STORAGE_PREFIX + matchId);
@@ -19,7 +20,7 @@ function loadState(matchId: string): engine.LiveMatchState {
 
 const UNDO_LIMIT = 25;
 
-export function useLiveMatch(matchId: string) {
+export function useLiveMatch(matchId: string, teamId: string) {
   const [state, setState] = useState<engine.LiveMatchState>(() => loadState(matchId));
   const [tick, setTick] = useState(0); // força re-render a cada segundo enquanto o relógio corre, só para o display
   const historyRef = useRef<engine.LiveMatchState[]>([]);
@@ -33,18 +34,48 @@ export function useLiveMatch(matchId: string) {
   // é simplesmente voltar ao topo da pilha. Suficiente para correções em
   // campo; não sobrevive a um recarregar de página (aceitável: undo é para
   // "toquei errado agora mesmo", não para reabrir o jogo depois).
+  //
+  // Todo evento novo criado por uma ação entra na fila de sincronização na
+  // hora — antes mesmo de saber se há rede. A fila é que decide depois
+  // quando/se consegue enviar.
   function apply(next: (s: engine.LiveMatchState) => engine.LiveMatchState) {
     setState((s) => {
       historyRef.current.push(s);
       if (historyRef.current.length > UNDO_LIMIT) historyRef.current.shift();
       setCanUndo(true);
-      return next(s);
+      const result = next(s);
+      if (result.events.length > s.events.length) {
+        for (const ev of result.events.slice(s.events.length)) {
+          enqueue({
+            client_event_id: ev.clientEventId ?? ev.id,
+            match_id: matchId,
+            team_id: teamId,
+            type: ev.type,
+            player_id: ev.playerId,
+            payload: ev as unknown as Record<string, unknown>,
+            ms: ev.ms,
+            min: ev.min,
+            sec: ev.sec,
+            period: ev.period,
+          });
+        }
+      }
+      return result;
     });
   }
 
   function undo() {
     const prev = historyRef.current.pop();
     if (!prev) return;
+    // Se o evento desfeito ainda não tinha saído da fila local, tira-o de
+    // lá também. Limitação conhecida: se já tiver sincronizado (raro — a
+    // fila esvazia a cada ~8s), a cópia no Supabase fica para trás; isso
+    // exigiria um evento de "correção" explícito, como o próprio banco.html
+    // já fazia para correções feitas depois do jogo — fica para depois.
+    const removedIds = state.events
+      .filter((e) => !prev.events.some((pe) => pe.id === e.id))
+      .map((e) => e.clientEventId ?? e.id);
+    removeByClientEventIds(removedIds);
     setCanUndo(historyRef.current.length > 0);
     setState(prev);
   }
