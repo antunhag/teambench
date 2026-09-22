@@ -14,6 +14,7 @@ interface Props {
 
 export function MatchFlow({ teamId, matchId, opponent, onExit, sync }: Props) {
   const { players, status } = usePlayers(teamId);
+  const activeRoster = players.filter((p) => p.active); // jogo ao vivo só convoca atletas ativos
   const live = useLiveMatch(matchId, teamId);
 
   return (
@@ -31,9 +32,9 @@ export function MatchFlow({ teamId, matchId, opponent, onExit, sync }: Props) {
       {status === "loading" ? (
         <p>A carregar plantel...</p>
       ) : !live.state.started ? (
-        <PreMatch live={live} roster={players} opponent={opponent} />
+        <PreMatch live={live} roster={activeRoster} opponent={opponent} />
       ) : (
-        <LiveMatch live={live} roster={players} opponent={opponent} />
+        <LiveMatch live={live} roster={activeRoster} opponent={opponent} />
       )}
     </div>
   );

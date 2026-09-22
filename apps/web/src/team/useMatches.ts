@@ -13,6 +13,15 @@ export interface MatchRow {
   status: string;
 }
 
+export interface MatchFields {
+  matchDate: string; // ISO yyyy-mm-dd
+  opponent: string;
+  competition: string | null;
+  location: string | null;
+  kickoffTime: string | null;
+  formatId: string | null;
+}
+
 export function useMatches(teamId: string) {
   const [matches, setMatches] = useState<MatchRow[]>([]);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
@@ -50,6 +59,43 @@ export function useMatches(teamId: string) {
     refresh();
   }, [refresh]);
 
+  async function createMatch(fields: MatchFields) {
+    const { error } = await supabase.from("matches").insert({
+      id: crypto.randomUUID(),
+      team_id: teamId,
+      match_date: fields.matchDate,
+      opponent: fields.opponent,
+      competition: fields.competition,
+      location: fields.location,
+      kickoff_time: fields.kickoffTime,
+      format_id: fields.formatId,
+    });
+    if (error) throw error;
+    await refresh();
+  }
+
+  async function updateMatch(id: string, fields: MatchFields) {
+    const { error } = await supabase
+      .from("matches")
+      .update({
+        match_date: fields.matchDate,
+        opponent: fields.opponent,
+        competition: fields.competition,
+        location: fields.location,
+        kickoff_time: fields.kickoffTime,
+        format_id: fields.formatId,
+      })
+      .eq("id", id);
+    if (error) throw error;
+    await refresh();
+  }
+
+  async function deleteMatch(id: string) {
+    const { error } = await supabase.from("matches").delete().eq("id", id);
+    if (error) throw error;
+    await refresh();
+  }
+
   async function bulkImport(text: string, defaultFormatId: string | null) {
     const existing: ExistingMatch[] = matches.map((m) => ({
       id: m.id,
@@ -66,5 +112,5 @@ export function useMatches(teamId: string) {
     return result;
   }
 
-  return { matches, status, errorMessage, bulkImport, refresh };
+  return { matches, status, errorMessage, createMatch, updateMatch, deleteMatch, bulkImport, refresh };
 }

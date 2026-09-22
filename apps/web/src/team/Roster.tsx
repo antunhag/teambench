@@ -1,20 +1,52 @@
 import { useState } from "preact/hooks";
 import { POSITIONS, posAbbr, type Position } from "./positions";
-import { usePlayers } from "./usePlayers";
+import { usePlayers, type PlayerRow } from "./usePlayers";
 
 interface Props {
   teamId: string;
   canManage: boolean; // só team_admin gerencia o plantel
 }
 
+function EditRow({ p, onSave, onCancel }: { p: PlayerRow; onSave: (fields: { num: string; name: string; position: Position }) => void; onCancel: () => void }) {
+  const [num, setNum] = useState(p.num ?? "");
+  const [name, setName] = useState(p.name);
+  const [position, setPosition] = useState<Position>(p.position ?? "Universal");
+  return (
+    <tr style={{ borderTop: "1px solid #eee" }}>
+      <td style={{ padding: "6px 0" }}>
+        <input value={num} onInput={(e) => setNum((e.target as HTMLInputElement).value)} style={{ width: 50 }} />
+      </td>
+      <td>
+        <input value={name} onInput={(e) => setName((e.target as HTMLInputElement).value)} style={{ width: 160 }} />
+      </td>
+      <td>
+        <select value={position} onChange={(e) => setPosition((e.target as HTMLSelectElement).value as Position)}>
+          {POSITIONS.map((pos) => (
+            <option key={pos} value={pos}>{pos}</option>
+          ))}
+        </select>
+      </td>
+      <td style={{ textAlign: "right" }}>
+        <button type="button" onClick={() => onSave({ num, name, position })}>Salvar</button>{" "}
+        <button type="button" onClick={onCancel}>Cancelar</button>
+      </td>
+    </tr>
+  );
+}
+
 export function Roster({ teamId, canManage }: Props) {
-  const { players, status, errorMessage, addPlayer, deactivatePlayer, bulkImport } = usePlayers(teamId);
+  const { players, status, errorMessage, addPlayer, updatePlayer, deactivatePlayer, reactivatePlayer, bulkImport } = usePlayers(teamId);
+  const active = players.filter((p) => p.active);
+  const inactive = players.filter((p) => !p.active);
 
   const [num, setNum] = useState("");
   const [name, setName] = useState("");
   const [position, setPosition] = useState<Position>("Universal");
   const [addStatus, setAddStatus] = useState<"idle" | "saving" | "error">("idle");
   const [addError, setAddError] = useState("");
+
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [showInactive, setShowInactive] = useState(false);
 
   const [importText, setImportText] = useState("");
   const [importSummary, setImportSummary] = useState("");
@@ -59,8 +91,8 @@ export function Roster({ teamId, canManage }: Props) {
 
   return (
     <div style={{ marginTop: 24 }}>
-      <h2 style={{ fontSize: 16 }}>Plantel ({players.length})</h2>
-      {players.length === 0 ? (
+      <h2 style={{ fontSize: 16 }}>Plantel ({active.length})</h2>
+      {active.length === 0 ? (
         <p style={{ color: "#666" }}>Ainda sem atletas.</p>
       ) : (
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
@@ -73,22 +105,57 @@ export function Roster({ teamId, canManage }: Props) {
             </tr>
           </thead>
           <tbody>
-            {players.map((p) => (
-              <tr key={p.id} style={{ borderTop: "1px solid #eee" }}>
-                <td style={{ padding: "6px 0" }}>{p.num}</td>
-                <td>{p.name}</td>
-                <td>{posAbbr(p.position)}</td>
-                {canManage && (
-                  <td style={{ textAlign: "right" }}>
-                    <button type="button" onClick={() => deactivatePlayer(p.id)}>
-                      Remover
-                    </button>
-                  </td>
-                )}
-              </tr>
-            ))}
+            {active.map((p) =>
+              canManage && editingId === p.id ? (
+                <EditRow
+                  key={p.id}
+                  p={p}
+                  onCancel={() => setEditingId(null)}
+                  onSave={async (fields) => {
+                    await updatePlayer(p.id, fields);
+                    setEditingId(null);
+                  }}
+                />
+              ) : (
+                <tr key={p.id} style={{ borderTop: "1px solid #eee" }}>
+                  <td style={{ padding: "6px 0" }}>{p.num}</td>
+                  <td>{p.name}</td>
+                  <td>{posAbbr(p.position)}</td>
+                  {canManage && (
+                    <td style={{ textAlign: "right" }}>
+                      <button type="button" onClick={() => setEditingId(p.id)}>Editar</button>{" "}
+                      <button type="button" onClick={() => deactivatePlayer(p.id)}>Remover</button>
+                    </td>
+                  )}
+                </tr>
+              )
+            )}
           </tbody>
         </table>
+      )}
+
+      {canManage && inactive.length > 0 && (
+        <div style={{ marginTop: 12 }}>
+          <button type="button" onClick={() => setShowInactive((v) => !v)} style={{ fontSize: 12 }}>
+            {showInactive ? "Ocultar" : "Ver"} atletas removidos ({inactive.length})
+          </button>
+          {showInactive && (
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, marginTop: 6 }}>
+              <tbody>
+                {inactive.map((p) => (
+                  <tr key={p.id} style={{ borderTop: "1px solid #eee", color: "#666" }}>
+                    <td style={{ padding: "6px 0" }}>#{p.num}</td>
+                    <td>{p.name}</td>
+                    <td>{posAbbr(p.position)}</td>
+                    <td style={{ textAlign: "right" }}>
+                      <button type="button" onClick={() => reactivatePlayer(p.id)}>Reativar</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
       )}
 
       {canManage && (

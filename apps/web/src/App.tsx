@@ -4,6 +4,7 @@ import { Login } from "./auth/Login";
 import { isSupabaseConfigured, supabase } from "./supabaseClient";
 import { MatchFlow } from "./match/MatchFlow";
 import { Calendar } from "./team/Calendar";
+import { ClubSettings } from "./team/ClubSettings";
 import { CreateClub } from "./team/CreateClub";
 import { CreateTeam } from "./team/CreateTeam";
 import { MatchFormats } from "./team/MatchFormats";
@@ -71,18 +72,28 @@ function AuthenticatedApp({ session }: { session: Session }) {
   }
 
   // club.status === "has-club" a partir daqui — club.club nunca é null.
-  return <ClubApp session={session} clubId={club.club!.clubId} clubName={club.club!.clubName} sync={sync} />;
+  return (
+    <ClubApp
+      session={session}
+      clubId={club.club!.clubId}
+      clubName={club.club!.clubName}
+      onClubUpdated={club.refresh}
+      sync={sync}
+    />
+  );
 }
 
 function ClubApp({
   session,
   clubId,
   clubName,
+  onClubUpdated,
   sync,
 }: {
   session: Session;
   clubId: string;
   clubName: string;
+  onClubUpdated: () => void;
   sync: ReturnType<typeof useOutboxSync>;
 }) {
   const { status, team, errorMessage, refresh } = useCurrentTeam(session);
@@ -121,7 +132,7 @@ function ClubApp({
               {sync.syncing ? "A sincronizar..." : `${sync.pending} evento(s) por sincronizar`}
             </p>
           )}
-          <p style={{ color: "#666" }}>Clube: {clubName}</p>
+          <ClubSettings clubId={clubId} clubName={clubName} onUpdated={onClubUpdated} />
           <h1 style={{ fontSize: 20 }}>{team?.teamName}</h1>
           <p style={{ color: "#666" }}>Papel: {team ? ROLE_LABELS[team.role] ?? team.role : ""}</p>
 
