@@ -2,8 +2,10 @@ import type { Session } from "@supabase/supabase-js";
 import { useEffect, useState } from "preact/hooks";
 import { Login } from "./auth/Login";
 import { isSupabaseConfigured, supabase } from "./supabaseClient";
+import { Calendar } from "./team/Calendar";
 import { CreateClub } from "./team/CreateClub";
 import { CreateTeam } from "./team/CreateTeam";
+import { MatchFormats } from "./team/MatchFormats";
 import { Roster } from "./team/Roster";
 import { useCurrentClub } from "./team/useCurrentClub";
 import { useCurrentTeam } from "./team/useCurrentTeam";
@@ -90,7 +92,13 @@ function ClubApp({ session, clubId, clubName }: { session: Session; clubId: stri
       <h1 style={{ fontSize: 20 }}>{team?.teamName}</h1>
       <p style={{ color: "#666" }}>Papel: {team ? ROLE_LABELS[team.role] ?? team.role : ""}</p>
 
-      {team && <Roster teamId={team.teamId} canManage={team.role === "team_admin"} />}
+      {team && (
+        <>
+          <Roster teamId={team.teamId} canManage={team.role === "team_admin"} />
+          <MatchFormats teamId={team.teamId} canManage={team.role === "team_admin"} />
+          <Calendar teamId={team.teamId} canManage={team.role === "team_admin"} />
+        </>
+      )}
     </div>
   );
 }
