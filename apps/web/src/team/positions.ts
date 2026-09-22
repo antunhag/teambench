@@ -14,6 +14,13 @@ export function posAbbr(pos: string | null | undefined): string {
   return (pos && POS_ABBR[pos as Position]) || "UN";
 }
 
+export function isGoalkeeper(pos: string | null | undefined): boolean {
+  return pos === "Guarda-Redes";
+}
+
+/** Cor de destaque do guarda-redes — mesma do banco.html original, pra reconhecer de relance. */
+export const GOALKEEPER_COLOR = "#2D6FE0";
+
 function normPos(s: string | null | undefined): string {
   return (s || "")
     .toString()

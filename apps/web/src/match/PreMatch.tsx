@@ -1,5 +1,5 @@
 import type { PlayerRow } from "../team/usePlayers";
-import { posAbbr } from "../team/positions";
+import { GOALKEEPER_COLOR, isGoalkeeper, posAbbr } from "../team/positions";
 import type { useLiveMatch } from "./useLiveMatch";
 
 interface Props {
@@ -20,18 +20,20 @@ export function PreMatch({ live, roster, opponent }: Props) {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(120px, 1fr))", gap: 8 }}>
         {roster.map((p) => {
           const checked = state.convocadoIds.includes(p.id);
+          const gk = isGoalkeeper(p.position);
           return (
             <label
               key={p.id}
               style={{
-                border: "1px solid #ccc",
+                border: `1px solid ${gk ? GOALKEEPER_COLOR : "#ccc"}`,
                 borderRadius: 8,
                 padding: 8,
-                background: checked ? "#eef7ee" : "#fff",
+                background: checked ? "#eef7ee" : gk ? `${GOALKEEPER_COLOR}14` : "#fff",
                 display: "flex",
                 alignItems: "center",
                 gap: 6,
                 fontSize: 13,
+                color: gk ? GOALKEEPER_COLOR : undefined,
               }}
             >
               <input type="checkbox" checked={checked} onChange={() => live.toggleConvocado(p.id)} />#{p.num} {p.name}
@@ -47,20 +49,22 @@ export function PreMatch({ live, roster, opponent }: Props) {
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(100px, 1fr))", gap: 8 }}>
           {convocados.map((p) => {
             const selected = state.onCourt.includes(p.id);
+            const gk = isGoalkeeper(p.position);
             return (
               <button
                 type="button"
                 key={p.id}
                 onClick={() => live.toggleTitular(p.id)}
                 style={{
-                  border: selected ? "2px solid #2a7" : "1px solid #ccc",
+                  border: selected ? "2px solid #2a7" : `1px solid ${gk ? GOALKEEPER_COLOR : "#ccc"}`,
                   borderRadius: 8,
                   padding: 8,
-                  background: selected ? "#eef7ee" : "#fff",
+                  background: selected ? "#eef7ee" : gk ? `${GOALKEEPER_COLOR}14` : "#fff",
+                  color: gk && !selected ? GOALKEEPER_COLOR : undefined,
                 }}
               >
                 #{p.num} {p.name}
-                <div style={{ fontSize: 10, color: "#666" }}>{posAbbr(p.position)}</div>
+                <div style={{ fontSize: 10, color: gk && !selected ? GOALKEEPER_COLOR : "#666" }}>{posAbbr(p.position)}</div>
               </button>
             );
           })}
