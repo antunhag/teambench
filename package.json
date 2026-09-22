@@ -2,9 +2,11 @@
   "name": "teambench",
   "private": true,
   "workspaces": [
-    "packages/*"
+    "packages/*",
+    "apps/*"
   ],
   "scripts": {
-    "test": "npm test --workspace packages/engine"
+    "test": "npm test --workspace packages/engine",
+    "dev": "npm run dev --workspace apps/web"
   }
 }

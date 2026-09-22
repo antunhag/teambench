@@ -1,0 +1,96 @@
+import type { Session } from "@supabase/supabase-js";
+import { useEffect, useState } from "preact/hooks";
+import { Login } from "./auth/Login";
+import { isSupabaseConfigured, supabase } from "./supabaseClient";
+import { CreateClub } from "./team/CreateClub";
+import { CreateTeam } from "./team/CreateTeam";
+import { useCurrentClub } from "./team/useCurrentClub";
+import { useCurrentTeam } from "./team/useCurrentTeam";
+
+const ROLE_LABELS: Record<string, string> = {
+  team_admin: "Admin da Equipa",
+  data_entry: "Lançador de dados",
+  viewer: "Visualizador",
+};
+
+export function App() {
+  const [session, setSession] = useState<Session | null | undefined>(undefined); // undefined = ainda a carregar
+
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+    supabase.auth.getSession().then(({ data }) => setSession(data.session));
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, newSession) => {
+      setSession(newSession);
+    });
+    return () => sub.subscription.unsubscribe();
+  }, []);
+
+  if (!isSupabaseConfigured) {
+    return (
+      <div style={{ maxWidth: 480, margin: "64px auto", fontFamily: "system-ui, sans-serif" }}>
+        <h1 style={{ fontSize: 20 }}>Teambench</h1>
+        <p>
+          Falta configurar a ligação ao Supabase. Copie <code>apps/web/.env.example</code> para{" "}
+          <code>apps/web/.env.local</code> e preencha <code>VITE_SUPABASE_URL</code> e{" "}
+          <code>VITE_SUPABASE_ANON_KEY</code> com os valores de Project Settings → API, depois recarregue esta página.
+        </p>
+      </div>
+    );
+  }
+
+  if (session === undefined) {
+    return <p style={{ textAlign: "center", marginTop: 64 }}>A carregar...</p>;
+  }
+
+  if (!session) {
+    return <Login />;
+  }
+
+  return <AuthenticatedApp session={session} />;
+}
+
+function AuthenticatedApp({ session }: { session: Session }) {
+  const club = useCurrentClub(session);
+
+  if (club.status === "loading") {
+    return <p style={{ textAlign: "center", marginTop: 64 }}>A carregar clube...</p>;
+  }
+  if (club.status === "error") {
+    return <p style={{ textAlign: "center", marginTop: 64, color: "crimson" }}>Erro: {club.errorMessage}</p>;
+  }
+  if (club.status === "no-club") {
+    return <CreateClub session={session} onCreated={club.refresh} />;
+  }
+
+  // club.status === "has-club" a partir daqui — club.club nunca é null.
+  return <ClubApp session={session} clubId={club.club!.clubId} clubName={club.club!.clubName} />;
+}
+
+function ClubApp({ session, clubId, clubName }: { session: Session; clubId: string; clubName: string }) {
+  const { status, team, errorMessage, refresh } = useCurrentTeam(session);
+
+  if (status === "loading") {
+    return <p style={{ textAlign: "center", marginTop: 64 }}>A carregar equipa...</p>;
+  }
+  if (status === "error") {
+    return <p style={{ textAlign: "center", marginTop: 64, color: "crimson" }}>Erro: {errorMessage}</p>;
+  }
+  if (status === "no-team") {
+    return <CreateTeam session={session} clubId={clubId} clubName={clubName} onCreated={refresh} />;
+  }
+
+  return (
+    <div style={{ maxWidth: 480, margin: "64px auto", fontFamily: "system-ui, sans-serif" }}>
+      <p>
+        Sessão iniciada como <strong>{session.user.email}</strong>.{" "}
+        <button type="button" onClick={() => supabase.auth.signOut()}>Sair</button>
+      </p>
+      <p style={{ color: "#666" }}>Clube: {clubName}</p>
+      <h1 style={{ fontSize: 20 }}>{team?.teamName}</h1>
+      <p style={{ color: "#666" }}>Papel: {team ? ROLE_LABELS[team.role] ?? team.role : ""}</p>
+      <p style={{ color: "#666", marginTop: 24 }}>
+        Próximo passo: plantel, formato de jogo e importação de calendário.
+      </p>
+    </div>
+  );
+}
