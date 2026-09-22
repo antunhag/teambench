@@ -1,5 +1,6 @@
 import type { Session } from "@supabase/supabase-js";
 import { useEffect, useState } from "preact/hooks";
+import { AcceptInvite } from "./team/AcceptInvite";
 import { Login } from "./auth/Login";
 import { isSupabaseConfigured, supabase } from "./supabaseClient";
 import { MatchFlow } from "./match/MatchFlow";
@@ -9,8 +10,9 @@ import { CreateClub } from "./team/CreateClub";
 import { CreateTeam } from "./team/CreateTeam";
 import { MatchFormats } from "./team/MatchFormats";
 import { Roster } from "./team/Roster";
+import { TeamMembers } from "./team/TeamMembers";
 import { useCurrentClub } from "./team/useCurrentClub";
-import { useCurrentTeam } from "./team/useCurrentTeam";
+import { useCurrentTeam, type CurrentTeam } from "./team/useCurrentTeam";
 import { useOutboxSync } from "./sync/useOutboxSync";
 
 const ROLE_LABELS: Record<string, string> = {
@@ -55,65 +57,85 @@ export function App() {
   return <AuthenticatedApp session={session} />;
 }
 
+function getInviteTokenFromUrl(): string | null {
+  return new URLSearchParams(window.location.search).get("invite");
+}
+
+function clearInviteFromUrl() {
+  const url = new URL(window.location.href);
+  url.searchParams.delete("invite");
+  window.history.replaceState({}, "", url.toString());
+}
+
 function AuthenticatedApp({ session }: { session: Session }) {
+  const [inviteToken, setInviteToken] = useState<string | null>(getInviteTokenFromUrl);
   const club = useCurrentClub(session);
+  const team = useCurrentTeam(session);
   // Roda em segundo plano assim que há sessão — independente de qual tela
   // está aberta, e sobrevive a trocar de tela/clube/equipa.
   const sync = useOutboxSync();
 
-  if (club.status === "loading") {
-    return <p style={{ textAlign: "center", marginTop: 64 }}>A carregar clube...</p>;
+  function dismissInvite() {
+    clearInviteFromUrl();
+    setInviteToken(null);
   }
+
+  // O convite é resolvido antes de qualquer outra tela — quem aceita um
+  // convite pode não ter clube nenhum (um Lançador de dados só pertence à
+  // equipa, nunca precisa criar/administrar um clube).
+  if (inviteToken) {
+    return (
+      <AcceptInvite
+        session={session}
+        token={inviteToken}
+        onAccepted={() => {
+          dismissInvite();
+          team.refresh();
+          club.refresh();
+        }}
+        onDismiss={dismissInvite}
+      />
+    );
+  }
+
+  if (club.status === "loading" || team.status === "loading") {
+    return <p style={{ textAlign: "center", marginTop: 64 }}>A carregar...</p>;
+  }
+  if (team.status === "error") {
+    return <p style={{ textAlign: "center", marginTop: 64, color: "crimson" }}>Erro: {team.errorMessage}</p>;
+  }
+
+  if (team.status === "has-team") {
+    return <TeamApp session={session} team={team.team!} club={club} sync={sync} />;
+  }
+
+  // Sem equipa ainda — onboarding normal: clube primeiro, depois equipa.
   if (club.status === "error") {
     return <p style={{ textAlign: "center", marginTop: 64, color: "crimson" }}>Erro: {club.errorMessage}</p>;
   }
   if (club.status === "no-club") {
     return <CreateClub session={session} onCreated={club.refresh} />;
   }
-
-  // club.status === "has-club" a partir daqui — club.club nunca é null.
-  return (
-    <ClubApp
-      session={session}
-      clubId={club.club!.clubId}
-      clubName={club.club!.clubName}
-      onClubUpdated={club.refresh}
-      sync={sync}
-    />
-  );
+  return <CreateTeam session={session} clubId={club.club!.clubId} clubName={club.club!.clubName} onCreated={team.refresh} />;
 }
 
-function ClubApp({
+function TeamApp({
   session,
-  clubId,
-  clubName,
-  onClubUpdated,
+  team,
+  club,
   sync,
 }: {
   session: Session;
-  clubId: string;
-  clubName: string;
-  onClubUpdated: () => void;
+  team: CurrentTeam;
+  club: ReturnType<typeof useCurrentClub>;
   sync: ReturnType<typeof useOutboxSync>;
 }) {
-  const { status, team, errorMessage, refresh } = useCurrentTeam(session);
   const [activeMatch, setActiveMatch] = useState<{ id: string; opponent: string | null; formatId: string | null } | null>(null);
-
-  if (status === "loading") {
-    return <p style={{ textAlign: "center", marginTop: 64 }}>A carregar equipa...</p>;
-  }
-  if (status === "error") {
-    return <p style={{ textAlign: "center", marginTop: 64, color: "crimson" }}>Erro: {errorMessage}</p>;
-  }
-  if (status === "no-team") {
-    return <CreateTeam session={session} clubId={clubId} clubName={clubName} onCreated={refresh} />;
-  }
-
-  const canTrackLive = team?.role === "team_admin" || team?.role === "data_entry";
+  const canTrackLive = team.role === "team_admin" || team.role === "data_entry";
 
   return (
     <div style={{ maxWidth: activeMatch ? 720 : 480, margin: "64px auto", fontFamily: "system-ui, sans-serif" }}>
-      {activeMatch && team ? (
+      {activeMatch ? (
         <MatchFlow
           teamId={team.teamId}
           matchId={activeMatch.id}
@@ -133,22 +155,24 @@ function ClubApp({
               {sync.syncing ? "A sincronizar..." : `${sync.pending} evento(s) por sincronizar`}
             </p>
           )}
-          <ClubSettings clubId={clubId} clubName={clubName} onUpdated={onClubUpdated} />
-          <h1 style={{ fontSize: 20 }}>{team?.teamName}</h1>
-          <p style={{ color: "#666" }}>Papel: {team ? ROLE_LABELS[team.role] ?? team.role : ""}</p>
-
-          {team && (
-            <>
-              <Roster teamId={team.teamId} canManage={team.role === "team_admin"} />
-              <MatchFormats teamId={team.teamId} canManage={team.role === "team_admin"} />
-              <Calendar
-                teamId={team.teamId}
-                canManage={team.role === "team_admin"}
-                canTrackLive={canTrackLive}
-                onStartMatch={(id, opponent, formatId) => setActiveMatch({ id, opponent, formatId })}
-              />
-            </>
+          {/* Configurações de clube só fazem sentido para quem administra o clube — um
+              membro convidado só para esta equipa (ex.: Lançador de dados) nunca terá
+              club.status === "has-club", já que não faz parte de club_members. */}
+          {club.status === "has-club" && (
+            <ClubSettings clubId={club.club!.clubId} clubName={club.club!.clubName} onUpdated={club.refresh} />
           )}
+          <h1 style={{ fontSize: 20 }}>{team.teamName}</h1>
+          <p style={{ color: "#666" }}>Papel: {ROLE_LABELS[team.role] ?? team.role}</p>
+
+          <Roster teamId={team.teamId} canManage={team.role === "team_admin"} />
+          <MatchFormats teamId={team.teamId} canManage={team.role === "team_admin"} />
+          <Calendar
+            teamId={team.teamId}
+            canManage={team.role === "team_admin"}
+            canTrackLive={canTrackLive}
+            onStartMatch={(id, opponent, formatId) => setActiveMatch({ id, opponent, formatId })}
+          />
+          {team.role === "team_admin" && <TeamMembers teamId={team.teamId} />}
         </>
       )}
     </div>

@@ -20,7 +20,13 @@ export function Login() {
     e.preventDefault();
     setStatus("sending");
     setErrorMessage("");
-    const { error } = await supabase.auth.signInWithOtp({ email });
+    // emailRedirectTo preserva a URL exata (inclui ?invite=... quando veio de
+    // um link de convite) — sem isto o Supabase manda de volta para o Site
+    // URL configurado no dashboard, perdendo o token do convite.
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: { emailRedirectTo: window.location.href },
+    });
     if (error) {
       setStatus("error");
       setErrorMessage(error.message);
