@@ -1,0 +1,10 @@
+{
+  "name": "teambench",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "test": "npm test --workspace packages/engine"
+  }
+}
