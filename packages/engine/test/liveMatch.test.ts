@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   createLiveMatchState,
   doCard,
+  doEnter,
   doFoul,
   doGoal,
   doOppGoal,
@@ -128,6 +129,25 @@ describe("liveMatch — relógio, golos, cartões", () => {
     s = doFoul(s, salvador, 1_000);
     s = doFoul(s, salvador, 2_000);
     expect(s.periodFouls).toBe(2);
+  });
+
+  it("doEnter põe um jogador em campo sem ninguém sair, só se houver vaga (<5)", () => {
+    let s = createLiveMatchState([salvador, joao]);
+    s = toggleTitular(s, salvador);
+    s = goLive(s);
+    s = resumeOrStart(s, 0);
+    s = doEnter(s, joao, 10_000);
+    expect(s.onCourt).toEqual([salvador, joao]);
+    expect(playerCurrentSeconds(s, joao, 20_000)).toBe(10);
+
+    // com 5 em campo, doEnter não faz nada
+    let full = createLiveMatchState(["p1", "p2", "p3", "p4", "p5", "p6"]);
+    ["p1", "p2", "p3", "p4", "p5"].forEach((id) => (full = toggleTitular(full, id)));
+    full = goLive(full);
+    full = resumeOrStart(full, 0);
+    const before = full.onCourt;
+    full = doEnter(full, "p6", 5_000);
+    expect(full.onCourt).toBe(before);
   });
 
   it("substituição assenta o tempo de quem sai e começa a contar para quem entra", () => {

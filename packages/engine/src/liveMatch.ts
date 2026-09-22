@@ -168,6 +168,15 @@ export function endTreatment(state: LiveMatchState, nowMs: number): LiveMatchSta
   return { ...state, treatment: null, events: [...state.events, ev] };
 }
 
+/** Entra em campo sem ninguém sair — só possível com menos de 5 em campo (ex.: depois de um vermelho, antes de repor o número). */
+export function doEnter(state: LiveMatchState, inId: string, nowMs: number): LiveMatchState {
+  if (state.onCourt.length >= 5 || state.onCourt.includes(inId)) return state;
+  const atMs = matchElapsedMs(state, nowMs);
+  const clockAcc = state.clock.running ? markOnSince(state.clockAcc, inId, atMs) : state.clockAcc;
+  const ev = createEvent("substituicao", inId, atMs, state.period, nowMs, { outId: null });
+  return { ...state, onCourt: [...state.onCourt, inId], clockAcc, events: [...state.events, ev] };
+}
+
 export function doSub(state: LiveMatchState, outId: string, inId: string, nowMs: number): LiveMatchState {
   const atMs = matchElapsedMs(state, nowMs);
   let clockAcc = state.clockAcc;

@@ -26,14 +26,12 @@ const PAUSE_REASONS = [
 type Picker =
   | { kind: "golo-scorer" }
   | { kind: "golo-assist"; scorerId: string }
-  | { kind: "card-player" }
-  | { kind: "card-action"; playerId: string }
-  | { kind: "sub-out" }
-  | { kind: "sub-in"; outId: string }
-  | { kind: "treat-player" }
+  | { kind: "player"; playerId: string } // toca no chip (em campo ou banco) -> ações contextuais
+  | { kind: "sub-in"; outId: string } // "substituir (sai)" a partir do sheet do jogador
+  | { kind: "sub-out-for-entry"; inId: string } // banco cheio: escolher quem sai para este entrar
   | null;
 
-function PlayerChip({ p, onClick }: { p: PlayerRow; onClick: () => void }) {
+function PlayerChip({ p, onClick, dim }: { p: PlayerRow; onClick: () => void; dim?: boolean }) {
   return (
     <button
       type="button"
@@ -48,7 +46,8 @@ function PlayerChip({ p, onClick }: { p: PlayerRow; onClick: () => void }) {
         alignItems: "center",
         justifyContent: "center",
         gap: 2,
-        background: "#fff",
+        background: dim ? "#f7f7f7" : "#fff",
+        color: dim ? "#666" : undefined,
       }}
     >
       <div style={{ fontWeight: 700, fontSize: 15 }}>#{p.num}</div>
@@ -84,7 +83,6 @@ export function LiveMatch({ live, roster, opponent }: Props) {
     .filter((id) => !state.onCourt.includes(id))
     .map((id) => byId.get(id))
     .filter((p): p is PlayerRow => !!p);
-  const convocados = state.convocadoIds.map((id) => byId.get(id)).filter((p): p is PlayerRow => !!p);
 
   const [showPauseReasons, setShowPauseReasons] = useState(false);
   const [picker, setPicker] = useState<Picker>(null);
@@ -95,6 +93,14 @@ export function LiveMatch({ live, roster, opponent }: Props) {
   function handleClockClick() {
     if (state.clock.running) setShowPauseReasons(true);
     else live.resumeOrStart();
+  }
+
+  function handleBenchTap(p: PlayerRow) {
+    if (state.onCourt.length < 5) {
+      live.doEnter(p.id);
+    } else {
+      setPicker({ kind: "sub-out-for-entry", inId: p.id });
+    }
   }
 
   return (
@@ -139,6 +145,13 @@ export function LiveMatch({ live, roster, opponent }: Props) {
         </div>
       )}
 
+      {state.treatment && (
+        <div style={{ marginTop: 8, border: "1px solid crimson", borderRadius: 8, padding: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          🩹 Atendimento em curso: <strong>{byId.get(state.treatment.playerId)?.name}</strong>
+          <button type="button" onClick={live.endTreatment}>Terminar</button>
+        </div>
+      )}
+
       <div style={{ marginTop: 12, display: "flex", gap: 8 }}>
         <button type="button" disabled={!live.canUndo} onClick={live.undo}>
           ↩️ Desfazer
@@ -146,48 +159,41 @@ export function LiveMatch({ live, roster, opponent }: Props) {
         <button type="button" onClick={() => setPicker({ kind: "golo-scorer" })} style={{ fontWeight: 700 }}>
           ⚽ Golo
         </button>
-        <button type="button" onClick={() => setPicker({ kind: "card-player" })}>
-          🟨🟥✋ Cartão/Falta
-        </button>
-        <button type="button" onClick={() => setPicker({ kind: "sub-out" })} disabled={bench.length === 0}>
-          🔁 Substituir
-        </button>
       </div>
 
-      <h3 style={{ fontSize: 14, marginTop: 16 }}>Em campo ({onCourt.length})</h3>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(90px, 1fr))", gap: 6 }}>
+      <p style={{ fontSize: 11, color: "#666", marginTop: 8, marginBottom: 4 }}>
+        Toca num atleta para cartão, falta, substituição ou atendimento.
+      </p>
+
+      <h3 style={{ fontSize: 14, marginTop: 8 }}>Em campo ({onCourt.length})</h3>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(90px, 1fr))", gap: 8 }}>
         {onCourt.map((p) => (
-          <div key={p.id} style={{ border: "1px solid #ccc", borderRadius: 8, padding: 6, fontSize: 12, textAlign: "center" }}>
+          <button
+            key={p.id}
+            type="button"
+            onClick={() => setPicker({ kind: "player", playerId: p.id })}
+            style={{ border: "1px solid #ccc", borderRadius: 8, padding: 6, fontSize: 12, textAlign: "center", background: "#fff" }}
+          >
             #{p.num} {p.name}
             <div style={{ fontSize: 10, color: "#666" }}>
               {posAbbr(p.position)} · {Math.floor(live.playerSeconds(p.id) / 60)}'
             </div>
-          </div>
+          </button>
         ))}
       </div>
 
       <h3 style={{ fontSize: 14, marginTop: 16 }}>Banco ({bench.length})</h3>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(90px, 1fr))", gap: 6 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(90px, 1fr))", gap: 8 }}>
         {bench.map((p) => (
-          <div key={p.id} style={{ border: "1px solid #eee", borderRadius: 8, padding: 6, fontSize: 12, textAlign: "center", color: "#666" }}>
+          <button
+            key={p.id}
+            type="button"
+            onClick={() => setPicker({ kind: "player", playerId: p.id })}
+            style={{ border: "1px solid #eee", borderRadius: 8, padding: 6, fontSize: 12, textAlign: "center", background: "#fafafa", color: "#666" }}
+          >
             #{p.num} {p.name}
-          </div>
+          </button>
         ))}
-      </div>
-
-      <div style={{ marginTop: 16 }}>
-        <fieldset>
-          <legend>🩹 Atendimento</legend>
-          {state.treatment ? (
-            <button type="button" onClick={live.endTreatment}>
-              Terminar atendimento — {byId.get(state.treatment.playerId)?.name}
-            </button>
-          ) : (
-            <button type="button" onClick={() => setPicker({ kind: "treat-player" })}>
-              Iniciar atendimento
-            </button>
-          )}
-        </fieldset>
       </div>
 
       <div style={{ marginTop: 16 }}>
@@ -215,7 +221,7 @@ export function LiveMatch({ live, roster, opponent }: Props) {
         </div>
       </div>
 
-      {/* ---- Sheets de toque: golo, cartão/falta, substituição, atendimento ---- */}
+      {/* ---- Sheets de toque ---- */}
 
       {picker?.kind === "golo-scorer" && (
         <Sheet title="Quem marcou?" sub="Toca no marcador" onClose={() => setPicker(null)}>
@@ -256,62 +262,91 @@ export function LiveMatch({ live, roster, opponent }: Props) {
         </Sheet>
       )}
 
-      {picker?.kind === "card-player" && (
-        <Sheet title="Cartão / Falta" sub="Toca no atleta" onClose={() => setPicker(null)}>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(96px, 1fr))", gap: 8 }}>
-            {onCourt.map((p) => (
-              <PlayerChip key={p.id} p={p} onClick={() => setPicker({ kind: "card-action", playerId: p.id })} />
-            ))}
-          </div>
-        </Sheet>
-      )}
-
-      {picker?.kind === "card-action" && (
-        <Sheet title={byId.get(picker.playerId)?.name ?? ""} onClose={() => setPicker(null)}>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-            <button
-              type="button"
-              onClick={() => {
-                live.doCard(picker.playerId, "amarelo");
-                setPicker(null);
-              }}
-              style={{ padding: 14 }}
-            >
-              🟨 Amarelo
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                live.doCard(picker.playerId, "vermelho");
-                setPicker(null);
-              }}
-              style={{ padding: 14 }}
-            >
-              🟥 Vermelho
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                live.doFoul(picker.playerId);
-                setPicker(null);
-              }}
-              style={{ padding: 14, gridColumn: "1 / -1" }}
-            >
-              ✋ Falta cometida
-            </button>
-          </div>
-        </Sheet>
-      )}
-
-      {picker?.kind === "sub-out" && (
-        <Sheet title="Quem sai?" onClose={() => setPicker(null)}>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(96px, 1fr))", gap: 8 }}>
-            {onCourt.map((p) => (
-              <PlayerChip key={p.id} p={p} onClick={() => setPicker({ kind: "sub-in", outId: p.id })} />
-            ))}
-          </div>
-        </Sheet>
-      )}
+      {picker?.kind === "player" &&
+        (() => {
+          const p = byId.get(picker.playerId);
+          if (!p) return null;
+          const onC = state.onCourt.includes(p.id);
+          const inTreatment = state.treatment?.playerId === p.id;
+          return (
+            <Sheet title={`#${p.num} ${p.name}`} sub={onC ? "Em campo" : "No banco"} onClose={() => setPicker(null)}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                {onC && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        live.doCard(p.id, "amarelo");
+                        setPicker(null);
+                      }}
+                      style={{ padding: 14 }}
+                    >
+                      🟨 Amarelo
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        live.doCard(p.id, "vermelho");
+                        setPicker(null);
+                      }}
+                      style={{ padding: 14 }}
+                    >
+                      🟥 Vermelho
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        live.doFoul(p.id);
+                        setPicker(null);
+                      }}
+                      style={{ padding: 14 }}
+                    >
+                      ✋ Falta cometida
+                    </button>
+                    <button type="button" onClick={() => setPicker({ kind: "sub-in", outId: p.id })} style={{ padding: 14 }}>
+                      🔁 Substituir (sai)
+                    </button>
+                  </>
+                )}
+                {!onC && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleBenchTap(p);
+                      setPicker(null);
+                    }}
+                    style={{ padding: 14, gridColumn: "1 / -1" }}
+                  >
+                    ➡️ Entrar em campo
+                  </button>
+                )}
+                {!inTreatment ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      live.startTreatment(p.id);
+                      setPicker(null);
+                    }}
+                    style={{ padding: 14, gridColumn: "1 / -1" }}
+                  >
+                    🩹 Iniciar atendimento
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      live.endTreatment();
+                      setPicker(null);
+                    }}
+                    style={{ padding: 14, gridColumn: "1 / -1" }}
+                  >
+                    ✅ Terminar atendimento
+                  </button>
+                )}
+              </div>
+            </Sheet>
+          );
+        })()}
 
       {picker?.kind === "sub-in" && (
         <Sheet title="Quem entra?" sub={`Sai #${byId.get(picker.outId)?.num} ${byId.get(picker.outId)?.name}`} onClose={() => setPicker(null)}>
@@ -330,15 +365,15 @@ export function LiveMatch({ live, roster, opponent }: Props) {
         </Sheet>
       )}
 
-      {picker?.kind === "treat-player" && (
-        <Sheet title="Atendimento — qual atleta?" onClose={() => setPicker(null)}>
+      {picker?.kind === "sub-out-for-entry" && (
+        <Sheet title="Quadra completa (5) — quem sai?" sub={`Para entrar #${byId.get(picker.inId)?.num} ${byId.get(picker.inId)?.name}`} onClose={() => setPicker(null)}>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(96px, 1fr))", gap: 8 }}>
-            {convocados.map((p) => (
+            {onCourt.map((p) => (
               <PlayerChip
                 key={p.id}
                 p={p}
                 onClick={() => {
-                  live.startTreatment(p.id);
+                  live.doSub(p.id, picker.inId);
                   setPicker(null);
                 }}
               />

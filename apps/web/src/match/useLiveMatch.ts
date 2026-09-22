@@ -79,6 +79,7 @@ export function useLiveMatch(matchId: string) {
     doCard: (playerId: string, kind: "amarelo" | "vermelho") => apply((s) => engine.doCard(s, playerId, kind, now())),
     doFoul: (playerId: string) => apply((s) => engine.doFoul(s, playerId, now())),
     doSub: (outId: string, inId: string) => apply((s) => engine.doSub(s, outId, inId, now())),
+    doEnter: (inId: string) => apply((s) => engine.doEnter(s, inId, now())),
     startTreatment: (playerId: string) => apply((s) => engine.startTreatment(s, playerId, now())),
     endTreatment: () => apply((s) => engine.endTreatment(s, now())),
     endPeriod: () => apply((s) => engine.endPeriod(s, now())),
