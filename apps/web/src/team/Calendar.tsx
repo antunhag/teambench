@@ -5,9 +5,11 @@ import { useMatches } from "./useMatches";
 interface Props {
   teamId: string;
   canManage: boolean;
+  canTrackLive: boolean;
+  onStartMatch: (matchId: string, opponent: string | null) => void;
 }
 
-export function Calendar({ teamId, canManage }: Props) {
+export function Calendar({ teamId, canManage, canTrackLive, onStartMatch }: Props) {
   const { matches, status, errorMessage, bulkImport } = useMatches(teamId);
   const { formats } = useMatchFormats(teamId);
   const defaultFormat = formats.find((f) => f.isDefault) ?? null;
@@ -46,6 +48,7 @@ export function Calendar({ teamId, canManage }: Props) {
               <th>Adversário</th>
               <th>Competição</th>
               <th>Local</th>
+              {canTrackLive && <th />}
             </tr>
           </thead>
           <tbody>
@@ -55,6 +58,13 @@ export function Calendar({ teamId, canManage }: Props) {
                 <td>{m.opponent}</td>
                 <td>{m.competition}</td>
                 <td>{m.location}</td>
+                {canTrackLive && (
+                  <td style={{ textAlign: "right" }}>
+                    <button type="button" onClick={() => onStartMatch(m.id, m.opponent)}>
+                      Iniciar jogo
+                    </button>
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>

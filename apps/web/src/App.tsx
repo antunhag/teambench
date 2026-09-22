@@ -2,6 +2,7 @@ import type { Session } from "@supabase/supabase-js";
 import { useEffect, useState } from "preact/hooks";
 import { Login } from "./auth/Login";
 import { isSupabaseConfigured, supabase } from "./supabaseClient";
+import { MatchFlow } from "./match/MatchFlow";
 import { Calendar } from "./team/Calendar";
 import { CreateClub } from "./team/CreateClub";
 import { CreateTeam } from "./team/CreateTeam";
@@ -71,6 +72,7 @@ function AuthenticatedApp({ session }: { session: Session }) {
 
 function ClubApp({ session, clubId, clubName }: { session: Session; clubId: string; clubName: string }) {
   const { status, team, errorMessage, refresh } = useCurrentTeam(session);
+  const [activeMatch, setActiveMatch] = useState<{ id: string; opponent: string | null } | null>(null);
 
   if (status === "loading") {
     return <p style={{ textAlign: "center", marginTop: 64 }}>A carregar equipa...</p>;
@@ -82,21 +84,39 @@ function ClubApp({ session, clubId, clubName }: { session: Session; clubId: stri
     return <CreateTeam session={session} clubId={clubId} clubName={clubName} onCreated={refresh} />;
   }
 
-  return (
-    <div style={{ maxWidth: 480, margin: "64px auto", fontFamily: "system-ui, sans-serif" }}>
-      <p>
-        Sessão iniciada como <strong>{session.user.email}</strong>.{" "}
-        <button type="button" onClick={() => supabase.auth.signOut()}>Sair</button>
-      </p>
-      <p style={{ color: "#666" }}>Clube: {clubName}</p>
-      <h1 style={{ fontSize: 20 }}>{team?.teamName}</h1>
-      <p style={{ color: "#666" }}>Papel: {team ? ROLE_LABELS[team.role] ?? team.role : ""}</p>
+  const canTrackLive = team?.role === "team_admin" || team?.role === "data_entry";
 
-      {team && (
+  return (
+    <div style={{ maxWidth: activeMatch ? 720 : 480, margin: "64px auto", fontFamily: "system-ui, sans-serif" }}>
+      {activeMatch && team ? (
+        <MatchFlow
+          teamId={team.teamId}
+          matchId={activeMatch.id}
+          opponent={activeMatch.opponent}
+          onExit={() => setActiveMatch(null)}
+        />
+      ) : (
         <>
-          <Roster teamId={team.teamId} canManage={team.role === "team_admin"} />
-          <MatchFormats teamId={team.teamId} canManage={team.role === "team_admin"} />
-          <Calendar teamId={team.teamId} canManage={team.role === "team_admin"} />
+          <p>
+            Sessão iniciada como <strong>{session.user.email}</strong>.{" "}
+            <button type="button" onClick={() => supabase.auth.signOut()}>Sair</button>
+          </p>
+          <p style={{ color: "#666" }}>Clube: {clubName}</p>
+          <h1 style={{ fontSize: 20 }}>{team?.teamName}</h1>
+          <p style={{ color: "#666" }}>Papel: {team ? ROLE_LABELS[team.role] ?? team.role : ""}</p>
+
+          {team && (
+            <>
+              <Roster teamId={team.teamId} canManage={team.role === "team_admin"} />
+              <MatchFormats teamId={team.teamId} canManage={team.role === "team_admin"} />
+              <Calendar
+                teamId={team.teamId}
+                canManage={team.role === "team_admin"}
+                canTrackLive={canTrackLive}
+                onStartMatch={(id, opponent) => setActiveMatch({ id, opponent })}
+              />
+            </>
+          )}
         </>
       )}
     </div>
