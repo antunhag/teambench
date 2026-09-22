@@ -1,3 +1,4 @@
+import { isLastPeriod } from "@teambench/engine";
 import type { ComponentChildren } from "preact";
 import { useState } from "preact/hooks";
 import type { PlayerRow } from "../team/usePlayers";
@@ -8,6 +9,7 @@ interface Props {
   live: ReturnType<typeof useLiveMatch>;
   roster: PlayerRow[];
   opponent: string | null;
+  onViewSummary: () => void;
 }
 
 function fmtMinSec(ms: number): string {
@@ -75,8 +77,9 @@ function Sheet({ title, sub, onClose, children }: { title: string; sub?: string;
   );
 }
 
-export function LiveMatch({ live, roster, opponent }: Props) {
+export function LiveMatch({ live, roster, opponent, onViewSummary }: Props) {
   const { state, elapsedMs } = live;
+  const isFinalPeriod = isLastPeriod(state.period, live.format);
   const byId = new Map(roster.map((p) => [p.id, p]));
   const onCourt = state.onCourt.map((id) => byId.get(id)).filter((p): p is PlayerRow => !!p);
   const bench = state.convocadoIds
@@ -113,9 +116,11 @@ export function LiveMatch({ live, roster, opponent }: Props) {
         <div style={{ textAlign: "center", minWidth: 90 }}>
           <div style={{ fontSize: 11, opacity: 0.85 }}>Parte {state.period}</div>
           <div style={{ fontSize: 24, fontWeight: 600 }}>{fmtMinSec(elapsedMs)}</div>
-          <button type="button" onClick={handleClockClick} style={{ marginTop: 4, fontSize: 11, borderRadius: 20, border: "none", padding: "4px 10px" }}>
-            {clockLabel}
-          </button>
+          {!state.finished && (
+            <button type="button" onClick={handleClockClick} style={{ marginTop: 4, fontSize: 11, borderRadius: 20, border: "none", padding: "4px 10px" }}>
+              {clockLabel}
+            </button>
+          )}
         </div>
         <div style={{ textAlign: "center", flex: 1 }}>
           <div style={{ fontSize: 11, opacity: 0.85 }}>{opponent || "Advers."}</div>
@@ -145,6 +150,17 @@ export function LiveMatch({ live, roster, opponent }: Props) {
         </div>
       )}
 
+      {state.finished && (
+        <div style={{ marginTop: 8, border: "2px solid #1F7A4D", borderRadius: 8, padding: 10, textAlign: "center" }}>
+          <strong>Jogo terminado</strong> — Nós {state.score.nos} – {state.score.advers} {opponent}
+          <div style={{ marginTop: 6 }}>
+            <button type="button" onClick={onViewSummary} style={{ fontWeight: 700 }}>
+              📋 Ver Resumo
+            </button>
+          </div>
+        </div>
+      )}
+
       {state.treatment && (
         <div style={{ marginTop: 8, border: "1px solid crimson", borderRadius: 8, padding: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           🩹 Atendimento em curso: <strong>{byId.get(state.treatment.playerId)?.name}</strong>
@@ -152,18 +168,22 @@ export function LiveMatch({ live, roster, opponent }: Props) {
         </div>
       )}
 
-      <div style={{ marginTop: 12, display: "flex", gap: 8 }}>
-        <button type="button" disabled={!live.canUndo} onClick={live.undo}>
-          ↩️ Desfazer
-        </button>
-        <button type="button" onClick={() => setPicker({ kind: "golo-scorer" })} style={{ fontWeight: 700 }}>
-          ⚽ Golo
-        </button>
-      </div>
+      {!state.finished && (
+        <>
+          <div style={{ marginTop: 12, display: "flex", gap: 8 }}>
+            <button type="button" disabled={!live.canUndo} onClick={live.undo}>
+              ↩️ Desfazer
+            </button>
+            <button type="button" onClick={() => setPicker({ kind: "golo-scorer" })} style={{ fontWeight: 700 }}>
+              ⚽ Golo
+            </button>
+          </div>
 
-      <p style={{ fontSize: 11, color: "#666", marginTop: 8, marginBottom: 4 }}>
-        Toca num atleta para cartão, falta, substituição ou atendimento.
-      </p>
+          <p style={{ fontSize: 11, color: "#666", marginTop: 8, marginBottom: 4 }}>
+            Toca num atleta para cartão, falta, substituição ou atendimento.
+          </p>
+        </>
+      )}
 
       <h3 style={{ fontSize: 14, marginTop: 8 }}>Em campo ({onCourt.length})</h3>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(90px, 1fr))", gap: 8 }}>
@@ -171,6 +191,7 @@ export function LiveMatch({ live, roster, opponent }: Props) {
           <button
             key={p.id}
             type="button"
+            disabled={state.finished}
             onClick={() => setPicker({ kind: "player", playerId: p.id })}
             style={{ border: "1px solid #ccc", borderRadius: 8, padding: 6, fontSize: 12, textAlign: "center", background: "#fff" }}
           >
@@ -188,6 +209,7 @@ export function LiveMatch({ live, roster, opponent }: Props) {
           <button
             key={p.id}
             type="button"
+            disabled={state.finished}
             onClick={() => setPicker({ kind: "player", playerId: p.id })}
             style={{ border: "1px solid #eee", borderRadius: 8, padding: 6, fontSize: 12, textAlign: "center", background: "#fafafa", color: "#666" }}
           >
@@ -196,12 +218,14 @@ export function LiveMatch({ live, roster, opponent }: Props) {
         ))}
       </div>
 
-      <div style={{ marginTop: 16 }}>
-        <p style={{ fontSize: 12, color: "#666" }}>Faltas na parte: {state.periodFouls}</p>
-        <button type="button" onClick={live.endPeriod} style={{ width: "100%", padding: 10 }}>
-          Terminar Parte {state.period}
-        </button>
-      </div>
+      {!state.finished && (
+        <div style={{ marginTop: 16 }}>
+          <p style={{ fontSize: 12, color: "#666" }}>Faltas na parte: {state.periodFouls}</p>
+          <button type="button" onClick={live.endPeriod} style={{ width: "100%", padding: 10, fontWeight: isFinalPeriod ? 700 : 400 }}>
+            {isFinalPeriod ? "Terminar Jogo" : `Terminar Parte ${state.period}`}
+          </button>
+        </div>
+      )}
 
       <div style={{ marginTop: 16 }}>
         <h3 style={{ fontSize: 14 }}>Registo ({state.events.length})</h3>

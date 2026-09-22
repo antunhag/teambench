@@ -20,7 +20,7 @@ function loadState(matchId: string): engine.LiveMatchState {
 
 const UNDO_LIMIT = 25;
 
-export function useLiveMatch(matchId: string, teamId: string) {
+export function useLiveMatch(matchId: string, teamId: string, format: engine.MatchFormat) {
   const [state, setState] = useState<engine.LiveMatchState>(() => loadState(matchId));
   const [tick, setTick] = useState(0); // força re-render a cada segundo enquanto o relógio corre, só para o display
   const historyRef = useRef<engine.LiveMatchState[]>([]);
@@ -96,6 +96,7 @@ export function useLiveMatch(matchId: string, teamId: string) {
   return {
     state,
     elapsedMs,
+    format,
     canUndo,
     undo,
     // toggleConvocado/toggleTitular ficam fora da pilha de undo — são ajustes
@@ -113,7 +114,7 @@ export function useLiveMatch(matchId: string, teamId: string) {
     doEnter: (inId: string) => apply((s) => engine.doEnter(s, inId, now())),
     startTreatment: (playerId: string) => apply((s) => engine.startTreatment(s, playerId, now())),
     endTreatment: () => apply((s) => engine.endTreatment(s, now())),
-    endPeriod: () => apply((s) => engine.endPeriod(s, now())),
+    endPeriod: () => apply((s) => engine.endPeriod(s, format, now())),
     playerSeconds: (playerId: string) => engine.playerCurrentSeconds(state, playerId, now()),
   };
 }

@@ -25,3 +25,13 @@ export function periodDurationMs(format: MatchFormat, periodNumber: number): num
 export function isPeriodOverdue(elapsedMs: number, format: MatchFormat, periodNumber: number): boolean {
   return elapsedMs > periodDurationMs(format, periodNumber);
 }
+
+/** Total de partes do jogo neste formato (regulares + prolongamento), se o prolongamento chegar a ser jogado. */
+export function totalPeriods(format: MatchFormat): number {
+  return format.periodCount + format.overtimePeriodCount;
+}
+
+/** Verdadeiro quando `periodNumber` é a última parte deste formato — terminá-la termina o jogo, não abre mais uma. */
+export function isLastPeriod(periodNumber: number, format: MatchFormat): boolean {
+  return periodNumber >= totalPeriods(format);
+}

@@ -17,6 +17,7 @@ import {
   toggleConvocado,
   toggleTitular,
 } from "../src/liveMatch";
+import type { MatchFormat } from "../src/types";
 
 // Mesmos dois atletas do incidente real (rows.test.ts), usados aqui para
 // confirmar que a orquestração completa do jogo também os mantém separados.
@@ -24,6 +25,10 @@ const salvador = "athlete-salvador";
 const joao = "athlete-joao";
 const guarda = "athlete-gr";
 const suplente = "athlete-suplente";
+
+const SUB15: MatchFormat = { periodCount: 2, periodMinutes: 25, overtimePeriodCount: 0, overtimeMinutes: 0 };
+const SUB13: MatchFormat = { periodCount: 2, periodMinutes: 20, overtimePeriodCount: 0, overtimeMinutes: 0 };
+const COM_PROLONGAMENTO: MatchFormat = { periodCount: 2, periodMinutes: 25, overtimePeriodCount: 2, overtimeMinutes: 5 };
 
 describe("liveMatch — fluxo pré-jogo", () => {
   it("toggleConvocado adiciona e remove", () => {
@@ -175,13 +180,14 @@ describe("liveMatch — relógio, golos, cartões", () => {
 });
 
 describe("liveMatch — fim de parte", () => {
-  it("endPeriod assenta o tempo, zera o relógio e avança a parte", () => {
+  it("endPeriod assenta o tempo, zera o relógio e avança a parte (ainda não é a última)", () => {
     let s = createLiveMatchState([salvador]);
     s = toggleTitular(s, salvador);
     s = goLive(s);
     s = resumeOrStart(s, 0);
-    s = endPeriod(s, 600_000); // 10 min de parte
+    s = endPeriod(s, SUB15, 600_000); // 10 min de parte, formato de 2 partes
     expect(s.period).toBe(2);
+    expect(s.finished).toBe(false);
     expect(s.clock.elapsedMs).toBe(0);
     expect(s.clock.running).toBe(false);
     expect(playerCurrentSeconds(s, salvador, 999_999_999)).toBe(600); // assentado, não continua contando
@@ -194,8 +200,60 @@ describe("liveMatch — fim de parte", () => {
     s = goLive(s);
     s = resumeOrStart(s, 0);
     const durMs = 300_000; // 5 minutos
-    s = endPeriod(s, durMs);
+    s = endPeriod(s, SUB15, durMs);
     const total = ids.reduce((acc, id) => acc + playerCurrentSeconds(s, id, durMs), 0);
     expect(total).toBe((durMs / 1000) * 5);
+  });
+
+  it(
+    "REGRESSÃO (bug relatado) — terminar a 2ª parte de um formato de 2 partes termina o jogo, " +
+      "não avança para uma 3ª parte indefinidamente. Cada escalão/equipa respeita o seu próprio period_count.",
+    () => {
+      let s = createLiveMatchState([salvador]);
+      s = toggleTitular(s, salvador);
+      s = goLive(s);
+      s = resumeOrStart(s, 0);
+      s = endPeriod(s, SUB15, 1_500_000); // fim da 1ª parte (25 min)
+      expect(s.finished).toBe(false);
+      expect(s.period).toBe(2);
+
+      s = resumeOrStart(s, 1_500_000);
+      s = endPeriod(s, SUB15, 3_000_000); // fim da 2ª parte
+      expect(s.finished).toBe(true);
+      expect(s.period).toBe(2); // não vira 3 — o jogo simplesmente terminou
+
+      // Sub-13 com partes mais curtas também respeita o SEU period_count (2), não um valor global fixo.
+      let s13 = createLiveMatchState([salvador]);
+      s13 = toggleTitular(s13, salvador);
+      s13 = goLive(s13);
+      s13 = resumeOrStart(s13, 0);
+      s13 = endPeriod(s13, SUB13, 1_200_000);
+      s13 = resumeOrStart(s13, 1_200_000);
+      s13 = endPeriod(s13, SUB13, 2_400_000);
+      expect(s13.finished).toBe(true);
+    }
+  );
+
+  it("com prolongamento configurado, terminar a 2ª parte NÃO termina o jogo — só a última parte do prolongamento termina", () => {
+    let s = createLiveMatchState([salvador]);
+    s = toggleTitular(s, salvador);
+    s = goLive(s);
+    s = resumeOrStart(s, 0);
+    s = endPeriod(s, COM_PROLONGAMENTO, 1_500_000); // fim da 1ª parte
+    expect(s.finished).toBe(false);
+    s = resumeOrStart(s, 1_500_000);
+    s = endPeriod(s, COM_PROLONGAMENTO, 3_000_000); // fim da 2ª parte — ainda não é a última (há prolongamento)
+    expect(s.finished).toBe(false);
+    expect(s.period).toBe(3);
+
+    s = resumeOrStart(s, 3_000_000);
+    s = endPeriod(s, COM_PROLONGAMENTO, 3_300_000); // fim do prolongamento 1
+    expect(s.finished).toBe(false);
+    expect(s.period).toBe(4);
+
+    s = resumeOrStart(s, 3_300_000);
+    s = endPeriod(s, COM_PROLONGAMENTO, 3_600_000); // fim do prolongamento 2 — agora sim termina
+    expect(s.finished).toBe(true);
+    expect(s.period).toBe(4);
   });
 });

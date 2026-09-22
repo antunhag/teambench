@@ -6,7 +6,7 @@ interface Props {
   teamId: string;
   canManage: boolean;
   canTrackLive: boolean;
-  onStartMatch: (matchId: string, opponent: string | null) => void;
+  onStartMatch: (matchId: string, opponent: string | null, formatId: string | null) => void;
 }
 
 const emptyForm: MatchFields = { matchDate: "", opponent: "", competition: null, location: null, kickoffTime: null, formatId: null };
@@ -151,7 +151,7 @@ export function Calendar({ teamId, canManage, canTrackLive, onStartMatch }: Prop
                   <td>{m.location}</td>
                   <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
                     {canTrackLive && (
-                      <button type="button" onClick={() => onStartMatch(m.id, m.opponent)}>
+                      <button type="button" onClick={() => onStartMatch(m.id, m.opponent, m.formatId)}>
                         Iniciar jogo
                       </button>
                     )}{" "}

@@ -1,5 +1,7 @@
+import type { MatchFormat } from "@teambench/engine";
 import { useState } from "preact/hooks";
 import type { useOutboxSync } from "../sync/useOutboxSync";
+import { useMatchFormats } from "../team/useMatchFormats";
 import { usePlayers } from "../team/usePlayers";
 import { LiveMatch } from "./LiveMatch";
 import { MatchSummary } from "./MatchSummary";
@@ -10,14 +12,27 @@ interface Props {
   teamId: string;
   matchId: string;
   opponent: string | null;
+  formatId: string | null;
   onExit: () => void;
   sync: ReturnType<typeof useOutboxSync>;
 }
 
-export function MatchFlow({ teamId, matchId, opponent, onExit, sync }: Props) {
+// Usado só enquanto os formatos da equipa ainda não carregaram, ou se a
+// equipa nunca chegou a configurar nenhum — nunca fica sem duração nenhuma.
+const FALLBACK_FORMAT: MatchFormat = { periodCount: 2, periodMinutes: 25, overtimePeriodCount: 0, overtimeMinutes: 0 };
+
+export function MatchFlow({ teamId, matchId, opponent, formatId, onExit, sync }: Props) {
   const { players, status } = usePlayers(teamId);
+  const { formats } = useMatchFormats(teamId);
   const activeRoster = players.filter((p) => p.active); // jogo ao vivo só convoca atletas ativos
-  const live = useLiveMatch(matchId, teamId);
+
+  // O formato deste jogo específico (definido na criação/edição do jogo),
+  // com fallback para o padrão da equipa — cada jogo respeita o SEU
+  // period_count, nunca um valor fixo global.
+  const format: MatchFormat =
+    formats.find((f) => f.id === formatId) ?? formats.find((f) => f.isDefault) ?? formats[0] ?? FALLBACK_FORMAT;
+
+  const live = useLiveMatch(matchId, teamId, format);
   const [showSummary, setShowSummary] = useState(false);
 
   return (
@@ -44,7 +59,7 @@ export function MatchFlow({ teamId, matchId, opponent, onExit, sync }: Props) {
       ) : !live.state.started ? (
         <PreMatch live={live} roster={activeRoster} opponent={opponent} />
       ) : (
-        <LiveMatch live={live} roster={activeRoster} opponent={opponent} />
+        <LiveMatch live={live} roster={activeRoster} opponent={opponent} onViewSummary={() => setShowSummary(true)} />
       )}
     </div>
   );

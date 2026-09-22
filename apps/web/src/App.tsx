@@ -97,7 +97,7 @@ function ClubApp({
   sync: ReturnType<typeof useOutboxSync>;
 }) {
   const { status, team, errorMessage, refresh } = useCurrentTeam(session);
-  const [activeMatch, setActiveMatch] = useState<{ id: string; opponent: string | null } | null>(null);
+  const [activeMatch, setActiveMatch] = useState<{ id: string; opponent: string | null; formatId: string | null } | null>(null);
 
   if (status === "loading") {
     return <p style={{ textAlign: "center", marginTop: 64 }}>A carregar equipa...</p>;
@@ -118,6 +118,7 @@ function ClubApp({
           teamId={team.teamId}
           matchId={activeMatch.id}
           opponent={activeMatch.opponent}
+          formatId={activeMatch.formatId}
           onExit={() => setActiveMatch(null)}
           sync={sync}
         />
@@ -144,7 +145,7 @@ function ClubApp({
                 teamId={team.teamId}
                 canManage={team.role === "team_admin"}
                 canTrackLive={canTrackLive}
-                onStartMatch={(id, opponent) => setActiveMatch({ id, opponent })}
+                onStartMatch={(id, opponent, formatId) => setActiveMatch({ id, opponent, formatId })}
               />
             </>
           )}

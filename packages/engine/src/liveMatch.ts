@@ -7,7 +7,8 @@
 import { createClockAccounting, markOnSince, nowElapsedMs as clockNowElapsedMs, playerSeconds, settleAll, settlePlayer } from "./clock";
 import type { ClockState } from "./clock";
 import { createEvent, recomputeScoreFor } from "./events";
-import type { ClockAccounting, MatchEvent, Score } from "./types";
+import { isLastPeriod } from "./matchFormat";
+import type { ClockAccounting, MatchEvent, MatchFormat, Score } from "./types";
 
 export interface Treatment {
   playerId: string;
@@ -26,6 +27,8 @@ export interface LiveMatchState {
   periodFouls: number;
   clockAcc: ClockAccounting;
   started: boolean;
+  /** Verdadeiro depois de terminar a última parte do formato configurado (regulares + prolongamento). */
+  finished: boolean;
 }
 
 export function createLiveMatchState(convocadoIds: string[] = []): LiveMatchState {
@@ -41,6 +44,7 @@ export function createLiveMatchState(convocadoIds: string[] = []): LiveMatchStat
     periodFouls: 0,
     clockAcc: createClockAccounting(),
     started: false,
+    finished: false,
   };
 }
 
@@ -189,8 +193,14 @@ export function doSub(state: LiveMatchState, outId: string, inId: string, nowMs:
   return { ...state, onCourt, clockAcc, events: [...state.events, ev] };
 }
 
-/** Assenta o tempo, regista o fim da parte, e zera o relógio para a próxima parte começar do 00:00. */
-export function endPeriod(state: LiveMatchState, nowMs: number): LiveMatchState {
+/**
+ * Assenta o tempo e regista o fim da parte. Se esta é a última parte do
+ * formato configurado (regulares + prolongamento), o jogo termina aqui —
+ * `finished` fica true e o número da parte NÃO avança mais, em vez de
+ * oferecer indefinidamente "mais uma parte". Formatos diferentes (ex.:
+ * Sub-13 2×20min vs Sub-15 2×25min) têm cada um o seu próprio limite.
+ */
+export function endPeriod(state: LiveMatchState, format: MatchFormat, nowMs: number): LiveMatchState {
   const atMs = matchElapsedMs(state, nowMs);
   const clockAcc = state.clock.running ? settleAll(state.clockAcc, state.onCourt, atMs) : state.clockAcc;
   const durSec = Math.round(atMs / 1000);
@@ -198,12 +208,14 @@ export function endPeriod(state: LiveMatchState, nowMs: number): LiveMatchState 
     label: `Fim da parte ${state.period}`,
     duracaoSec: durSec,
   });
+  const finished = isLastPeriod(state.period, format);
   return {
     ...state,
     clockAcc,
     clock: { running: false, elapsedMs: 0, startTs: null },
-    period: state.period + 1,
+    period: finished ? state.period : state.period + 1,
     periodFouls: 0,
+    finished,
     events: [...state.events, ev],
   };
 }
