@@ -2,11 +2,13 @@ import type { MatchFormat } from "@teambench/engine";
 import { useState } from "preact/hooks";
 import type { useOutboxSync } from "../sync/useOutboxSync";
 import { useMatchFormats } from "../team/useMatchFormats";
-import { usePlayers } from "../team/usePlayers";
+import { usePlayers, type PlayerRow } from "../team/usePlayers";
 import { LiveMatch } from "./LiveMatch";
 import { MatchSummary } from "./MatchSummary";
 import { PreMatch } from "./PreMatch";
+import { ReadOnlyMatch } from "./ReadOnlyMatch";
 import { useLiveMatch } from "./useLiveMatch";
+import { useMatchLock } from "./useMatchLock";
 
 interface Props {
   teamId: string;
@@ -32,8 +34,14 @@ export function MatchFlow({ teamId, matchId, opponent, formatId, onExit, sync }:
   const format: MatchFormat =
     formats.find((f) => f.id === formatId) ?? formats.find((f) => f.isDefault) ?? formats[0] ?? FALLBACK_FORMAT;
 
-  const live = useLiveMatch(matchId, teamId, format);
-  const [showSummary, setShowSummary] = useState(false);
+  // Só quem reivindicar a trava do jogo (useMatchLock) chega a montar
+  // useLiveMatch — quem está em modo leitura não deve tocar em
+  // localStorage/outbox do jogo de outra pessoa.
+  const lock = useMatchLock(matchId);
+
+  if (status === "loading" || lock.status === "checking") {
+    return <p>A carregar jogo...</p>;
+  }
 
   return (
     <div>
@@ -41,26 +49,57 @@ export function MatchFlow({ teamId, matchId, opponent, formatId, onExit, sync }:
         <button type="button" onClick={onExit}>
           ← Voltar ao painel
         </button>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          {sync.pending > 0 && (
-            <span style={{ fontSize: 12, color: "#a60" }}>
-              {sync.syncing ? "A sincronizar..." : `${sync.pending} evento(s) por sincronizar`}
-            </span>
-          )}
-          {live.state.started && !showSummary && (
-            <button type="button" onClick={() => setShowSummary(true)}>📋 Resumo</button>
-          )}
-        </div>
+        {sync.pending > 0 && (
+          <span style={{ fontSize: 12, color: "#a60" }}>
+            {sync.syncing ? "A sincronizar..." : `${sync.pending} evento(s) por sincronizar`}
+          </span>
+        )}
       </div>
-      {status === "loading" ? (
-        <p>A carregar plantel...</p>
-      ) : showSummary ? (
+      {lock.status === "readonly" ? (
+        <ReadOnlyMatch matchId={matchId} opponent={opponent} roster={activeRoster} format={format} />
+      ) : (
+        <MatchFlowEditor
+          teamId={teamId}
+          matchId={matchId}
+          opponent={opponent}
+          format={format}
+          activeRoster={activeRoster}
+        />
+      )}
+    </div>
+  );
+}
+
+function MatchFlowEditor({
+  teamId,
+  matchId,
+  opponent,
+  format,
+  activeRoster,
+}: {
+  teamId: string;
+  matchId: string;
+  opponent: string | null;
+  format: MatchFormat;
+  activeRoster: PlayerRow[];
+}) {
+  const live = useLiveMatch(matchId, teamId, format);
+  const [showSummary, setShowSummary] = useState(false);
+
+  return (
+    <>
+      {live.state.started && !showSummary && (
+        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
+          <button type="button" onClick={() => setShowSummary(true)}>📋 Resumo</button>
+        </div>
+      )}
+      {showSummary ? (
         <MatchSummary live={live} roster={activeRoster} opponent={opponent} matchId={matchId} onClose={() => setShowSummary(false)} />
       ) : !live.state.started ? (
         <PreMatch live={live} roster={activeRoster} opponent={opponent} />
       ) : (
         <LiveMatch live={live} roster={activeRoster} opponent={opponent} onViewSummary={() => setShowSummary(true)} />
       )}
-    </div>
+    </>
   );
 }
