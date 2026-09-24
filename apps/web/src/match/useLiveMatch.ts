@@ -106,8 +106,9 @@ export function useLiveMatch(matchId: string, teamId: string, format: engine.Mat
     goLive: () => setState((s) => engine.goLive(s)),
     resumeOrStart: () => apply((s) => engine.resumeOrStart(s, now())),
     pause: (label: string, reasonId?: string) => apply((s) => engine.pause(s, now(), label, reasonId)),
-    doGoal: (scorerId: string, assistId: string | null) => apply((s) => engine.doGoal(s, scorerId, assistId, now())),
-    doOppGoal: () => apply((s) => engine.doOppGoal(s, now())),
+    doGoal: (scorerId: string, assistId: string | null, tipo?: string | null, zona?: number | null) =>
+      apply((s) => engine.doGoal(s, scorerId, assistId, now(), tipo, zona)),
+    doOppGoal: (tipo?: string | null, zona?: number | null) => apply((s) => engine.doOppGoal(s, now(), tipo, zona)),
     doCard: (playerId: string, kind: "amarelo" | "vermelho") => apply((s) => engine.doCard(s, playerId, kind, now())),
     doFoul: (playerId: string) => apply((s) => engine.doFoul(s, playerId, now())),
     doSub: (outId: string, inId: string) => apply((s) => engine.doSub(s, outId, inId, now())),

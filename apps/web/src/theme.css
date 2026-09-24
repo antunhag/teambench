@@ -476,6 +476,23 @@ a {
 .abtn.stop {
   background: color-mix(in srgb, var(--ink-dim) 18%, var(--surface));
 }
+.zonegrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-top: 10px;
+}
+.zonegrid .zbtn {
+  padding: 16px 6px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  font-weight: 700;
+  font-size: 16px;
+  text-align: center;
+  cursor: pointer;
+  color: var(--ink);
+}
 
 /* ---------- log / lists ---------- */
 .logline {

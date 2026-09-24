@@ -1,4 +1,4 @@
-import { isLastPeriod } from "@teambench/engine";
+import { describeEvent, isLastPeriod, TIPOS_GOLO, ZONAS_GOLO } from "@teambench/engine";
 import type { ComponentChildren } from "preact";
 import { useState } from "preact/hooks";
 import type { PlayerRow } from "../team/usePlayers";
@@ -28,6 +28,10 @@ const PAUSE_REASONS = [
 type Picker =
   | { kind: "golo-scorer" }
   | { kind: "golo-assist"; scorerId: string }
+  | { kind: "golo-tipo"; scorerId: string; assistId: string | null } // golo nosso: último passo antes da zona
+  | { kind: "golo-zona"; scorerId: string; assistId: string | null; tipo: string | null }
+  | { kind: "opp-golo-tipo" } // golo sofrido: mesmo par tipo/zona, sem marcador/assistência
+  | { kind: "opp-golo-zona"; tipo: string | null }
   | { kind: "player"; playerId: string } // toca num jogador EM CAMPO -> ações contextuais (cartão/falta/substituir/atendimento)
   | { kind: "sub-out" } // atalho da barra: escolher primeiro quem sai
   | { kind: "sub-in"; outId: string } // escolher quem entra, já sabendo quem sai
@@ -108,7 +112,7 @@ export function LiveMatch({ live, roster, opponent, onViewSummary }: Props) {
         <div className="score-side">
           <div className="lbl">{opponent || "Advers."}</div>
           <div className="val">{state.score.advers}</div>
-          <button type="button" className="oppgoal" onClick={live.doOppGoal} style={{ marginTop: 4 }}>
+          <button type="button" className="oppgoal" onClick={() => setPicker({ kind: "opp-golo-tipo" })} style={{ marginTop: 4 }}>
             +1 golo advers.
           </button>
         </div>
@@ -224,14 +228,13 @@ export function LiveMatch({ live, roster, opponent, onViewSummary }: Props) {
             .slice()
             .reverse()
             .map((e) => {
-              const p = e.playerId ? byId.get(e.playerId) : null;
+              const lookup = (id: string) => {
+                const p = byId.get(id);
+                return p ? { id: p.id, num: p.num ?? "", name: p.name, pos: p.position ?? "Universal" } : undefined;
+              };
               return (
                 <div key={e.id} className="logline">
-                  <span className="t">{fmtMinSec(e.ms)}</span>
-                  <span className="d">
-                    {e.type}
-                    {p ? ` — #${p.num} ${p.name}` : ""}
-                  </span>
+                  <span className="d">{describeEvent(e, lookup, live.format)}</span>
                 </div>
               );
             })}
@@ -259,23 +262,91 @@ export function LiveMatch({ live, roster, opponent, onViewSummary }: Props) {
                 <PlayerChip
                   key={p.id}
                   p={p}
-                  onClick={() => {
-                    live.doGoal(picker.scorerId, p.id);
-                    setPicker(null);
-                  }}
+                  onClick={() => setPicker({ kind: "golo-tipo", scorerId: picker.scorerId, assistId: p.id })}
                 />
               ))}
           </div>
           <button
             type="button"
             className="btn primary block"
+            onClick={() => setPicker({ kind: "golo-tipo", scorerId: picker.scorerId, assistId: null })}
+            style={{ marginTop: 10 }}
+          >
+            Sem assistência
+          </button>
+        </Sheet>
+      )}
+
+      {(picker?.kind === "golo-tipo" || picker?.kind === "opp-golo-tipo") && (
+        <Sheet title="Tipo de jogada?" sub="Opcional — ajuda depois a cruzar com a folha de estatísticas" onClose={() => setPicker(null)}>
+          <div className="actiongrid">
+            {TIPOS_GOLO.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                className="abtn"
+                onClick={() =>
+                  setPicker(
+                    picker.kind === "golo-tipo"
+                      ? { kind: "golo-zona", scorerId: picker.scorerId, assistId: picker.assistId, tipo: t.id }
+                      : { kind: "opp-golo-zona", tipo: t.id }
+                  )
+                }
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            className="btn ghost block"
+            onClick={() =>
+              setPicker(
+                picker.kind === "golo-tipo"
+                  ? { kind: "golo-zona", scorerId: picker.scorerId, assistId: picker.assistId, tipo: null }
+                  : { kind: "opp-golo-zona", tipo: null }
+              )
+            }
+            style={{ marginTop: 10 }}
+          >
+            Não sei / saltar
+          </button>
+        </Sheet>
+      )}
+
+      {(picker?.kind === "golo-zona" || picker?.kind === "opp-golo-zona") && (
+        <Sheet
+          title="Zona do golo?"
+          sub="Opcional — grelha 3×4 (1-3 mais perto da baliza, 10-12 mais perto do meio-campo)"
+          onClose={() => setPicker(null)}
+        >
+          <div className="zonegrid">
+            {ZONAS_GOLO.map((z) => (
+              <button
+                key={z}
+                type="button"
+                className="zbtn"
+                onClick={() => {
+                  if (picker.kind === "golo-zona") live.doGoal(picker.scorerId, picker.assistId, picker.tipo, z);
+                  else live.doOppGoal(picker.tipo, z);
+                  setPicker(null);
+                }}
+              >
+                {z}
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            className="btn ghost block"
             onClick={() => {
-              live.doGoal(picker.scorerId, null);
+              if (picker.kind === "golo-zona") live.doGoal(picker.scorerId, picker.assistId, picker.tipo, null);
+              else live.doOppGoal(picker.tipo, null);
               setPicker(null);
             }}
             style={{ marginTop: 10 }}
           >
-            Sem assistência
+            Não sei / saltar
           </button>
         </Sheet>
       )}

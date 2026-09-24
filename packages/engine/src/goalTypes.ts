@@ -19,3 +19,7 @@ export function tipoGoloLabel(id: string | null | undefined): string | null {
   const t = TIPOS_GOLO.find((x) => x.id === id);
   return t ? t.label : null;
 }
+
+// Zona do campo onde o golo aconteceu — grelha 3×4 do banco.html original
+// (1-3 mais perto da baliza, 10-12 mais perto do meio-campo).
+export const ZONAS_GOLO: number[] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
