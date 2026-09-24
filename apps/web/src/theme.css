@@ -392,13 +392,21 @@ a {
 .pchip .b.r {
   background: var(--red);
 }
+/* Tempo em quadra — pedido explícito pra ficar grande e no topo do card:
+   é a estatística que mais se quer verificar de relance durante o jogo. */
 .pchip .min {
   position: absolute;
-  bottom: 4px;
+  top: 4px;
   right: 6px;
-  font-size: 9.5px;
-  color: var(--ink-dim);
+  font-family: "Oswald";
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink);
   font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.pchip.gr .min {
+  color: var(--gr);
 }
 .pchip.selected {
   outline: 2px solid var(--accent);

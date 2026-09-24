@@ -1,6 +1,7 @@
 import * as engine from "@teambench/engine";
 import { useEffect, useState } from "preact/hooks";
 import { supabase } from "../supabaseClient";
+import { isGoalkeeper, posAbbr } from "../team/positions";
 import type { PlayerRow } from "../team/usePlayers";
 
 interface Props {
@@ -14,10 +15,6 @@ const POLL_MS = 5_000;
 
 function toEnginePlayer(p: PlayerRow): engine.Player {
   return { id: p.id, num: p.num ?? "", name: p.name, pos: p.position ?? "Universal" };
-}
-
-function fmtMin(totalSec: number): string {
-  return `${Math.floor(totalSec / 60)}'`;
 }
 
 /**
@@ -120,23 +117,15 @@ export function ReadOnlyMatch({ matchId, opponent, roster, format }: Props) {
       {minutesRows.length > 0 && (
         <>
           <h3 className="section-title" style={{ marginTop: 16 }}>Tempo em quadra</h3>
-          <div className="tablewrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Atleta</th>
-                  <th className="num">Min</th>
-                </tr>
-              </thead>
-              <tbody>
-                {minutesRows.map(({ player, sec }) => (
-                  <tr key={player.id}>
-                    <td>#{player.num} {player.name}</td>
-                    <td className="num">{fmtMin(sec)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="pgrid">
+            {minutesRows.map(({ player, sec }) => (
+              <div key={player.id} className={`pchip${isGoalkeeper(player.pos) ? " gr" : ""}`} style={{ cursor: "default" }}>
+                <span className="min">{Math.floor(sec / 60)}'</span>
+                <span className="n">#{player.num}</span>
+                <span className="nm">{player.name}</span>
+                <span className="pos">{posAbbr(player.pos)}</span>
+              </div>
+            ))}
           </div>
         </>
       )}

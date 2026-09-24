@@ -198,11 +198,10 @@ export function LiveMatch({ live, roster, opponent, onViewSummary }: Props) {
             disabled={state.finished}
             onClick={() => setPicker({ kind: "player", playerId: p.id })}
           >
+            <span className="min">{Math.floor(live.playerSeconds(p.id) / 60)}'</span>
             <span className="n">#{p.num}</span>
             <span className="nm">{p.name}</span>
-            <span className="pos">
-              {posAbbr(p.position)} · {Math.floor(live.playerSeconds(p.id) / 60)}'
-            </span>
+            <span className="pos">{posAbbr(p.position)}</span>
           </button>
         ))}
       </div>
@@ -218,6 +217,7 @@ export function LiveMatch({ live, roster, opponent, onViewSummary }: Props) {
             disabled={state.finished}
             onClick={() => handleBenchTap(p)}
           >
+            <span className="min">{Math.floor(live.playerSeconds(p.id) / 60)}'</span>
             <span className="n">#{p.num}</span>
             <span className="nm">{p.name}</span>
           </button>
