@@ -72,7 +72,10 @@ export function describeEvent(e: MatchEvent, playerById: PlayerLookup, format?: 
       body = `Cartão vermelho — ${pname}`;
       break;
     case "falta":
-      body = `Falta — ${pname}`;
+      body = `Falta cometida — ${pname}`;
+      break;
+    case "falta_sofrida":
+      body = `Falta sofrida — ${pname}`;
       break;
     case "lesao_inicio":
       body = `Atendimento iniciado — ${pname}`;

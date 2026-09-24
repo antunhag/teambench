@@ -4,11 +4,13 @@ import {
   doCard,
   doEnter,
   doFoul,
+  doFoulSuffered,
   doGoal,
   doOppGoal,
   doSub,
   endPeriod,
   endTreatment,
+  foulsInPeriod,
   goLive,
   pause,
   playerCurrentSeconds,
@@ -134,6 +136,34 @@ describe("liveMatch — relógio, golos, cartões", () => {
     s = doFoul(s, salvador, 1_000);
     s = doFoul(s, salvador, 2_000);
     expect(s.periodFouls).toBe(2);
+  });
+
+  it("doFoulSuffered incrementa periodFoulsAdvers, separado de periodFouls", () => {
+    let s = createLiveMatchState([salvador]);
+    s = toggleTitular(s, salvador);
+    s = goLive(s);
+    s = resumeOrStart(s, 0);
+    s = doFoul(s, salvador, 1_000);
+    s = doFoulSuffered(s, salvador, 2_000);
+    s = doFoulSuffered(s, salvador, 3_000);
+    expect(s.periodFouls).toBe(1);
+    expect(s.periodFoulsAdvers).toBe(2);
+    expect(foulsInPeriod(s.events, 1)).toEqual({ nos: 1, advers: 2 });
+  });
+
+  it("endPeriod reinicia periodFouls e periodFoulsAdvers para a parte seguinte", () => {
+    let s = createLiveMatchState([salvador]);
+    s = toggleTitular(s, salvador);
+    s = goLive(s);
+    s = resumeOrStart(s, 0);
+    s = doFoul(s, salvador, 1_000);
+    s = doFoulSuffered(s, salvador, 2_000);
+    s = endPeriod(s, SUB15, 3_000);
+    expect(s.periodFouls).toBe(0);
+    expect(s.periodFoulsAdvers).toBe(0);
+    // Os eventos da parte 1 continuam contáveis por período — não desaparecem.
+    expect(foulsInPeriod(s.events, 1)).toEqual({ nos: 1, advers: 1 });
+    expect(foulsInPeriod(s.events, 2)).toEqual({ nos: 0, advers: 0 });
   });
 
   it("doEnter põe um jogador em campo sem ninguém sair, só se houver vaga (<5)", () => {

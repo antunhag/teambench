@@ -62,6 +62,10 @@ export function ReadOnlyMatch({ matchId, opponent, roster, format }: Props) {
   if (status === "error") return <p className="banner error">Erro: {errorMessage}</p>;
 
   const score = engine.recomputeScoreFor(events);
+  // Não há LiveMatchState aqui (só os eventos já sincronizados) — a parte
+  // atual é a maior já vista; falta ainda por período dá pra contar direto.
+  const currentPeriod = events.reduce((max, e) => Math.max(max, e.period), 1);
+  const fouls = engine.foulsInPeriod(events, currentPeriod);
 
   return (
     <div>
@@ -81,6 +85,9 @@ export function ReadOnlyMatch({ matchId, opponent, roster, format }: Props) {
           <div className="val">{score.advers}</div>
         </div>
       </div>
+      <p className="hint">
+        Faltas na parte {currentPeriod}: nós {fouls.nos} · adversário {fouls.advers}
+      </p>
 
       <h3 className="section-title" style={{ marginTop: 16 }}>Registo cronológico ({events.length})</h3>
       <div style={{ maxHeight: 320, overflowY: "auto" }}>

@@ -111,6 +111,7 @@ export function useLiveMatch(matchId: string, teamId: string, format: engine.Mat
     doOppGoal: (tipo?: string | null, zona?: number | null) => apply((s) => engine.doOppGoal(s, now(), tipo, zona)),
     doCard: (playerId: string, kind: "amarelo" | "vermelho") => apply((s) => engine.doCard(s, playerId, kind, now())),
     doFoul: (playerId: string) => apply((s) => engine.doFoul(s, playerId, now())),
+    doFoulSuffered: (playerId: string) => apply((s) => engine.doFoulSuffered(s, playerId, now())),
     doSub: (outId: string, inId: string) => apply((s) => engine.doSub(s, outId, inId, now())),
     doEnter: (inId: string) => apply((s) => engine.doEnter(s, inId, now())),
     startTreatment: (playerId: string) => apply((s) => engine.startTreatment(s, playerId, now())),

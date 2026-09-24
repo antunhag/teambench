@@ -25,6 +25,8 @@ export interface LiveMatchState {
   score: Score;
   treatment: Treatment | null;
   periodFouls: number;
+  /** Faltas sofridas pelos nossos jogadores (cometidas pelo adversário) na parte atual. */
+  periodFoulsAdvers: number;
   clockAcc: ClockAccounting;
   started: boolean;
   /** Verdadeiro depois de terminar a última parte do formato configurado (regulares + prolongamento). */
@@ -42,6 +44,7 @@ export function createLiveMatchState(convocadoIds: string[] = []): LiveMatchStat
     score: { nos: 0, advers: 0 },
     treatment: null,
     periodFouls: 0,
+    periodFoulsAdvers: 0,
     clockAcc: createClockAccounting(),
     started: false,
     finished: false,
@@ -157,6 +160,13 @@ export function doFoul(state: LiveMatchState, playerId: string, nowMs: number): 
   return { ...state, events: [...state.events, ev], periodFouls: state.periodFouls + 1 };
 }
 
+/** Falta sofrida por um dos nossos jogadores (cometida pelo adversário) — conta para o total do adversário na parte. */
+export function doFoulSuffered(state: LiveMatchState, playerId: string, nowMs: number): LiveMatchState {
+  const atMs = matchElapsedMs(state, nowMs);
+  const ev = createEvent("falta_sofrida", playerId, atMs, state.period, nowMs, {});
+  return { ...state, events: [...state.events, ev], periodFoulsAdvers: state.periodFoulsAdvers + 1 };
+}
+
 export function startTreatment(state: LiveMatchState, playerId: string, nowMs: number): LiveMatchState {
   if (state.treatment) return state;
   const atMs = matchElapsedMs(state, nowMs);
@@ -215,6 +225,7 @@ export function endPeriod(state: LiveMatchState, format: MatchFormat, nowMs: num
     clock: { running: false, elapsedMs: 0, startTs: null },
     period: finished ? state.period : state.period + 1,
     periodFouls: 0,
+    periodFoulsAdvers: 0,
     finished,
     events: [...state.events, ev],
   };
@@ -222,4 +233,16 @@ export function endPeriod(state: LiveMatchState, format: MatchFormat, nowMs: num
 
 export function playerCurrentSeconds(state: LiveMatchState, playerId: string, nowMs: number): number {
   return playerSeconds(state.clockAcc, playerId, matchElapsedMs(state, nowMs));
+}
+
+/**
+ * Contagem de faltas cometidas/sofridas numa parte, direto da lista de
+ * eventos — usada por quem só tem os eventos sincronizados (ex.: o modo
+ * leitura de quem não segura a trava do jogo), sem um LiveMatchState local.
+ */
+export function foulsInPeriod(events: MatchEvent[], period: number): { nos: number; advers: number } {
+  return {
+    nos: events.filter((e) => e.period === period && e.type === "falta").length,
+    advers: events.filter((e) => e.period === period && e.type === "falta_sofrida").length,
+  };
 }

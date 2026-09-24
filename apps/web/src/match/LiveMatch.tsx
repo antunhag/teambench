@@ -214,7 +214,9 @@ export function LiveMatch({ live, roster, opponent, onViewSummary }: Props) {
 
       {!state.finished && (
         <div style={{ marginTop: 16 }}>
-          <p className="hint">Faltas na parte: {state.periodFouls}</p>
+          <p className="hint">
+            Faltas na parte: nós {state.periodFouls} · adversário {state.periodFoulsAdvers}
+          </p>
           <button type="button" className={`btn block${isFinalPeriod ? " primary" : ""}`} onClick={live.endPeriod}>
             {isFinalPeriod ? "Terminar Jogo" : `Terminar Parte ${state.period}`}
           </button>
@@ -389,6 +391,16 @@ export function LiveMatch({ live, roster, opponent, onViewSummary }: Props) {
                   }}
                 >
                   <span className="ic">✋</span>Falta cometida
+                </button>
+                <button
+                  type="button"
+                  className="abtn"
+                  onClick={() => {
+                    live.doFoulSuffered(p.id);
+                    setPicker(null);
+                  }}
+                >
+                  <span className="ic">🙌</span>Falta sofrida
                 </button>
                 <button type="button" className="abtn" onClick={() => setPicker({ kind: "sub-in", outId: p.id })}>
                   <span className="ic">🔁</span>Substituir (sai)
