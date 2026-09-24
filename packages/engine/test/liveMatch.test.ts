@@ -208,6 +208,25 @@ describe("liveMatch — relógio, golos, cartões", () => {
     expect(playerCurrentSeconds(s, suplente, 25_000)).toBe(10);
   });
 
+  it(
+    "REGRESSÃO — futsal permite entrar e sair várias vezes: o tempo de um " +
+      "atleta soma TODAS as suas passagens em campo, nunca reinicia quando ele " +
+      "volta a entrar depois de já ter saído.",
+    () => {
+      let s = createLiveMatchState([salvador, suplente]);
+      s = toggleTitular(s, salvador);
+      s = goLive(s);
+      s = resumeOrStart(s, 0);
+      s = doSub(s, salvador, suplente, 15_000); // salvador joga 15s, sai; suplente entra
+      s = doSub(s, suplente, salvador, 40_000); // suplente joga 25s, sai; salvador volta a entrar
+      s = doSub(s, salvador, suplente, 70_000); // salvador joga mais 30s (2ª passagem), sai de novo
+
+      expect(s.onCourt).toEqual([suplente]);
+      expect(playerCurrentSeconds(s, salvador, 999_000)).toBe(15 + 30); // duas passagens somadas, já fora
+      expect(playerCurrentSeconds(s, suplente, 70_000)).toBe(25); // 1ª passagem assentada, 2ª ainda não rendeu tempo
+    }
+  );
+
   it("atendimento (lesão) regista início e fim com a duração certa (tempo de jogo, relógio a correr)", () => {
     let s = createLiveMatchState([salvador]);
     s = toggleTitular(s, salvador);
