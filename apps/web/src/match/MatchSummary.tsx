@@ -61,65 +61,67 @@ export function MatchSummary({ live, roster, opponent, matchId, onClose }: Props
 
   return (
     <div>
-      <button type="button" onClick={onClose} style={{ marginBottom: 12 }}>
+      <button type="button" className="btn sm ghost" onClick={onClose} style={{ marginBottom: 12 }}>
         ← Voltar ao jogo
       </button>
-      <h2 style={{ fontSize: 16 }}>Resumo — vs {opponent}</h2>
-      <p style={{ color: "#666" }}>
+      <h2 style={{ fontSize: 18 }}>Resumo — vs {opponent}</h2>
+      <p className="hint" style={{ fontSize: 15, fontWeight: 600, color: "var(--ink)" }}>
         Nós {state.score.nos} – {state.score.advers} {opponent}
       </p>
 
-      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-        <thead>
-          <tr style={{ textAlign: "left", color: "#666", fontSize: 11 }}>
-            <th>Atleta</th>
-            <th>Conv.</th>
-            <th>Tit.</th>
-            <th>Min</th>
-            <th>G</th>
-            <th>A</th>
-            <th>CA</th>
-            <th>CV</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r) => (
-            <tr key={r.playerId} style={{ borderTop: "1px solid #eee" }}>
-              <td>#{r.num} {r.nome}</td>
-              <td>{r.convocado}</td>
-              <td>{r.titular}</td>
-              <td>{r.min}</td>
-              <td>{r.golos}</td>
-              <td>{r.assist}</td>
-              <td>{r.ca}</td>
-              <td>{r.cv}</td>
+      <div className="tablewrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Atleta</th>
+              <th className="num">Conv.</th>
+              <th className="num">Tit.</th>
+              <th className="num">Min</th>
+              <th className="num">G</th>
+              <th className="num">A</th>
+              <th className="num">CA</th>
+              <th className="num">CV</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.playerId}>
+                <td>#{r.num} {r.nome}</td>
+                <td className="num">{r.convocado}</td>
+                <td className="num">{r.titular}</td>
+                <td className="num">{r.min}</td>
+                <td className="num">{r.golos}</td>
+                <td className="num">{r.assist}</td>
+                <td className="num">{r.ca}</td>
+                <td className="num">{r.cv}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
 
-      <div style={{ marginTop: 16, display: "flex", gap: 8, flexWrap: "wrap" }}>
-        <button type="button" onClick={handleCopy}>📋 Copiar resumo</button>
-        <button type="button" onClick={handleDownloadTimeline}>🗓️ Descarregar timeline</button>
-        <button type="button" onClick={handleFinish} disabled={finishStatus === "saving" || finishStatus === "done"}>
+      <div className="btn-row" style={{ marginTop: 16 }}>
+        <button type="button" className="btn" onClick={handleCopy}>📋 Copiar resumo</button>
+        <button type="button" className="btn" onClick={handleDownloadTimeline}>🗓️ Descarregar timeline</button>
+        <button type="button" className="btn primary" onClick={handleFinish} disabled={finishStatus === "saving" || finishStatus === "done"}>
           {finishStatus === "done" ? "✅ Jogo terminado" : "Marcar jogo como terminado"}
         </button>
       </div>
-      {copyMsg && <p style={{ fontSize: 12, color: "#666" }}>{copyMsg}</p>}
-      {finishStatus === "error" && <p style={{ color: "crimson", fontSize: 12 }}>Não consegui marcar como terminado — tente de novo.</p>}
+      {copyMsg && <p className="hint">{copyMsg}</p>}
+      {finishStatus === "error" && <p className="banner error">Não consegui marcar como terminado — tente de novo.</p>}
 
       <div style={{ marginTop: 16 }}>
-        <h3 style={{ fontSize: 14 }}>Registo cronológico ({state.events.length})</h3>
-        <div style={{ maxHeight: 240, overflowY: "auto", fontSize: 12 }}>
+        <h3 className="section-title">Registo cronológico ({state.events.length})</h3>
+        <div style={{ maxHeight: 240, overflowY: "auto" }}>
           {state.events.map((e) => (
-            <div key={e.id} style={{ borderTop: "1px solid #eee", padding: "4px 0" }}>
-              {engine.describeEvent(e, byId)}
+            <div key={e.id} className="logline">
+              <span className="d">{engine.describeEvent(e, byId)}</span>
             </div>
           ))}
         </div>
       </div>
 
-      <p style={{ fontSize: 11, color: "#aaa", marginTop: 8 }}>
+      <p className="hint" style={{ marginTop: 8 }}>
         A tabela de posições/nomes usa o registo local deste telemóvel. O que já sincronizou também está guardado no Supabase (tabela match_events).
       </p>
     </div>

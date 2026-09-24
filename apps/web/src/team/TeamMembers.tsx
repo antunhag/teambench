@@ -47,80 +47,80 @@ export function TeamMembers({ teamId }: Props) {
     setTimeout(() => setCopyFeedback(""), 3000);
   }
 
-  if (status === "loading") return <p>A carregar membros da equipa...</p>;
-  if (status === "error") return <p style={{ color: "crimson" }}>Erro: {errorMessage}</p>;
+  if (status === "loading") return <p className="empty">A carregar membros da equipa...</p>;
+  if (status === "error") return <p className="banner error">Erro: {errorMessage}</p>;
 
   return (
-    <div style={{ marginTop: 24 }}>
-      <h2 style={{ fontSize: 16 }}>Acesso à equipa</h2>
+    <div className="card">
+      <h2 className="section-title">Acesso à equipa</h2>
 
-      <ul style={{ paddingLeft: 0, listStyle: "none" }}>
+      <div>
         {members.map((m) => (
-          <li key={m.id} style={{ borderTop: "1px solid #eee", padding: "8px 0", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span>
-              {m.email} <span style={{ color: "#666", fontSize: 12 }}>— {ROLE_LABELS[m.role]}</span>
+          <div key={m.id} className="list-row">
+            <span className="lname" style={{ fontWeight: 400 }}>
+              {m.email} <span className="lsub">— {ROLE_LABELS[m.role]}</span>
             </span>
             {members.length > 1 && (
-              <button type="button" onClick={() => confirm(`Remover ${m.email} da equipa?`) && removeMember(m.id)}>
+              <button type="button" className="btn sm danger" onClick={() => confirm(`Remover ${m.email} da equipa?`) && removeMember(m.id)}>
                 Remover
               </button>
             )}
-          </li>
+          </div>
         ))}
-      </ul>
+      </div>
 
       {invites.length > 0 && (
         <>
-          <h3 style={{ fontSize: 13, color: "#666", marginTop: 12 }}>Convites pendentes</h3>
-          <ul style={{ paddingLeft: 0, listStyle: "none" }}>
+          <h3 className="section-title" style={{ marginTop: 12, marginBottom: 4 }}>Convites pendentes</h3>
+          <div>
             {invites.map((i) => (
-              <li key={i.id} style={{ borderTop: "1px solid #eee", padding: "8px 0", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <span>
-                  {i.email} <span style={{ color: "#666", fontSize: 12 }}>— {ROLE_LABELS[i.role]}</span>
+              <div key={i.id} className="list-row">
+                <span className="lname" style={{ fontWeight: 400 }}>
+                  {i.email} <span className="lsub">— {ROLE_LABELS[i.role]}</span>
                 </span>
                 <span>
-                  <button type="button" onClick={() => copyLink(inviteLink(i.token))}>Copiar link</button>{" "}
-                  <button type="button" onClick={() => revokeInvite(i.id)}>Revogar</button>
+                  <button type="button" className="btn sm ghost" onClick={() => copyLink(inviteLink(i.token))}>Copiar link</button>{" "}
+                  <button type="button" className="btn sm danger" onClick={() => revokeInvite(i.id)}>Revogar</button>
                 </span>
-              </li>
+              </div>
             ))}
-          </ul>
+          </div>
         </>
       )}
 
-      <form onSubmit={handleInvite} style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-end" }}>
-        <label>
-          Email a convidar
+      <form onSubmit={handleInvite} className="inline-fields" style={{ marginTop: 12 }}>
+        <div className="field" style={{ marginBottom: 0 }}>
+          <label>Email a convidar</label>
           <input
             type="email"
             required
             value={email}
             onInput={(e) => setEmail((e.target as HTMLInputElement).value)}
-            style={{ display: "block", width: 220 }}
+            style={{ width: 220 }}
           />
-        </label>
-        <label>
-          Papel
-          <select value={role} onChange={(e) => setRole((e.target as HTMLSelectElement).value as TeamRole)} style={{ display: "block" }}>
+        </div>
+        <div className="field" style={{ marginBottom: 0 }}>
+          <label>Papel</label>
+          <select value={role} onChange={(e) => setRole((e.target as HTMLSelectElement).value as TeamRole)}>
             <option value="data_entry">Lançador de dados</option>
             <option value="team_admin">Admin da Equipa</option>
             <option value="viewer">Visualizador</option>
           </select>
-        </label>
-        <button type="submit" disabled={saveStatus === "saving"}>
+        </div>
+        <button type="submit" className="btn primary" disabled={saveStatus === "saving"}>
           Gerar convite
         </button>
       </form>
-      {saveStatus === "error" && <p style={{ color: "crimson" }}>{saveError}</p>}
+      {saveStatus === "error" && <p className="banner error" style={{ marginTop: 8 }}>{saveError}</p>}
 
       {lastLink && (
-        <div style={{ marginTop: 8, border: "1px solid #ddd", borderRadius: 8, padding: 10, fontSize: 13 }}>
-          <p style={{ margin: 0 }}>
+        <div className="card" style={{ marginTop: 8, boxShadow: "none" }}>
+          <p style={{ margin: 0, fontSize: 13 }}>
             Convite criado para <strong>{lastLink.email}</strong>. Envie este link a essa pessoa (WhatsApp, email...):
           </p>
-          <p style={{ margin: "6px 0", wordBreak: "break-all", fontFamily: "monospace", fontSize: 12 }}>{lastLink.url}</p>
-          <button type="button" onClick={() => copyLink(lastLink.url)}>Copiar link</button>
-          {copyFeedback && <span style={{ marginLeft: 8, color: "#2a7" }}>{copyFeedback}</span>}
+          <p style={{ margin: "6px 0", wordBreak: "break-all", fontFamily: "ui-monospace, Menlo, monospace", fontSize: 12 }}>{lastLink.url}</p>
+          <button type="button" className="btn sm ghost" onClick={() => copyLink(lastLink.url)}>Copiar link</button>
+          {copyFeedback && <span className="hint" style={{ marginLeft: 8, color: "var(--court)" }}>{copyFeedback}</span>}
         </div>
       )}
     </div>

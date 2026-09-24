@@ -58,28 +58,35 @@ export function ReadOnlyMatch({ matchId, opponent, roster, format }: Props) {
     };
   }, [matchId]);
 
-  if (status === "loading") return <p>A carregar jogo...</p>;
-  if (status === "error") return <p style={{ color: "crimson" }}>Erro: {errorMessage}</p>;
+  if (status === "loading") return <p className="empty">A carregar jogo...</p>;
+  if (status === "error") return <p className="banner error">Erro: {errorMessage}</p>;
 
   const score = engine.recomputeScoreFor(events);
 
   return (
     <div>
-      <div style={{ border: "1px solid #a60", borderRadius: 8, padding: 10, marginBottom: 12, background: "#fff8ec" }}>
+      <div className="banner warn">
         <strong>Modo leitura</strong> — outra pessoa já está a registar este jogo. Acompanhe aqui em tempo real; para
         editar, aguarde essa pessoa terminar ou libertar o jogo.
       </div>
 
-      <h2 style={{ fontSize: 16 }}>vs {opponent}</h2>
-      <p style={{ fontSize: 20, fontWeight: 700 }}>
-        Nós {score.nos} – {score.advers} {opponent}
-      </p>
+      <h2 style={{ fontSize: 18 }}>vs {opponent}</h2>
+      <div className="scoreboard">
+        <div className="score-side">
+          <div className="lbl">Nós</div>
+          <div className="val">{score.nos}</div>
+        </div>
+        <div className="score-side">
+          <div className="lbl">{opponent || "Advers."}</div>
+          <div className="val">{score.advers}</div>
+        </div>
+      </div>
 
-      <h3 style={{ fontSize: 14, marginTop: 16 }}>Registo cronológico ({events.length})</h3>
-      <div style={{ maxHeight: 320, overflowY: "auto", fontSize: 12 }}>
+      <h3 className="section-title" style={{ marginTop: 16 }}>Registo cronológico ({events.length})</h3>
+      <div style={{ maxHeight: 320, overflowY: "auto" }}>
         {events.map((e) => (
-          <div key={e.clientEventId ?? e.id} style={{ borderTop: "1px solid #eee", padding: "4px 0" }}>
-            {engine.describeEvent(e, byId, format)}
+          <div key={e.clientEventId ?? e.id} className="logline">
+            <span className="d">{engine.describeEvent(e, byId, format)}</span>
           </div>
         ))}
       </div>

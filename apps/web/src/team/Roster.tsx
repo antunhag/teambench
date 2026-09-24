@@ -12,8 +12,8 @@ function EditRow({ p, onSave, onCancel }: { p: PlayerRow; onSave: (fields: { num
   const [name, setName] = useState(p.name);
   const [position, setPosition] = useState<Position>(p.position ?? "Universal");
   return (
-    <tr style={{ borderTop: "1px solid #eee" }}>
-      <td style={{ padding: "6px 0" }}>
+    <tr>
+      <td>
         <input value={num} onInput={(e) => setNum((e.target as HTMLInputElement).value)} style={{ width: 50 }} />
       </td>
       <td>
@@ -26,9 +26,9 @@ function EditRow({ p, onSave, onCancel }: { p: PlayerRow; onSave: (fields: { num
           ))}
         </select>
       </td>
-      <td style={{ textAlign: "right" }}>
-        <button type="button" onClick={() => onSave({ num, name, position })}>Salvar</button>{" "}
-        <button type="button" onClick={onCancel}>Cancelar</button>
+      <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+        <button type="button" className="btn sm primary" onClick={() => onSave({ num, name, position })}>Salvar</button>{" "}
+        <button type="button" className="btn sm ghost" onClick={onCancel}>Cancelar</button>
       </td>
     </tr>
   );
@@ -86,127 +86,127 @@ export function Roster({ teamId, canManage }: Props) {
     }
   }
 
-  if (status === "loading") return <p>A carregar plantel...</p>;
-  if (status === "error") return <p style={{ color: "crimson" }}>Erro: {errorMessage}</p>;
+  if (status === "loading") return <p className="empty">A carregar plantel...</p>;
+  if (status === "error") return <p className="banner error">Erro: {errorMessage}</p>;
 
   return (
-    <div style={{ marginTop: 24 }}>
-      <h2 style={{ fontSize: 16 }}>Plantel ({active.length})</h2>
+    <div className="card">
+      <h2 className="section-title">Plantel ({active.length})</h2>
       {active.length === 0 ? (
-        <p style={{ color: "#666" }}>Ainda sem atletas.</p>
+        <p className="empty">Ainda sem atletas.</p>
       ) : (
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
-          <thead>
-            <tr style={{ textAlign: "left", color: "#666", fontSize: 12 }}>
-              <th>Nº</th>
-              <th>Nome</th>
-              <th>Posição</th>
-              {canManage && <th />}
-            </tr>
-          </thead>
-          <tbody>
-            {active.map((p) =>
-              canManage && editingId === p.id ? (
-                <EditRow
-                  key={p.id}
-                  p={p}
-                  onCancel={() => setEditingId(null)}
-                  onSave={async (fields) => {
-                    await updatePlayer(p.id, fields);
-                    setEditingId(null);
-                  }}
-                />
-              ) : (
-                <tr key={p.id} style={{ borderTop: "1px solid #eee" }}>
-                  <td style={{ padding: "6px 0" }}>{p.num}</td>
-                  <td>{p.name}</td>
-                  <td>{posAbbr(p.position)}</td>
-                  {canManage && (
-                    <td style={{ textAlign: "right" }}>
-                      <button type="button" onClick={() => setEditingId(p.id)}>Editar</button>{" "}
-                      <button type="button" onClick={() => deactivatePlayer(p.id)}>Remover</button>
-                    </td>
-                  )}
-                </tr>
-              )
-            )}
-          </tbody>
-        </table>
+        <div className="tablewrap">
+          <table>
+            <thead>
+              <tr>
+                <th className="num">Nº</th>
+                <th>Nome</th>
+                <th>Posição</th>
+                {canManage && <th />}
+              </tr>
+            </thead>
+            <tbody>
+              {active.map((p) =>
+                canManage && editingId === p.id ? (
+                  <EditRow
+                    key={p.id}
+                    p={p}
+                    onCancel={() => setEditingId(null)}
+                    onSave={async (fields) => {
+                      await updatePlayer(p.id, fields);
+                      setEditingId(null);
+                    }}
+                  />
+                ) : (
+                  <tr key={p.id}>
+                    <td className="num">{p.num}</td>
+                    <td>{p.name}</td>
+                    <td>{posAbbr(p.position)}</td>
+                    {canManage && (
+                      <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                        <button type="button" className="btn sm ghost" onClick={() => setEditingId(p.id)}>Editar</button>{" "}
+                        <button type="button" className="btn sm danger" onClick={() => deactivatePlayer(p.id)}>Remover</button>
+                      </td>
+                    )}
+                  </tr>
+                )
+              )}
+            </tbody>
+          </table>
+        </div>
       )}
 
       {canManage && inactive.length > 0 && (
         <div style={{ marginTop: 12 }}>
-          <button type="button" onClick={() => setShowInactive((v) => !v)} style={{ fontSize: 12 }}>
+          <button type="button" className="btn sm ghost" onClick={() => setShowInactive((v) => !v)}>
             {showInactive ? "Ocultar" : "Ver"} atletas removidos ({inactive.length})
           </button>
           {showInactive && (
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, marginTop: 6 }}>
-              <tbody>
-                {inactive.map((p) => (
-                  <tr key={p.id} style={{ borderTop: "1px solid #eee", color: "#666" }}>
-                    <td style={{ padding: "6px 0" }}>#{p.num}</td>
-                    <td>{p.name}</td>
-                    <td>{posAbbr(p.position)}</td>
-                    <td style={{ textAlign: "right" }}>
-                      <button type="button" onClick={() => reactivatePlayer(p.id)}>Reativar</button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <div className="tablewrap">
+              <table>
+                <tbody>
+                  {inactive.map((p) => (
+                    <tr key={p.id} style={{ color: "var(--ink-dim)" }}>
+                      <td className="num">#{p.num}</td>
+                      <td>{p.name}</td>
+                      <td>{posAbbr(p.position)}</td>
+                      <td style={{ textAlign: "right" }}>
+                        <button type="button" className="btn sm ghost" onClick={() => reactivatePlayer(p.id)}>Reativar</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
       )}
 
       {canManage && (
         <>
-          <div style={{ marginTop: 24 }}>
-            <h3 style={{ fontSize: 14 }}>Adicionar atleta</h3>
-            <form onSubmit={handleAdd} style={{ display: "flex", gap: 8, alignItems: "flex-end", flexWrap: "wrap" }}>
-              <label>
-                Nº
-                <input value={num} onInput={(e) => setNum((e.target as HTMLInputElement).value)} style={{ display: "block", width: 60 }} />
-              </label>
-              <label>
-                Nome
-                <input required value={name} onInput={(e) => setName((e.target as HTMLInputElement).value)} style={{ display: "block", width: 200 }} />
-              </label>
-              <label>
-                Posição
-                <select
-                  value={position}
-                  onChange={(e) => setPosition((e.target as HTMLSelectElement).value as Position)}
-                  style={{ display: "block" }}
-                >
+          <div style={{ marginTop: 20 }}>
+            <h3 className="section-title">Adicionar atleta</h3>
+            <form onSubmit={handleAdd} className="inline-fields">
+              <div className="field" style={{ marginBottom: 0 }}>
+                <label>Nº</label>
+                <input value={num} onInput={(e) => setNum((e.target as HTMLInputElement).value)} style={{ width: 60 }} />
+              </div>
+              <div className="field" style={{ marginBottom: 0 }}>
+                <label>Nome</label>
+                <input required value={name} onInput={(e) => setName((e.target as HTMLInputElement).value)} style={{ width: 200 }} />
+              </div>
+              <div className="field" style={{ marginBottom: 0 }}>
+                <label>Posição</label>
+                <select value={position} onChange={(e) => setPosition((e.target as HTMLSelectElement).value as Position)}>
                   {POSITIONS.map((p) => (
                     <option key={p} value={p}>
                       {p}
                     </option>
                   ))}
                 </select>
-              </label>
-              <button type="submit" disabled={addStatus === "saving"}>
+              </div>
+              <button type="submit" className="btn primary" disabled={addStatus === "saving"}>
                 Adicionar
               </button>
             </form>
-            {addStatus === "error" && <p style={{ color: "crimson" }}>{addError}</p>}
+            {addStatus === "error" && <p className="banner error" style={{ marginTop: 8 }}>{addError}</p>}
           </div>
 
-          <div style={{ marginTop: 24 }}>
-            <h3 style={{ fontSize: 14 }}>Importar colando do Excel</h3>
-            <p style={{ color: "#666", fontSize: 12 }}>
+          <div style={{ marginTop: 20 }}>
+            <h3 className="section-title">Importar colando do Excel</h3>
+            <p className="hint">
               Cola as linhas (Nº, Nome, Posição). Atualiza quem já existe (casando pelo nome), acrescenta quem for
               novo, nunca remove ninguém sozinho.
             </p>
             <textarea
+              className="exportbox"
               value={importText}
               onInput={(e) => setImportText((e.target as HTMLTextAreaElement).value)}
-              style={{ width: "100%", minHeight: 100, fontFamily: "monospace" }}
             />
-            <button type="button" onClick={handleImport} disabled={importStatus === "saving"} style={{ marginTop: 8 }}>
+            <button type="button" className="btn primary" onClick={handleImport} disabled={importStatus === "saving"} style={{ marginTop: 8 }}>
               {importStatus === "saving" ? "A importar..." : "Importar / Atualizar plantel"}
             </button>
-            {importSummary && <p style={{ marginTop: 8 }}>{importSummary}</p>}
+            {importSummary && <p className="hint" style={{ marginTop: 8 }}>{importSummary}</p>}
           </div>
         </>
       )}

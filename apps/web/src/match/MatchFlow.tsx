@@ -40,19 +40,17 @@ export function MatchFlow({ teamId, matchId, opponent, formatId, onExit, sync }:
   const lock = useMatchLock(matchId);
 
   if (status === "loading" || lock.status === "checking") {
-    return <p>A carregar jogo...</p>;
+    return <p className="empty">A carregar jogo...</p>;
   }
 
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-        <button type="button" onClick={onExit}>
+        <button type="button" className="btn sm ghost" onClick={onExit}>
           ← Voltar ao painel
         </button>
         {sync.pending > 0 && (
-          <span style={{ fontSize: 12, color: "#a60" }}>
-            {sync.syncing ? "A sincronizar..." : `${sync.pending} evento(s) por sincronizar`}
-          </span>
+          <span className="hint">{sync.syncing ? "A sincronizar..." : `${sync.pending} evento(s) por sincronizar`}</span>
         )}
       </div>
       {lock.status === "readonly" ? (
@@ -90,7 +88,7 @@ function MatchFlowEditor({
     <>
       {live.state.started && !showSummary && (
         <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
-          <button type="button" onClick={() => setShowSummary(true)}>📋 Resumo</button>
+          <button type="button" className="btn sm" onClick={() => setShowSummary(true)}>📋 Resumo</button>
         </div>
       )}
       {showSummary ? (

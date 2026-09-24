@@ -68,32 +68,32 @@ export function AcceptInvite({ session, token, onAccepted, onDismiss }: Props) {
   }
 
   return (
-    <div style={{ maxWidth: 400, margin: "64px auto", fontFamily: "system-ui, sans-serif" }}>
+    <div className="page" style={{ maxWidth: 400 }}>
       <h1 style={{ fontSize: 20 }}>Convite para equipa</h1>
 
-      {status === "loading" && <p>A verificar convite...</p>}
+      {status === "loading" && <p className="empty">A verificar convite...</p>}
       {status === "not-found" && (
         <>
-          <p style={{ color: "crimson" }}>
+          <p className="banner error">
             Convite não encontrado para <strong>{session.user.email}</strong>. Confirme que entrou com o mesmo email
             que recebeu o convite.
           </p>
-          <button type="button" onClick={onDismiss}>Continuar sem aceitar</button>
+          <button type="button" className="btn ghost" onClick={onDismiss}>Continuar sem aceitar</button>
         </>
       )}
       {preview && (status === "ready" || status === "accepting" || status === "error") && (
-        <>
+        <div className="card">
           <p>
             Você foi convidado para a equipa <strong>{preview.teamName}</strong> como{" "}
             <strong>{ROLE_LABELS[preview.role] ?? preview.role}</strong>.
           </p>
-          <p style={{ color: "#666", fontSize: 13 }}>Convite endereçado a {preview.email}.</p>
-          <button type="button" onClick={handleAccept} disabled={status === "accepting"} style={{ width: "100%", padding: 10, marginTop: 8 }}>
+          <p className="hint">Convite endereçado a {preview.email}.</p>
+          <button type="button" className="btn primary block" onClick={handleAccept} disabled={status === "accepting"} style={{ marginTop: 8 }}>
             {status === "accepting" ? "A aceitar..." : "Aceitar convite"}
           </button>
-          {status === "error" && <p style={{ color: "crimson", marginTop: 8 }}>{errorMessage}</p>}
-          <button type="button" onClick={onDismiss} style={{ marginTop: 8 }}>Cancelar</button>
-        </>
+          {status === "error" && <p className="banner error" style={{ marginTop: 8 }}>{errorMessage}</p>}
+          <button type="button" className="btn ghost block" onClick={onDismiss} style={{ marginTop: 8 }}>Cancelar</button>
+        </div>
       )}
     </div>
   );

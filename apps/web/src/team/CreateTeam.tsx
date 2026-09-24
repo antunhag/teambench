@@ -48,26 +48,25 @@ export function CreateTeam({ session, clubId, clubName, onCreated }: Props) {
   }
 
   return (
-    <div style={{ maxWidth: 400, margin: "64px auto", fontFamily: "system-ui, sans-serif" }}>
+    <div className="page" style={{ maxWidth: 400 }}>
       <h1 style={{ fontSize: 20 }}>Criar a primeira equipa</h1>
-      <p style={{ color: "#666" }}>
+      <p className="hint" style={{ marginBottom: 16 }}>
         Clube: <strong>{clubName}</strong>. Você vai ser o administrador desta equipa.
       </p>
       <form onSubmit={handleSubmit}>
-        <label style={{ display: "block", marginBottom: 8 }}>
-          Nome da equipa
+        <div className="field">
+          <label>Nome da equipa</label>
           <input
             required
             value={name}
             onInput={(e) => setName((e.target as HTMLInputElement).value)}
             placeholder="Ex.: Sub-15"
-            style={{ display: "block", width: "100%", padding: 8, marginTop: 4 }}
           />
-        </label>
-        <button type="submit" disabled={status === "saving"} style={{ width: "100%", padding: 10, marginTop: 8 }}>
+        </div>
+        <button type="submit" className="btn primary block" disabled={status === "saving"}>
           {status === "saving" ? "A criar..." : "Criar equipa"}
         </button>
-        {status === "error" && <p style={{ color: "crimson", marginTop: 8 }}>{errorMessage}</p>}
+        {status === "error" && <p className="banner error" style={{ marginTop: 8 }}>{errorMessage}</p>}
       </form>
     </div>
   );

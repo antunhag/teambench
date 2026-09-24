@@ -49,62 +49,50 @@ export function Login() {
   }
 
   return (
-    <div style={{ maxWidth: 360, margin: "64px auto", fontFamily: "system-ui, sans-serif" }}>
-      <h1 style={{ fontSize: 20, marginBottom: 4 }}>Teambench</h1>
-      <p style={{ color: "#666", marginBottom: 24 }}>Entrar na sua equipa</p>
+    <div className="page" style={{ maxWidth: 360 }}>
+      <h1 style={{ fontSize: 22, marginBottom: 4 }}>⚽ Teambench</h1>
+      <p className="hint" style={{ marginBottom: 20 }}>Entrar na sua equipa</p>
 
-      <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
-        <button
-          type="button"
-          onClick={() => setMode("magic-link")}
-          style={{ fontWeight: mode === "magic-link" ? 700 : 400 }}
-        >
+      <div className="tabs" style={{ display: "flex", gap: 6, marginBottom: 16 }}>
+        <div className={`tab${mode === "magic-link" ? " active" : ""}`} onClick={() => setMode("magic-link")}>
           Link mágico
-        </button>
-        <button
-          type="button"
-          onClick={() => setMode("password")}
-          style={{ fontWeight: mode === "password" ? 700 : 400 }}
-        >
+        </div>
+        <div className={`tab${mode === "password" ? " active" : ""}`} onClick={() => setMode("password")}>
           Senha
-        </button>
+        </div>
       </div>
 
       {mode === "magic-link" && status === "sent" ? (
         <p>Enviámos um link de acesso para <strong>{email}</strong>. Abra-o neste mesmo telemóvel/navegador.</p>
       ) : (
         <form onSubmit={mode === "magic-link" ? sendMagicLink : signInWithPassword}>
-          <label style={{ display: "block", marginBottom: 8 }}>
-            Email
+          <div className="field">
+            <label>Email</label>
             <input
               type="email"
               required
               value={email}
               onInput={(e) => setEmail((e.target as HTMLInputElement).value)}
-              style={{ display: "block", width: "100%", padding: 8, marginTop: 4 }}
             />
-          </label>
+          </div>
 
           {mode === "password" && (
-            <label style={{ display: "block", marginBottom: 8 }}>
-              Senha
+            <div className="field">
+              <label>Senha</label>
               <input
                 type="password"
                 required
                 value={password}
                 onInput={(e) => setPassword((e.target as HTMLInputElement).value)}
-                style={{ display: "block", width: "100%", padding: 8, marginTop: 4 }}
               />
-            </label>
+            </div>
           )}
 
-          <button type="submit" disabled={status === "sending"} style={{ width: "100%", padding: 10, marginTop: 8 }}>
+          <button type="submit" className="btn primary block" disabled={status === "sending"}>
             {status === "sending" ? "A enviar..." : mode === "magic-link" ? "Enviar link mágico" : "Entrar"}
           </button>
 
-          {status === "error" && (
-            <p style={{ color: "crimson", marginTop: 8 }}>{errorMessage}</p>
-          )}
+          {status === "error" && <p className="banner error" style={{ marginTop: 8 }}>{errorMessage}</p>}
         </form>
       )}
     </div>

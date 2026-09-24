@@ -2,7 +2,7 @@ import { isLastPeriod } from "@teambench/engine";
 import type { ComponentChildren } from "preact";
 import { useState } from "preact/hooks";
 import type { PlayerRow } from "../team/usePlayers";
-import { GOALKEEPER_COLOR, isGoalkeeper, posAbbr } from "../team/positions";
+import { isGoalkeeper, posAbbr } from "../team/positions";
 import type { useLiveMatch } from "./useLiveMatch";
 
 interface Props {
@@ -37,41 +37,22 @@ type Picker =
 function PlayerChip({ p, onClick, dim }: { p: PlayerRow; onClick: () => void; dim?: boolean }) {
   const gk = isGoalkeeper(p.position);
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      style={{
-        border: `1px solid ${gk ? GOALKEEPER_COLOR : "#ccc"}`,
-        borderRadius: 10,
-        padding: "10px 6px",
-        minHeight: 64,
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: 2,
-        background: dim ? "#f7f7f7" : gk ? `${GOALKEEPER_COLOR}14` : "#fff",
-        color: dim ? "#666" : gk ? GOALKEEPER_COLOR : undefined,
-      }}
-    >
-      <div style={{ fontWeight: 700, fontSize: 15 }}>#{p.num}</div>
-      <div style={{ fontSize: 11 }}>{p.name}</div>
-      <div style={{ fontSize: 9, color: gk ? GOALKEEPER_COLOR : "#666" }}>{posAbbr(p.position)}</div>
+    <button type="button" className={`pchip${gk ? " gr" : ""}${dim ? " dim" : ""}`} onClick={onClick}>
+      <span className="n">#{p.num}</span>
+      <span className="nm">{p.name}</span>
+      <span className="pos">{posAbbr(p.position)}</span>
     </button>
   );
 }
 
 function Sheet({ title, sub, onClose, children }: { title: string; sub?: string; onClose: () => void; children: ComponentChildren }) {
   return (
-    <div
-      style={{ position: "fixed", inset: 0, background: "rgba(10,20,14,.5)", zIndex: 50, display: "flex", alignItems: "flex-end", justifyContent: "center" }}
-      onClick={(e) => e.target === e.currentTarget && onClose()}
-    >
-      <div style={{ background: "#fff", width: "100%", maxWidth: 520, borderRadius: "18px 18px 0 0", padding: 16, maxHeight: "85vh", overflowY: "auto" }}>
-        <h3 style={{ fontSize: 16, margin: "0 0 2px" }}>{title}</h3>
-        {sub && <div style={{ fontSize: 12, color: "#666", marginBottom: 12 }}>{sub}</div>}
+    <div className="overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="sheet">
+        <h3>{title}</h3>
+        {sub && <div className="sub">{sub}</div>}
         {children}
-        <button type="button" onClick={onClose} style={{ marginTop: 14, width: "100%", padding: 10 }}>
+        <button type="button" className="btn ghost block" onClick={onClose} style={{ marginTop: 14 }}>
           Cancelar
         </button>
       </div>
@@ -110,41 +91,42 @@ export function LiveMatch({ live, roster, opponent, onViewSummary }: Props) {
 
   return (
     <div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "#1F7A4D", color: "#fff", borderRadius: 12, padding: 12 }}>
-        <div style={{ textAlign: "center", flex: 1 }}>
-          <div style={{ fontSize: 11, opacity: 0.85 }}>Nós</div>
-          <div style={{ fontSize: 28, fontWeight: 700 }}>{state.score.nos}</div>
+      <div className="scoreboard">
+        <div className="score-side">
+          <div className="lbl">Nós</div>
+          <div className="val">{state.score.nos}</div>
         </div>
-        <div style={{ textAlign: "center", minWidth: 90 }}>
-          <div style={{ fontSize: 11, opacity: 0.85 }}>Parte {state.period}</div>
-          <div style={{ fontSize: 24, fontWeight: 600 }}>{fmtMinSec(elapsedMs)}</div>
+        <div className="clock-mid">
+          <div className="lbl" style={{ fontSize: 10.5, opacity: 0.85 }}>Parte {state.period}</div>
+          <div className="time">{fmtMinSec(elapsedMs)}</div>
           {!state.finished && (
-            <button type="button" onClick={handleClockClick} style={{ marginTop: 4, fontSize: 11, borderRadius: 20, border: "none", padding: "4px 10px" }}>
+            <button type="button" className="clock-btn" onClick={handleClockClick}>
               {clockLabel}
             </button>
           )}
         </div>
-        <div style={{ textAlign: "center", flex: 1 }}>
-          <div style={{ fontSize: 11, opacity: 0.85 }}>{opponent || "Advers."}</div>
-          <div style={{ fontSize: 28, fontWeight: 700 }}>{state.score.advers}</div>
-          <button type="button" onClick={live.doOppGoal} style={{ fontSize: 10, marginTop: 4 }}>
+        <div className="score-side">
+          <div className="lbl">{opponent || "Advers."}</div>
+          <div className="val">{state.score.advers}</div>
+          <button type="button" className="oppgoal" onClick={live.doOppGoal} style={{ marginTop: 4 }}>
             +1 golo advers.
           </button>
         </div>
       </div>
 
       {showPauseReasons && (
-        <div style={{ marginTop: 8, border: "1px solid #ccc", borderRadius: 8, padding: 8 }}>
-          <p style={{ fontSize: 12, margin: "0 0 6px" }}>Motivo da pausa:</p>
+        <div className="card">
+          <p className="hint" style={{ marginTop: 0 }}>Motivo da pausa:</p>
           {PAUSE_REASONS.map((r) => (
             <button
               key={r.id}
               type="button"
+              className="btn ghost block"
               onClick={() => {
                 live.pause(r.label, r.id);
                 setShowPauseReasons(false);
               }}
-              style={{ display: "block", width: "100%", marginBottom: 4, textAlign: "left", padding: 6 }}
+              style={{ marginBottom: 4, textAlign: "left" }}
             >
               {r.label}
             </button>
@@ -153,10 +135,10 @@ export function LiveMatch({ live, roster, opponent, onViewSummary }: Props) {
       )}
 
       {state.finished && (
-        <div style={{ marginTop: 8, border: "2px solid #1F7A4D", borderRadius: 8, padding: 10, textAlign: "center" }}>
+        <div className="banner success" style={{ textAlign: "center", marginTop: 12 }}>
           <strong>Jogo terminado</strong> — Nós {state.score.nos} – {state.score.advers} {opponent}
           <div style={{ marginTop: 6 }}>
-            <button type="button" onClick={onViewSummary} style={{ fontWeight: 700 }}>
+            <button type="button" className="btn primary" onClick={onViewSummary}>
               📋 Ver Resumo
             </button>
           </div>
@@ -164,108 +146,92 @@ export function LiveMatch({ live, roster, opponent, onViewSummary }: Props) {
       )}
 
       {state.treatment && (
-        <div style={{ marginTop: 8, border: "1px solid crimson", borderRadius: 8, padding: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div className="banner error" style={{ marginTop: 12, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           🩹 Atendimento em curso: <strong>{byId.get(state.treatment.playerId)?.name}</strong>
-          <button type="button" onClick={live.endTreatment}>Terminar</button>
+          <button type="button" className="btn sm ghost" onClick={live.endTreatment}>Terminar</button>
         </div>
       )}
 
       {!state.finished && (
         <>
-          <div style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <button type="button" disabled={!live.canUndo} onClick={live.undo}>
+          <div className="tray" style={{ position: "static", background: "transparent", borderTop: "none", padding: 0, marginTop: 12 }}>
+            <button type="button" className="btn" disabled={!live.canUndo} onClick={live.undo}>
               ↩️ Desfazer
             </button>
-            <button type="button" onClick={() => setPicker({ kind: "golo-scorer" })} style={{ fontWeight: 700 }}>
+            <button type="button" className="btn primary" onClick={() => setPicker({ kind: "golo-scorer" })}>
               ⚽ Golo
             </button>
-            <button type="button" onClick={() => setPicker({ kind: "sub-out" })} style={{ fontWeight: 700 }} disabled={bench.length === 0}>
+            <button type="button" className="btn" onClick={() => setPicker({ kind: "sub-out" })} disabled={bench.length === 0}>
               🔁 Substituição
             </button>
           </div>
 
-          <p style={{ fontSize: 11, color: "#666", marginTop: 8, marginBottom: 4 }}>
+          <p className="hint">
             Toca direto no atleta do banco pra entrar, ou num atleta em campo para cartão/falta/atendimento/substituição.
           </p>
         </>
       )}
 
-      <h3 style={{ fontSize: 14, marginTop: 8 }}>Em campo ({onCourt.length})</h3>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(90px, 1fr))", gap: 8 }}>
-        {onCourt.map((p) => {
-          const gk = isGoalkeeper(p.position);
-          return (
-            <button
-              key={p.id}
-              type="button"
-              disabled={state.finished}
-              onClick={() => setPicker({ kind: "player", playerId: p.id })}
-              style={{
-                border: `1px solid ${gk ? GOALKEEPER_COLOR : "#ccc"}`,
-                borderRadius: 8,
-                padding: 6,
-                fontSize: 12,
-                textAlign: "center",
-                background: gk ? `${GOALKEEPER_COLOR}14` : "#fff",
-              }}
-            >
-              #{p.num} {p.name}
-              <div style={{ fontSize: 10, color: gk ? GOALKEEPER_COLOR : "#666" }}>
-                {posAbbr(p.position)} · {Math.floor(live.playerSeconds(p.id) / 60)}'
-              </div>
-            </button>
-          );
-        })}
+      <h3 className="section-title" style={{ marginTop: 16 }}>Em campo ({onCourt.length})</h3>
+      <div className="pgrid">
+        {onCourt.map((p) => (
+          <button
+            key={p.id}
+            type="button"
+            className={`pchip${isGoalkeeper(p.position) ? " gr" : ""}`}
+            disabled={state.finished}
+            onClick={() => setPicker({ kind: "player", playerId: p.id })}
+          >
+            <span className="n">#{p.num}</span>
+            <span className="nm">{p.name}</span>
+            <span className="pos">
+              {posAbbr(p.position)} · {Math.floor(live.playerSeconds(p.id) / 60)}'
+            </span>
+          </button>
+        ))}
       </div>
 
-      <h3 style={{ fontSize: 14, marginTop: 16 }}>Banco ({bench.length})</h3>
-      <p style={{ fontSize: 10, color: "#666", margin: "0 0 6px" }}>Toca para entrar em campo.</p>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(90px, 1fr))", gap: 8 }}>
-        {bench.map((p) => {
-          const gk = isGoalkeeper(p.position);
-          return (
-            <button
-              key={p.id}
-              type="button"
-              disabled={state.finished}
-              onClick={() => handleBenchTap(p)}
-              style={{
-                border: `1px solid ${gk ? GOALKEEPER_COLOR : "#eee"}`,
-                borderRadius: 8,
-                padding: 6,
-                fontSize: 12,
-                textAlign: "center",
-                background: gk ? `${GOALKEEPER_COLOR}14` : "#fafafa",
-                color: gk ? GOALKEEPER_COLOR : "#666",
-              }}
-            >
-              #{p.num} {p.name}
-            </button>
-          );
-        })}
+      <h3 className="section-title" style={{ marginTop: 16 }}>Banco ({bench.length})</h3>
+      <p className="hint" style={{ marginTop: 0 }}>Toca para entrar em campo.</p>
+      <div className="pgrid">
+        {bench.map((p) => (
+          <button
+            key={p.id}
+            type="button"
+            className={`pchip dim${isGoalkeeper(p.position) ? " gr" : ""}`}
+            disabled={state.finished}
+            onClick={() => handleBenchTap(p)}
+          >
+            <span className="n">#{p.num}</span>
+            <span className="nm">{p.name}</span>
+          </button>
+        ))}
       </div>
 
       {!state.finished && (
         <div style={{ marginTop: 16 }}>
-          <p style={{ fontSize: 12, color: "#666" }}>Faltas na parte: {state.periodFouls}</p>
-          <button type="button" onClick={live.endPeriod} style={{ width: "100%", padding: 10, fontWeight: isFinalPeriod ? 700 : 400 }}>
+          <p className="hint">Faltas na parte: {state.periodFouls}</p>
+          <button type="button" className={`btn block${isFinalPeriod ? " primary" : ""}`} onClick={live.endPeriod}>
             {isFinalPeriod ? "Terminar Jogo" : `Terminar Parte ${state.period}`}
           </button>
         </div>
       )}
 
       <div style={{ marginTop: 16 }}>
-        <h3 style={{ fontSize: 14 }}>Registo ({state.events.length})</h3>
-        <div style={{ maxHeight: 200, overflowY: "auto", fontSize: 12 }}>
+        <h3 className="section-title">Registo ({state.events.length})</h3>
+        <div style={{ maxHeight: 200, overflowY: "auto" }}>
           {state.events
             .slice()
             .reverse()
             .map((e) => {
               const p = e.playerId ? byId.get(e.playerId) : null;
               return (
-                <div key={e.id} style={{ borderTop: "1px solid #eee", padding: "4px 0" }}>
-                  <span style={{ color: "#666" }}>{fmtMinSec(e.ms)}</span> — {e.type}
-                  {p ? ` — #${p.num} ${p.name}` : ""}
+                <div key={e.id} className="logline">
+                  <span className="t">{fmtMinSec(e.ms)}</span>
+                  <span className="d">
+                    {e.type}
+                    {p ? ` — #${p.num} ${p.name}` : ""}
+                  </span>
                 </div>
               );
             })}
@@ -276,7 +242,7 @@ export function LiveMatch({ live, roster, opponent, onViewSummary }: Props) {
 
       {picker?.kind === "golo-scorer" && (
         <Sheet title="Quem marcou?" sub="Toca no marcador" onClose={() => setPicker(null)}>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(96px, 1fr))", gap: 8 }}>
+          <div className="pgrid">
             {onCourt.map((p) => (
               <PlayerChip key={p.id} p={p} onClick={() => setPicker({ kind: "golo-assist", scorerId: p.id })} />
             ))}
@@ -286,7 +252,7 @@ export function LiveMatch({ live, roster, opponent, onViewSummary }: Props) {
 
       {picker?.kind === "golo-assist" && (
         <Sheet title="Assistência?" sub='Opcional — toca em "sem assistência" se não houver' onClose={() => setPicker(null)}>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(96px, 1fr))", gap: 8 }}>
+          <div className="pgrid">
             {onCourt
               .filter((p) => p.id !== picker.scorerId)
               .map((p) => (
@@ -302,11 +268,12 @@ export function LiveMatch({ live, roster, opponent, onViewSummary }: Props) {
           </div>
           <button
             type="button"
+            className="btn primary block"
             onClick={() => {
               live.doGoal(picker.scorerId, null);
               setPicker(null);
             }}
-            style={{ marginTop: 10, width: "100%", padding: 10, fontWeight: 700 }}
+            style={{ marginTop: 10 }}
           >
             Sem assistência
           </button>
@@ -321,61 +288,63 @@ export function LiveMatch({ live, roster, opponent, onViewSummary }: Props) {
           const inTreatment = state.treatment?.playerId === p.id;
           return (
             <Sheet title={`#${p.num} ${p.name}`} sub="Em campo" onClose={() => setPicker(null)}>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+              <div className="actiongrid">
                 <button
                   type="button"
+                  className="abtn yellow"
                   onClick={() => {
                     live.doCard(p.id, "amarelo");
                     setPicker(null);
                   }}
-                  style={{ padding: 14 }}
                 >
-                  🟨 Amarelo
+                  <span className="ic">🟨</span>Amarelo
                 </button>
                 <button
                   type="button"
+                  className="abtn red"
                   onClick={() => {
                     live.doCard(p.id, "vermelho");
                     setPicker(null);
                   }}
-                  style={{ padding: 14 }}
                 >
-                  🟥 Vermelho
+                  <span className="ic">🟥</span>Vermelho
                 </button>
                 <button
                   type="button"
+                  className="abtn"
                   onClick={() => {
                     live.doFoul(p.id);
                     setPicker(null);
                   }}
-                  style={{ padding: 14 }}
                 >
-                  ✋ Falta cometida
+                  <span className="ic">✋</span>Falta cometida
                 </button>
-                <button type="button" onClick={() => setPicker({ kind: "sub-in", outId: p.id })} style={{ padding: 14 }}>
-                  🔁 Substituir (sai)
+                <button type="button" className="abtn" onClick={() => setPicker({ kind: "sub-in", outId: p.id })}>
+                  <span className="ic">🔁</span>Substituir (sai)
                 </button>
                 {!inTreatment ? (
                   <button
                     type="button"
+                    className="abtn stop"
+                    style={{ gridColumn: "1 / -1" }}
                     onClick={() => {
                       live.startTreatment(p.id);
                       setPicker(null);
                     }}
-                    style={{ padding: 14, gridColumn: "1 / -1" }}
                   >
-                    🩹 Iniciar atendimento
+                    <span className="ic">🩹</span>Iniciar atendimento
                   </button>
                 ) : (
                   <button
                     type="button"
+                    className="abtn stop"
+                    style={{ gridColumn: "1 / -1" }}
                     onClick={() => {
                       live.endTreatment();
                       setPicker(null);
                     }}
-                    style={{ padding: 14, gridColumn: "1 / -1" }}
                   >
-                    ✅ Terminar atendimento
+                    <span className="ic">✅</span>Terminar atendimento
                   </button>
                 )}
               </div>
@@ -385,7 +354,7 @@ export function LiveMatch({ live, roster, opponent, onViewSummary }: Props) {
 
       {picker?.kind === "sub-out" && (
         <Sheet title="Quem sai?" sub="Atalho rápido — toca em quem vai sair" onClose={() => setPicker(null)}>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(96px, 1fr))", gap: 8 }}>
+          <div className="pgrid">
             {onCourt.map((p) => (
               <PlayerChip key={p.id} p={p} onClick={() => setPicker({ kind: "sub-in", outId: p.id })} />
             ))}
@@ -395,7 +364,7 @@ export function LiveMatch({ live, roster, opponent, onViewSummary }: Props) {
 
       {picker?.kind === "sub-in" && (
         <Sheet title="Quem entra?" sub={`Sai #${byId.get(picker.outId)?.num} ${byId.get(picker.outId)?.name}`} onClose={() => setPicker(null)}>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(96px, 1fr))", gap: 8 }}>
+          <div className="pgrid">
             {bench.map((p) => (
               <PlayerChip
                 key={p.id}
@@ -412,7 +381,7 @@ export function LiveMatch({ live, roster, opponent, onViewSummary }: Props) {
 
       {picker?.kind === "sub-out-for-entry" && (
         <Sheet title="Quadra completa (5) — quem sai?" sub={`Para entrar #${byId.get(picker.inId)?.num} ${byId.get(picker.inId)?.name}`} onClose={() => setPicker(null)}>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(96px, 1fr))", gap: 8 }}>
+          <div className="pgrid">
             {onCourt.map((p) => (
               <PlayerChip
                 key={p.id}

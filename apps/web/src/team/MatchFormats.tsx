@@ -35,62 +35,64 @@ export function MatchFormats({ teamId, canManage }: Props) {
     }
   }
 
-  if (status === "loading") return <p>A carregar formatos de jogo...</p>;
-  if (status === "error") return <p style={{ color: "crimson" }}>Erro: {errorMessage}</p>;
+  if (status === "loading") return <p className="empty">A carregar formatos de jogo...</p>;
+  if (status === "error") return <p className="banner error">Erro: {errorMessage}</p>;
 
   return (
-    <div style={{ marginTop: 24 }}>
-      <h2 style={{ fontSize: 16 }}>Formato de jogo</h2>
+    <div className="card">
+      <h2 className="section-title">Formato de jogo</h2>
       {formats.length === 0 ? (
-        <p style={{ color: "#666" }}>Ainda sem formato definido — os jogos vão precisar de um.</p>
+        <p className="empty">Ainda sem formato definido — os jogos vão precisar de um.</p>
       ) : (
-        <ul style={{ paddingLeft: 0, listStyle: "none" }}>
+        <div>
           {formats.map((f) => (
-            <li key={f.id} style={{ borderTop: "1px solid #eee", padding: "8px 0" }}>
-              <strong>{f.name}</strong>
-              {f.isDefault && <span style={{ marginLeft: 6, fontSize: 11, color: "#666" }}>(padrão)</span>}
-              <div style={{ fontSize: 13, color: "#666" }}>
-                {f.periodCount}×{f.periodMinutes} min
-                {f.overtimePeriodCount > 0 ? ` + ${f.overtimePeriodCount}×${f.overtimeMinutes} min prolongamento` : ""}
+            <div key={f.id} className="list-row" style={{ flexDirection: "column", alignItems: "flex-start" }}>
+              <div>
+                <span className="lname">{f.name}</span>
+                {f.isDefault && <span className="pill" style={{ marginLeft: 6 }}>padrão</span>}
+                <div className="lsub">
+                  {f.periodCount}×{f.periodMinutes} min
+                  {f.overtimePeriodCount > 0 ? ` + ${f.overtimePeriodCount}×${f.overtimeMinutes} min prolongamento` : ""}
+                </div>
               </div>
               {canManage && !f.isDefault && (
-                <button type="button" onClick={() => setDefault(f.id)} style={{ marginTop: 4 }}>
+                <button type="button" className="btn sm ghost" onClick={() => setDefault(f.id)} style={{ marginTop: 4 }}>
                   Tornar padrão
                 </button>
               )}
-            </li>
+            </div>
           ))}
-        </ul>
+        </div>
       )}
 
       {canManage && (
-        <form onSubmit={handleAdd} style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-end" }}>
-          <label>
-            Nome
-            <input required value={name} onInput={(e) => setName((e.target as HTMLInputElement).value)} placeholder="Ex.: Campeonato Distrital Sub-15" style={{ display: "block", width: 220 }} />
-          </label>
-          <label>
-            Partes
-            <input type="number" min={1} value={periodCount} onInput={(e) => setPeriodCount(Number((e.target as HTMLInputElement).value))} style={{ display: "block", width: 60 }} />
-          </label>
-          <label>
-            Min/parte
-            <input type="number" min={1} value={periodMinutes} onInput={(e) => setPeriodMinutes(Number((e.target as HTMLInputElement).value))} style={{ display: "block", width: 70 }} />
-          </label>
-          <label>
-            Prolongamentos
-            <input type="number" min={0} value={overtimePeriodCount} onInput={(e) => setOvertimePeriodCount(Number((e.target as HTMLInputElement).value))} style={{ display: "block", width: 60 }} />
-          </label>
-          <label>
-            Min/prolong.
-            <input type="number" min={0} value={overtimeMinutes} onInput={(e) => setOvertimeMinutes(Number((e.target as HTMLInputElement).value))} style={{ display: "block", width: 70 }} />
-          </label>
-          <button type="submit" disabled={saveStatus === "saving"}>
+        <form onSubmit={handleAdd} className="inline-fields" style={{ marginTop: 12 }}>
+          <div className="field" style={{ marginBottom: 0 }}>
+            <label>Nome</label>
+            <input required value={name} onInput={(e) => setName((e.target as HTMLInputElement).value)} placeholder="Ex.: Campeonato Distrital Sub-15" style={{ width: 220 }} />
+          </div>
+          <div className="field" style={{ marginBottom: 0 }}>
+            <label>Partes</label>
+            <input type="number" min={1} value={periodCount} onInput={(e) => setPeriodCount(Number((e.target as HTMLInputElement).value))} style={{ width: 60 }} />
+          </div>
+          <div className="field" style={{ marginBottom: 0 }}>
+            <label>Min/parte</label>
+            <input type="number" min={1} value={periodMinutes} onInput={(e) => setPeriodMinutes(Number((e.target as HTMLInputElement).value))} style={{ width: 70 }} />
+          </div>
+          <div className="field" style={{ marginBottom: 0 }}>
+            <label>Prolongamentos</label>
+            <input type="number" min={0} value={overtimePeriodCount} onInput={(e) => setOvertimePeriodCount(Number((e.target as HTMLInputElement).value))} style={{ width: 60 }} />
+          </div>
+          <div className="field" style={{ marginBottom: 0 }}>
+            <label>Min/prolong.</label>
+            <input type="number" min={0} value={overtimeMinutes} onInput={(e) => setOvertimeMinutes(Number((e.target as HTMLInputElement).value))} style={{ width: 70 }} />
+          </div>
+          <button type="submit" className="btn primary" disabled={saveStatus === "saving"}>
             Adicionar formato
           </button>
         </form>
       )}
-      {saveStatus === "error" && <p style={{ color: "crimson" }}>{saveError}</p>}
+      {saveStatus === "error" && <p className="banner error" style={{ marginTop: 8 }}>{saveError}</p>}
     </div>
   );
 }

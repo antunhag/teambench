@@ -31,9 +31,9 @@ export function ClubSettings({ clubId, clubName, onUpdated }: Props) {
 
   if (!editing) {
     return (
-      <p style={{ color: "#666" }}>
+      <p className="hint" style={{ marginBottom: 4 }}>
         Clube: {clubName}{" "}
-        <button type="button" onClick={() => { setName(clubName); setEditing(true); }} style={{ fontSize: 11 }}>
+        <button type="button" className="btn sm ghost" onClick={() => { setName(clubName); setEditing(true); }}>
           Editar
         </button>
       </p>
@@ -41,11 +41,11 @@ export function ClubSettings({ clubId, clubName, onUpdated }: Props) {
   }
 
   return (
-    <form onSubmit={handleSave} style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 8 }}>
-      <input value={name} onInput={(e) => setName((e.target as HTMLInputElement).value)} required />
-      <button type="submit" disabled={status === "saving"}>Salvar</button>
-      <button type="button" onClick={() => setEditing(false)}>Cancelar</button>
-      {status === "error" && <span style={{ color: "crimson", fontSize: 12 }}>{errorMessage}</span>}
+    <form onSubmit={handleSave} className="inline-fields" style={{ marginBottom: 8 }}>
+      <input value={name} onInput={(e) => setName((e.target as HTMLInputElement).value)} required style={{ width: 220 }} />
+      <button type="submit" className="btn sm primary" disabled={status === "saving"}>Salvar</button>
+      <button type="button" className="btn sm ghost" onClick={() => setEditing(false)}>Cancelar</button>
+      {status === "error" && <span className="hint" style={{ color: "var(--red)" }}>{errorMessage}</span>}
     </form>
   );
 }

@@ -35,7 +35,7 @@ export function App() {
 
   if (!isSupabaseConfigured) {
     return (
-      <div style={{ maxWidth: 480, margin: "64px auto", fontFamily: "system-ui, sans-serif" }}>
+      <div className="page">
         <h1 style={{ fontSize: 20 }}>Teambench</h1>
         <p>
           Falta configurar a ligação ao Supabase. Copie <code>apps/web/.env.example</code> para{" "}
@@ -47,7 +47,7 @@ export function App() {
   }
 
   if (session === undefined) {
-    return <p style={{ textAlign: "center", marginTop: 64 }}>A carregar...</p>;
+    return <p className="empty">A carregar...</p>;
   }
 
   if (!session) {
@@ -99,10 +99,10 @@ function AuthenticatedApp({ session }: { session: Session }) {
   }
 
   if (club.status === "loading" || team.status === "loading") {
-    return <p style={{ textAlign: "center", marginTop: 64 }}>A carregar...</p>;
+    return <p className="empty">A carregar...</p>;
   }
   if (team.status === "error") {
-    return <p style={{ textAlign: "center", marginTop: 64, color: "crimson" }}>Erro: {team.errorMessage}</p>;
+    return <p className="banner error">Erro: {team.errorMessage}</p>;
   }
 
   if (team.status === "has-team") {
@@ -111,7 +111,7 @@ function AuthenticatedApp({ session }: { session: Session }) {
 
   // Sem equipa ainda — onboarding normal: clube primeiro, depois equipa.
   if (club.status === "error") {
-    return <p style={{ textAlign: "center", marginTop: 64, color: "crimson" }}>Erro: {club.errorMessage}</p>;
+    return <p className="banner error">Erro: {club.errorMessage}</p>;
   }
   if (club.status === "no-club") {
     return <CreateClub session={session} onCreated={club.refresh} />;
@@ -134,7 +134,7 @@ function TeamApp({
   const canTrackLive = team.role === "team_admin" || team.role === "data_entry";
 
   return (
-    <div style={{ maxWidth: activeMatch ? 720 : 480, margin: "64px auto", fontFamily: "system-ui, sans-serif" }}>
+    <div className={activeMatch ? "page wide" : "page"}>
       {activeMatch ? (
         <MatchFlow
           teamId={team.teamId}
@@ -146,14 +146,20 @@ function TeamApp({
         />
       ) : (
         <>
-          <p>
-            Sessão iniciada como <strong>{session.user.email}</strong>.{" "}
-            <button type="button" onClick={() => supabase.auth.signOut()}>Sair</button>
-          </p>
+          <div className="topbar">
+            <div className="brand" style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8, width: "100%" }}>
+              <h1>⚽ {team.teamName}</h1>
+              <button type="button" className="btn sm ghost" onClick={() => supabase.auth.signOut()}>
+                Sair
+              </button>
+            </div>
+            <span className="tag">
+              {session.user.email} · {ROLE_LABELS[team.role] ?? team.role}
+            </span>
+          </div>
+
           {sync.pending > 0 && (
-            <p style={{ fontSize: 12, color: "#a60" }}>
-              {sync.syncing ? "A sincronizar..." : `${sync.pending} evento(s) por sincronizar`}
-            </p>
+            <p className="hint">{sync.syncing ? "A sincronizar..." : `${sync.pending} evento(s) por sincronizar`}</p>
           )}
           {/* Configurações de clube só fazem sentido para quem administra o clube — um
               membro convidado só para esta equipa (ex.: Lançador de dados) nunca terá
@@ -161,8 +167,6 @@ function TeamApp({
           {club.status === "has-club" && (
             <ClubSettings clubId={club.club!.clubId} clubName={club.club!.clubName} onUpdated={club.refresh} />
           )}
-          <h1 style={{ fontSize: 20 }}>{team.teamName}</h1>
-          <p style={{ color: "#666" }}>Papel: {ROLE_LABELS[team.role] ?? team.role}</p>
 
           <Roster teamId={team.teamId} canManage={team.role === "team_admin"} />
           <MatchFormats teamId={team.teamId} canManage={team.role === "team_admin"} />

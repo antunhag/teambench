@@ -43,26 +43,25 @@ export function CreateClub({ session, onCreated }: Props) {
   }
 
   return (
-    <div style={{ maxWidth: 400, margin: "64px auto", fontFamily: "system-ui, sans-serif" }}>
+    <div className="page" style={{ maxWidth: 400 }}>
       <h1 style={{ fontSize: 20 }}>Criar o seu clube</h1>
-      <p style={{ color: "#666" }}>
+      <p className="hint" style={{ marginBottom: 16 }}>
         Você vai ser o administrador do clube — depois disto, cria-se a primeira equipa dentro dele.
       </p>
       <form onSubmit={handleSubmit}>
-        <label style={{ display: "block", marginBottom: 8 }}>
-          Nome do clube
+        <div className="field">
+          <label>Nome do clube</label>
           <input
             required
             value={name}
             onInput={(e) => setName((e.target as HTMLInputElement).value)}
             placeholder="Ex.: Associação Académica de Leça"
-            style={{ display: "block", width: "100%", padding: 8, marginTop: 4 }}
           />
-        </label>
-        <button type="submit" disabled={status === "saving"} style={{ width: "100%", padding: 10, marginTop: 8 }}>
+        </div>
+        <button type="submit" className="btn primary block" disabled={status === "saving"}>
           {status === "saving" ? "A criar..." : "Criar clube"}
         </button>
-        {status === "error" && <p style={{ color: "crimson", marginTop: 8 }}>{errorMessage}</p>}
+        {status === "error" && <p className="banner error" style={{ marginTop: 8 }}>{errorMessage}</p>}
       </form>
     </div>
   );
