@@ -270,6 +270,35 @@ a {
   font-size: 12px;
   cursor: pointer;
 }
+.scoreboard-fouls {
+  display: flex;
+  justify-content: center;
+  gap: 22px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.25);
+}
+.scoreboard-fouls .foul {
+  text-align: center;
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  opacity: 0.85;
+}
+.scoreboard-fouls .foul .n {
+  display: block;
+  font-family: "Oswald";
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.3;
+  text-transform: none;
+  letter-spacing: normal;
+}
+/* Falta acumulada crítica (5ª+ na parte) — em muitas competições de futsal já
+   dá lance livre direto sem barreira para o adversário. */
+.scoreboard-fouls .foul.warn .n {
+  color: var(--yellow);
+}
 .oppgoal {
   border: none;
   background: rgba(0, 0, 0, 0.15);

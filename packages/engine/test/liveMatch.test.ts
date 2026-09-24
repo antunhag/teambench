@@ -16,6 +16,7 @@ import {
   playerCurrentSeconds,
   resumeOrStart,
   startTreatment,
+  titularIdsFromEvents,
   toggleConvocado,
   toggleTitular,
 } from "../src/liveMatch";
@@ -70,6 +71,17 @@ describe("liveMatch — relógio, golos, cartões", () => {
     expect(s.clock.running).toBe(true);
     expect(s.started).toBe(true);
     expect(playerCurrentSeconds(s, salvador, 11_000)).toBe(10);
+  });
+
+  it("titularIdsFromEvents reconstrói os titulares do kickoff da parte 1, mesmo sem golos", () => {
+    let s = createLiveMatchState([salvador, guarda]);
+    s = toggleTitular(s, salvador);
+    s = toggleTitular(s, guarda);
+    s = goLive(s);
+    s = resumeOrStart(s, 0); // kickoff da parte 1 — sem nenhum golo no jogo
+    s = pause(s, 10_000, "Pedido de Tempo — Nós", "tempo_nos");
+    s = resumeOrStart(s, 20_000); // retomada = outro evento "kickoff", mesma parte
+    expect(titularIdsFromEvents(s.events).sort()).toEqual([guarda, salvador].sort());
   });
 
   it("pause assenta o tempo de todos em campo e para o relógio", () => {

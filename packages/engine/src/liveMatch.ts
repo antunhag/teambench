@@ -88,7 +88,11 @@ export function resumeOrStart(state: LiveMatchState, nowMs: number): LiveMatchSt
     clockAcc = markOnSince(clockAcc, id, atMs);
   });
   const label = hasKickoffThisPeriod(state) ? "Relógio retomado" : `Início da parte ${state.period}`;
-  const ev = createEvent("kickoff", null, atMs, state.period, nowMs, { label });
+  // O lineup no kickoff é o que permite reconstruir os titulares da parte 1
+  // só a partir dos eventos sincronizados (ver titularIdsFromEvents) — sem
+  // isto, um jogo sem golos na 1ª parte não teria nenhum registo de quem
+  // começou em campo.
+  const ev = createEvent("kickoff", null, atMs, state.period, nowMs, { label, lineup: state.onCourt.slice() });
   return {
     ...state,
     clock: { running: true, elapsedMs: state.clock.elapsedMs, startTs: nowMs },
@@ -245,4 +249,16 @@ export function foulsInPeriod(events: MatchEvent[], period: number): { nos: numb
     nos: events.filter((e) => e.period === period && e.type === "falta").length,
     advers: events.filter((e) => e.period === period && e.type === "falta_sofrida").length,
   };
+}
+
+/**
+ * Titulares da parte 1, reconstruídos a partir do primeiro evento "kickoff"
+ * — para quem só tem os eventos sincronizados (sem LiveMatchState local),
+ * ex.: o modo leitura, que precisa disto pra montar a timeline/minutos.
+ */
+export function titularIdsFromEvents(events: MatchEvent[]): string[] {
+  const first = events
+    .filter((e) => e.type === "kickoff" && e.period === 1)
+    .sort((a, b) => (a.ms ?? 0) - (b.ms ?? 0))[0];
+  return first?.lineup ?? [];
 }

@@ -16,16 +16,22 @@ function toEnginePlayer(p: PlayerRow): engine.Player {
   return { id: p.id, num: p.num ?? "", name: p.name, pos: p.position ?? "Universal" };
 }
 
+function fmtMin(totalSec: number): string {
+  return `${Math.floor(totalSec / 60)}'`;
+}
+
 /**
  * Vista de acompanhamento em tempo real para quem NÃO segura a trava deste
- * jogo (ver useMatchLock) — mostra placar e registo cronológico a partir do
- * que já sincronizou, sem tocar em localStorage/outbox: quem só está a ver
- * não deve interferir com o registo de quem está a jogar em campo.
+ * jogo (ver useMatchLock) — mostra placar, faltas, tempo em quadra e registo
+ * cronológico a partir do que já sincronizou, sem tocar em
+ * localStorage/outbox: quem só está a ver não deve interferir com o registo
+ * de quem está a jogar em campo.
  */
 export function ReadOnlyMatch({ matchId, opponent, roster, format }: Props) {
   const [events, setEvents] = useState<engine.MatchEvent[]>([]);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [errorMessage, setErrorMessage] = useState("");
+  const [showLog, setShowLog] = useState(false);
 
   const players = roster.map(toEnginePlayer);
   const byId = (id: string) => players.find((p) => p.id === id);
@@ -63,9 +69,22 @@ export function ReadOnlyMatch({ matchId, opponent, roster, format }: Props) {
 
   const score = engine.recomputeScoreFor(events);
   // Não há LiveMatchState aqui (só os eventos já sincronizados) — a parte
-  // atual é a maior já vista; falta ainda por período dá pra contar direto.
+  // atual é a maior já vista; faltas por período dá pra contar direto.
   const currentPeriod = events.reduce((max, e) => Math.max(max, e.period), 1);
   const fouls = engine.foulsInPeriod(events, currentPeriod);
+
+  // Tempo em quadra por atleta, reconstruído só dos eventos sincronizados —
+  // os titulares da parte 1 vêm do lineup gravado no primeiro kickoff (ver
+  // titularIdsFromEvents); sem golos no jogo não haveria outra forma de
+  // saber quem começou em campo.
+  const titularIds = engine.titularIdsFromEvents(events);
+  const halves = engine.buildTimelineData(events, players, titularIds);
+  const secondsById = new Map<string, number>();
+  halves.forEach((h) => h.players.forEach((p) => secondsById.set(p.id, (secondsById.get(p.id) ?? 0) + p.totalSec)));
+  const minutesRows = [...secondsById.entries()]
+    .map(([id, sec]) => ({ player: byId(id), sec }))
+    .filter((r): r is { player: engine.Player; sec: number } => !!r.player)
+    .sort((a, b) => b.sec - a.sec);
 
   return (
     <div>
@@ -75,28 +94,65 @@ export function ReadOnlyMatch({ matchId, opponent, roster, format }: Props) {
       </div>
 
       <h2 style={{ fontSize: 18 }}>vs {opponent}</h2>
-      <div className="scoreboard">
-        <div className="score-side">
-          <div className="lbl">Nós</div>
-          <div className="val">{score.nos}</div>
-        </div>
-        <div className="score-side">
-          <div className="lbl">{opponent || "Advers."}</div>
-          <div className="val">{score.advers}</div>
-        </div>
-      </div>
-      <p className="hint">
-        Faltas na parte {currentPeriod}: nós {fouls.nos} · adversário {fouls.advers}
-      </p>
-
-      <h3 className="section-title" style={{ marginTop: 16 }}>Registo cronológico ({events.length})</h3>
-      <div style={{ maxHeight: 320, overflowY: "auto" }}>
-        {events.map((e) => (
-          <div key={e.clientEventId ?? e.id} className="logline">
-            <span className="d">{engine.describeEvent(e, byId, format)}</span>
+      <div className="scoreboard" style={{ flexDirection: "column" }}>
+        <div style={{ display: "flex", width: "100%", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+          <div className="score-side">
+            <div className="lbl">Nós</div>
+            <div className="val">{score.nos}</div>
           </div>
-        ))}
+          <div className="score-side">
+            <div className="lbl">{opponent || "Advers."}</div>
+            <div className="val">{score.advers}</div>
+          </div>
+        </div>
+        <div className="scoreboard-fouls">
+          <div className={`foul${fouls.nos >= 5 ? " warn" : ""}`}>
+            Faltas nós
+            <span className="n">{fouls.nos}</span>
+          </div>
+          <div className={`foul${fouls.advers >= 5 ? " warn" : ""}`}>
+            Faltas advers.
+            <span className="n">{fouls.advers}</span>
+          </div>
+        </div>
       </div>
+
+      {minutesRows.length > 0 && (
+        <>
+          <h3 className="section-title" style={{ marginTop: 16 }}>Tempo em quadra</h3>
+          <div className="tablewrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Atleta</th>
+                  <th className="num">Min</th>
+                </tr>
+              </thead>
+              <tbody>
+                {minutesRows.map(({ player, sec }) => (
+                  <tr key={player.id}>
+                    <td>#{player.num} {player.name}</td>
+                    <td className="num">{fmtMin(sec)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+
+      <button type="button" className="btn sm ghost" onClick={() => setShowLog((v) => !v)} style={{ marginTop: 16 }}>
+        {showLog ? "Ocultar" : "Ver"} registo cronológico ({events.length})
+      </button>
+      {showLog && (
+        <div style={{ maxHeight: 320, overflowY: "auto", marginTop: 8 }}>
+          {events.map((e) => (
+            <div key={e.clientEventId ?? e.id} className="logline">
+              <span className="d">{engine.describeEvent(e, byId, format)}</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

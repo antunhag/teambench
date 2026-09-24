@@ -95,26 +95,38 @@ export function LiveMatch({ live, roster, opponent, onViewSummary }: Props) {
 
   return (
     <div>
-      <div className="scoreboard">
-        <div className="score-side">
-          <div className="lbl">Nós</div>
-          <div className="val">{state.score.nos}</div>
-        </div>
-        <div className="clock-mid">
-          <div className="lbl" style={{ fontSize: 10.5, opacity: 0.85 }}>Parte {state.period}</div>
-          <div className="time">{fmtMinSec(elapsedMs)}</div>
-          {!state.finished && (
-            <button type="button" className="clock-btn" onClick={handleClockClick}>
-              {clockLabel}
+      <div className="scoreboard" style={{ flexDirection: "column" }}>
+        <div style={{ display: "flex", width: "100%", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+          <div className="score-side">
+            <div className="lbl">Nós</div>
+            <div className="val">{state.score.nos}</div>
+          </div>
+          <div className="clock-mid">
+            <div className="lbl" style={{ fontSize: 10.5, opacity: 0.85 }}>Parte {state.period}</div>
+            <div className="time">{fmtMinSec(elapsedMs)}</div>
+            {!state.finished && (
+              <button type="button" className="clock-btn" onClick={handleClockClick}>
+                {clockLabel}
+              </button>
+            )}
+          </div>
+          <div className="score-side">
+            <div className="lbl">{opponent || "Advers."}</div>
+            <div className="val">{state.score.advers}</div>
+            <button type="button" className="oppgoal" onClick={() => setPicker({ kind: "opp-golo-tipo" })} style={{ marginTop: 4 }}>
+              +1 golo advers.
             </button>
-          )}
+          </div>
         </div>
-        <div className="score-side">
-          <div className="lbl">{opponent || "Advers."}</div>
-          <div className="val">{state.score.advers}</div>
-          <button type="button" className="oppgoal" onClick={() => setPicker({ kind: "opp-golo-tipo" })} style={{ marginTop: 4 }}>
-            +1 golo advers.
-          </button>
+        <div className="scoreboard-fouls">
+          <div className={`foul${state.periodFouls >= 5 ? " warn" : ""}`}>
+            Faltas nós
+            <span className="n">{state.periodFouls}</span>
+          </div>
+          <div className={`foul${state.periodFoulsAdvers >= 5 ? " warn" : ""}`}>
+            Faltas advers.
+            <span className="n">{state.periodFoulsAdvers}</span>
+          </div>
         </div>
       </div>
 
@@ -214,9 +226,6 @@ export function LiveMatch({ live, roster, opponent, onViewSummary }: Props) {
 
       {!state.finished && (
         <div style={{ marginTop: 16 }}>
-          <p className="hint">
-            Faltas na parte: nós {state.periodFouls} · adversário {state.periodFoulsAdvers}
-          </p>
           <button type="button" className={`btn block${isFinalPeriod ? " primary" : ""}`} onClick={live.endPeriod}>
             {isFinalPeriod ? "Terminar Jogo" : `Terminar Parte ${state.period}`}
           </button>
