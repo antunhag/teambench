@@ -1,4 +1,5 @@
 import { useState } from "preact/hooks";
+import { toErrorMessage } from "../errorMessage";
 import { useMatchFormats } from "./useMatchFormats";
 
 interface Props {
@@ -31,7 +32,7 @@ export function MatchFormats({ teamId, canManage }: Props) {
       setSaveStatus("idle");
     } catch (err) {
       setSaveStatus("error");
-      setSaveError(err instanceof Error ? err.message : String(err));
+      setSaveError(toErrorMessage(err));
     }
   }
 

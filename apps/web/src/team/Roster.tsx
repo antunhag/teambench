@@ -1,4 +1,5 @@
 import { useState } from "preact/hooks";
+import { toErrorMessage } from "../errorMessage";
 import { POSITIONS, posAbbr, type Position } from "./positions";
 import { usePlayers, type PlayerRow } from "./usePlayers";
 
@@ -64,7 +65,7 @@ export function Roster({ teamId, canManage }: Props) {
       setAddStatus("idle");
     } catch (err) {
       setAddStatus("error");
-      setAddError(err instanceof Error ? err.message : String(err));
+      setAddError(toErrorMessage(err));
     }
   }
 
@@ -81,7 +82,7 @@ export function Roster({ teamId, canManage }: Props) {
       setImportText("");
       setImportStatus("idle");
     } catch (err) {
-      setImportSummary(`Erro: ${err instanceof Error ? err.message : String(err)}`);
+      setImportSummary(`Erro: ${toErrorMessage(err)}`);
       setImportStatus("error");
     }
   }

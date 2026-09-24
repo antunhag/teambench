@@ -1,4 +1,5 @@
 import { useState } from "preact/hooks";
+import { toErrorMessage } from "../errorMessage";
 import { inviteLink, useTeamMembers, type TeamRole } from "./useTeamMembers";
 
 interface Props {
@@ -33,7 +34,7 @@ export function TeamMembers({ teamId }: Props) {
       setSaveStatus("idle");
     } catch (err) {
       setSaveStatus("error");
-      setSaveError(err instanceof Error ? err.message : String(err));
+      setSaveError(toErrorMessage(err));
     }
   }
 

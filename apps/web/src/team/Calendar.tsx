@@ -1,4 +1,5 @@
 import { useState } from "preact/hooks";
+import { toErrorMessage } from "../errorMessage";
 import { useMatchFormats } from "./useMatchFormats";
 import { useMatches, type MatchFields, type MatchRow } from "./useMatches";
 
@@ -33,7 +34,7 @@ function MatchForm({
       await onSave(fields);
     } catch (err) {
       setStatus("error");
-      setError(err instanceof Error ? err.message : String(err));
+      setError(toErrorMessage(err));
     }
   }
 
@@ -96,7 +97,7 @@ export function Calendar({ teamId, canManage, canTrackLive, onStartMatch }: Prop
       setImportText("");
       setImportStatus("idle");
     } catch (err) {
-      setImportSummary(`Erro: ${err instanceof Error ? err.message : String(err)}`);
+      setImportSummary(`Erro: ${toErrorMessage(err)}`);
       setImportStatus("error");
     }
   }

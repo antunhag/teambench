@@ -41,6 +41,30 @@ function parseDate(raw: string): string | null {
   return null;
 }
 
+/**
+ * Aceita HH:MM, HH:MM:SS, ou o formato comum em pt-PT "20h00"/"20h"; devolve
+ * HH:MM ou null se não reconhecer. É opcional e não bloqueia a linha — ao
+ * contrário da data/adversário, um valor de hora que o Postgres rejeitaria
+ * (ex.: "20h00" direto na coluna `time`) já travou uma importação inteira no
+ * passado, porque o upsert é um único lote: uma linha inválida derrubava
+ * todas as outras.
+ */
+function parseTime(raw: string | undefined): string | null {
+  const s = (raw || "").trim();
+  if (!s) return null;
+  const colon = /^(\d{1,2}):(\d{2})(?::\d{2})?$/.exec(s);
+  if (colon) {
+    const [, h, m] = colon;
+    return `${h.padStart(2, "0")}:${m}`;
+  }
+  const hLetter = /^(\d{1,2})[hH](\d{2})?$/.exec(s);
+  if (hLetter) {
+    const [, h, m] = hLetter;
+    return `${h.padStart(2, "0")}:${(m || "00").padStart(2, "0")}`;
+  }
+  return null;
+}
+
 export function parseMatchImport(
   text: string,
   teamId: string,
@@ -83,7 +107,7 @@ export function parseMatchImport(
       opponent,
       competition: competition || null,
       location: location || null,
-      kickoff_time: kickoff || null,
+      kickoff_time: parseTime(kickoff),
     });
     if (existingMatch) updated++;
     else added++;
