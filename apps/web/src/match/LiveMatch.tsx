@@ -77,6 +77,13 @@ export function LiveMatch({ live, roster, opponent, onViewSummary }: Props) {
   const [showPauseReasons, setShowPauseReasons] = useState(false);
   const [picker, setPicker] = useState<Picker>(null);
 
+  // Antes do primeiro "Iniciar Parte 1", o cinco inicial ainda pode estar
+  // incompleto (ver PreMatch) — tocar num jogador aqui só ajusta quem fica
+  // em campo (toggleTitular, sem gerar evento), em vez de contar como
+  // substituição/ação de jogo. Isto é o que permite adiar a decisão do
+  // cinco inicial até o apito real, sem travar o treinador na tela anterior.
+  const preKickoff = !state.started;
+
   const hasKickoffThisPeriod = state.events.some((e) => e.type === "kickoff" && e.period === state.period);
   const clockLabel = state.clock.running ? "Pausar" : hasKickoffThisPeriod ? "Retomar" : `Iniciar Parte ${state.period}`;
 
@@ -86,11 +93,18 @@ export function LiveMatch({ live, roster, opponent, onViewSummary }: Props) {
   }
 
   function handleBenchTap(p: PlayerRow) {
-    if (state.onCourt.length < 5) {
+    if (preKickoff) {
+      live.toggleTitular(p.id);
+    } else if (state.onCourt.length < 5) {
       live.doEnter(p.id);
     } else {
       setPicker({ kind: "sub-out-for-entry", inId: p.id });
     }
+  }
+
+  function handleOnCourtTap(p: PlayerRow) {
+    if (preKickoff) live.toggleTitular(p.id);
+    else setPicker({ kind: "player", playerId: p.id });
   }
 
   return (
@@ -168,24 +182,31 @@ export function LiveMatch({ live, roster, opponent, onViewSummary }: Props) {
         </div>
       )}
 
-      {!state.finished && (
-        <>
-          <div className="tray" style={{ position: "static", background: "transparent", borderTop: "none", padding: 0, marginTop: 12 }}>
-            <button type="button" className="btn" disabled={!live.canUndo} onClick={live.undo}>
-              ↩️ Desfazer
-            </button>
-            <button type="button" className="btn primary" onClick={() => setPicker({ kind: "golo-scorer" })}>
-              ⚽ Golo
-            </button>
-            <button type="button" className="btn" onClick={() => setPicker({ kind: "sub-out" })} disabled={bench.length === 0}>
-              🔁 Substituição
-            </button>
-          </div>
+      {preKickoff ? (
+        <p className="hint">
+          Ainda ajustando o cinco inicial ({state.onCourt.length}/5) — toca nos jogadores pra adicionar/remover. Toca
+          em "{clockLabel}" quando o jogo começar de verdade.
+        </p>
+      ) : (
+        !state.finished && (
+          <>
+            <div className="tray" style={{ position: "static", background: "transparent", borderTop: "none", padding: 0, marginTop: 12 }}>
+              <button type="button" className="btn" disabled={!live.canUndo} onClick={live.undo}>
+                ↩️ Desfazer
+              </button>
+              <button type="button" className="btn primary" onClick={() => setPicker({ kind: "golo-scorer" })}>
+                ⚽ Golo
+              </button>
+              <button type="button" className="btn" onClick={() => setPicker({ kind: "sub-out" })} disabled={bench.length === 0}>
+                🔁 Substituição
+              </button>
+            </div>
 
-          <p className="hint">
-            Toca direto no atleta do banco pra entrar, ou num atleta em campo para cartão/falta/atendimento/substituição.
-          </p>
-        </>
+            <p className="hint">
+              Toca direto no atleta do banco pra entrar, ou num atleta em campo para cartão/falta/atendimento/substituição.
+            </p>
+          </>
+        )
       )}
 
       <h3 className="section-title" style={{ marginTop: 16 }}>Em campo ({onCourt.length})</h3>
@@ -194,9 +215,9 @@ export function LiveMatch({ live, roster, opponent, onViewSummary }: Props) {
           <button
             key={p.id}
             type="button"
-            className={`pchip${isGoalkeeper(p.position) ? " gr" : ""}`}
+            className={`pchip${isGoalkeeper(p.position) ? " gr" : ""}${preKickoff ? " selected" : ""}`}
             disabled={state.finished}
-            onClick={() => setPicker({ kind: "player", playerId: p.id })}
+            onClick={() => handleOnCourtTap(p)}
           >
             <span className="min">{Math.floor(live.playerSeconds(p.id) / 60)}'</span>
             <span className="n">#{p.num}</span>
@@ -224,7 +245,7 @@ export function LiveMatch({ live, roster, opponent, onViewSummary }: Props) {
         ))}
       </div>
 
-      {!state.finished && (
+      {!state.finished && !preKickoff && (
         <div style={{ marginTop: 16 }}>
           <button type="button" className={`btn block${isFinalPeriod ? " primary" : ""}`} onClick={live.endPeriod}>
             {isFinalPeriod ? "Terminar Jogo" : `Terminar Parte ${state.period}`}

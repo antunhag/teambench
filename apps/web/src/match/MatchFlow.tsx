@@ -83,6 +83,11 @@ function MatchFlowEditor({
 }) {
   const live = useLiveMatch(matchId, teamId, format);
   const [showSummary, setShowSummary] = useState(false);
+  // Confirmar o pré-jogo só leva à tela do jogo — não inicia o relógio
+  // sozinho. O cinco inicial pode continuar incompleto até ali: o cronómetro
+  // real do jogo raramente espera o treinador terminar de decidir.
+  const [confirmed, setConfirmed] = useState(false);
+  const showPreMatch = !live.state.started && !confirmed;
 
   return (
     <>
@@ -93,8 +98,8 @@ function MatchFlowEditor({
       )}
       {showSummary ? (
         <MatchSummary live={live} roster={activeRoster} opponent={opponent} matchId={matchId} onClose={() => setShowSummary(false)} />
-      ) : !live.state.started ? (
-        <PreMatch live={live} roster={activeRoster} opponent={opponent} />
+      ) : showPreMatch ? (
+        <PreMatch live={live} roster={activeRoster} opponent={opponent} onConfirm={() => setConfirmed(true)} />
       ) : (
         <LiveMatch live={live} roster={activeRoster} opponent={opponent} onViewSummary={() => setShowSummary(true)} />
       )}

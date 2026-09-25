@@ -104,7 +104,15 @@ export function useLiveMatch(matchId: string, teamId: string, format: engine.Mat
     toggleConvocado: (id: string) => setState((s) => engine.toggleConvocado(s, id)),
     toggleTitular: (id: string) => setState((s) => engine.toggleTitular(s, id)),
     goLive: () => setState((s) => engine.goLive(s)),
-    resumeOrStart: () => apply((s) => engine.resumeOrStart(s, now())),
+    // Na primeira vez (ainda não "started"), tira o retrato dos titulares
+    // imediatamente antes do relógio arrancar de verdade — é só aí que se
+    // sabe ao certo quem ficou em campo, já que o treinador pode continuar
+    // ajustando o cinco inicial até apitar o início.
+    resumeOrStart: () =>
+      apply((s) => {
+        const withTitulars = s.started ? s : engine.goLive(s);
+        return engine.resumeOrStart(withTitulars, now());
+      }),
     pause: (label: string, reasonId?: string) => apply((s) => engine.pause(s, now(), label, reasonId)),
     doGoal: (scorerId: string, assistId: string | null, tipo?: string | null, zona?: number | null) =>
       apply((s) => engine.doGoal(s, scorerId, assistId, now(), tipo, zona)),

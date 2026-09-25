@@ -6,9 +6,10 @@ interface Props {
   live: ReturnType<typeof useLiveMatch>;
   roster: PlayerRow[];
   opponent: string | null;
+  onConfirm: () => void;
 }
 
-export function PreMatch({ live, roster, opponent }: Props) {
+export function PreMatch({ live, roster, opponent, onConfirm }: Props) {
   const { state } = live;
   const convocados = roster.filter((p) => state.convocadoIds.includes(p.id));
 
@@ -60,7 +61,12 @@ export function PreMatch({ live, roster, opponent }: Props) {
         </div>
       )}
 
-      <button type="button" className="btn primary block" disabled={state.onCourt.length === 0} onClick={() => { live.goLive(); live.resumeOrStart(); }} style={{ marginTop: 20 }}>
+      {state.onCourt.length < 5 && convocados.length > 0 && (
+        <p className="hint">
+          Pode continuar sem os 5 completos — dá pra ajustar quem fica em campo até apitar o início, já na próxima tela.
+        </p>
+      )}
+      <button type="button" className="btn primary block" disabled={convocados.length === 0} onClick={onConfirm} style={{ marginTop: 8 }}>
         Ir para o jogo →
       </button>
     </div>
