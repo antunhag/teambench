@@ -243,6 +243,34 @@ a {
   font-weight: 700;
   line-height: 1;
 }
+/* Pedidos de tempo usados nesta parte (0 ou 1, por equipa) — rótulo +
+   caixa com borda, uma linha própria entre o placar e as faltas. */
+.scoreboard-timeouts {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 10px;
+}
+.scoreboard-timeouts .timeout-box {
+  text-align: center;
+}
+.scoreboard-timeouts .lbl {
+  display: block;
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.85;
+  margin-bottom: 4px;
+}
+.scoreboard-timeouts .box {
+  display: inline-block;
+  min-width: 30px;
+  padding: 3px 8px;
+  border: 1.5px solid rgba(255, 255, 255, 0.7);
+  border-radius: 6px;
+  font-family: "Oswald";
+  font-size: 17px;
+  font-weight: 700;
+}
 .clock-mid {
   text-align: center;
   min-width: 98px;

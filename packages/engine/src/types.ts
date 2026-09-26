@@ -31,6 +31,7 @@ export type EventType =
   | "cartao_vermelho"
   | "falta"
   | "falta_sofrida"
+  | "fim_pausa"
   | "lesao_inicio"
   | "lesao_fim"
   | "substituicao";

@@ -15,6 +15,12 @@ export interface Treatment {
   startedAtMs: number;
 }
 
+export interface ActivePause {
+  startedAtMs: number;
+  label: string;
+  reasonId?: string;
+}
+
 export interface LiveMatchState {
   convocadoIds: string[];
   onCourt: string[];
@@ -24,6 +30,14 @@ export interface LiveMatchState {
   events: MatchEvent[];
   score: Score;
   treatment: Treatment | null;
+  /**
+   * Pausa em curso (pedido de tempo ou outro motivo) — NUNCA para o relógio
+   * da parte (ver pause()/endPause()): o risco de esquecer de retomar um
+   * relógio parado é maior do que o benefício de o parar de verdade. Em vez
+   * disso, endPause() desconta a duração da pausa do tempo em quadra de
+   * quem estava em campo.
+   */
+  activePause: ActivePause | null;
   periodFouls: number;
   /** Faltas sofridas pelos nossos jogadores (cometidas pelo adversário) na parte atual. */
   periodFoulsAdvers: number;
@@ -43,6 +57,7 @@ export function createLiveMatchState(convocadoIds: string[] = []): LiveMatchStat
     events: [],
     score: { nos: 0, advers: 0 },
     treatment: null,
+    activePause: null,
     periodFouls: 0,
     periodFoulsAdvers: 0,
     clockAcc: createClockAccounting(),
@@ -77,22 +92,26 @@ export function goLive(state: LiveMatchState): LiveMatchState {
   return { ...state, titularIds: state.onCourt.slice() };
 }
 
-function hasKickoffThisPeriod(state: LiveMatchState): boolean {
-  return state.events.some((e) => e.type === "kickoff" && e.period === state.period);
-}
-
+/**
+ * Liga o relógio da parte — chamada uma única vez por parte, no apito real
+ * (ver PreMatch/preKickoff em LiveMatch.tsx). Depois disso o relógio nunca
+ * mais para sozinho até endPeriod(): pausas (ver pause()/endPause()) não o
+ * param, só descontam tempo depois.
+ */
 export function resumeOrStart(state: LiveMatchState, nowMs: number): LiveMatchState {
   const atMs = matchElapsedMs(state, nowMs);
   let clockAcc = state.clockAcc;
   state.onCourt.forEach((id) => {
     clockAcc = markOnSince(clockAcc, id, atMs);
   });
-  const label = hasKickoffThisPeriod(state) ? "Relógio retomado" : `Início da parte ${state.period}`;
   // O lineup no kickoff é o que permite reconstruir os titulares da parte 1
   // só a partir dos eventos sincronizados (ver titularIdsFromEvents) — sem
   // isto, um jogo sem golos na 1ª parte não teria nenhum registo de quem
   // começou em campo.
-  const ev = createEvent("kickoff", null, atMs, state.period, nowMs, { label, lineup: state.onCourt.slice() });
+  const ev = createEvent("kickoff", null, atMs, state.period, nowMs, {
+    label: `Início da parte ${state.period}`,
+    lineup: state.onCourt.slice(),
+  });
   return {
     ...state,
     clock: { running: true, elapsedMs: state.clock.elapsedMs, startTs: nowMs },
@@ -102,14 +121,43 @@ export function resumeOrStart(state: LiveMatchState, nowMs: number): LiveMatchSt
   };
 }
 
+/**
+ * Inicia uma pausa (pedido de tempo ou outro motivo) — deliberadamente NÃO
+ * para o relógio da parte. Um relógio parado que o treinador esquece de
+ * retomar é pior do que descontar o tempo depois (ver endPause()): aqui só
+ * fica marcado o instante em que a pausa começou.
+ */
 export function pause(state: LiveMatchState, nowMs: number, label: string, reasonId?: string): LiveMatchState {
+  if (state.activePause) return state; // já em pausa — não sobrepõe
   const atMs = matchElapsedMs(state, nowMs);
-  const clockAcc = settleAll(state.clockAcc, state.onCourt, atMs);
   const ev = createEvent("pausa", null, atMs, state.period, nowMs, { label, reasonId });
+  return { ...state, activePause: { startedAtMs: atMs, label, reasonId }, events: [...state.events, ev] };
+}
+
+/**
+ * Fecha a pausa em curso. O relógio nunca parou, então não há nada para
+ * "retomar" ali — em vez disso, desconta a duração da pausa do tempo em
+ * quadra de quem estava em campo, empurrando pra frente o instante "em
+ * campo desde" de cada um (equivalente a subtrair, reusando a mesma
+ * contabilidade de clock.ts).
+ */
+export function endPause(state: LiveMatchState, nowMs: number): LiveMatchState {
+  if (!state.activePause) return state;
+  const atMs = matchElapsedMs(state, nowMs);
+  const durMs = Math.max(0, atMs - state.activePause.startedAtMs);
+  const onCourtSince = { ...state.clockAcc.onCourtSince };
+  state.onCourt.forEach((id) => {
+    if (onCourtSince[id] != null) onCourtSince[id] += durMs;
+  });
+  const ev = createEvent("fim_pausa", null, atMs, state.period, nowMs, {
+    label: state.activePause.label,
+    reasonId: state.activePause.reasonId,
+    duracaoSec: Math.round(durMs / 1000),
+  });
   return {
     ...state,
-    clock: { running: false, elapsedMs: atMs, startTs: null },
-    clockAcc,
+    clockAcc: { ...state.clockAcc, onCourtSince },
+    activePause: null,
     events: [...state.events, ev],
   };
 }
@@ -215,6 +263,9 @@ export function doSub(state: LiveMatchState, outId: string, inId: string, nowMs:
  * Sub-13 2×20min vs Sub-15 2×25min) têm cada um o seu próprio limite.
  */
 export function endPeriod(state: LiveMatchState, format: MatchFormat, nowMs: number): LiveMatchState {
+  // Fecha uma pausa esquecida em aberto antes de terminar a parte — nunca
+  // deixa isso pendurado para a parte seguinte.
+  if (state.activePause) state = endPause(state, nowMs);
   const atMs = matchElapsedMs(state, nowMs);
   const clockAcc = state.clock.running ? settleAll(state.clockAcc, state.onCourt, atMs) : state.clockAcc;
   const durSec = Math.round(atMs / 1000);

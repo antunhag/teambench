@@ -9,6 +9,7 @@ interface Props {
   opponent: string | null;
   roster: PlayerRow[];
   format?: engine.MatchFormat;
+  ourLabel: string;
 }
 
 const POLL_MS = 5_000;
@@ -24,7 +25,7 @@ function toEnginePlayer(p: PlayerRow): engine.Player {
  * localStorage/outbox: quem só está a ver não deve interferir com o registo
  * de quem está a jogar em campo.
  */
-export function ReadOnlyMatch({ matchId, opponent, roster, format }: Props) {
+export function ReadOnlyMatch({ matchId, opponent, roster, format, ourLabel }: Props) {
   const [events, setEvents] = useState<engine.MatchEvent[]>([]);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [errorMessage, setErrorMessage] = useState("");
@@ -69,6 +70,8 @@ export function ReadOnlyMatch({ matchId, opponent, roster, format }: Props) {
   // atual é a maior já vista; faltas por período dá pra contar direto.
   const currentPeriod = events.reduce((max, e) => Math.max(max, e.period), 1);
   const fouls = engine.foulsInPeriod(events, currentPeriod);
+  const timeoutNosUsed = engine.timeoutUsedInPeriod(events, currentPeriod, "tempo_nos");
+  const timeoutAdversUsed = engine.timeoutUsedInPeriod(events, currentPeriod, "tempo_advers");
 
   // Tempo em quadra por atleta, reconstruído só dos eventos sincronizados —
   // os titulares da parte 1 vêm do lineup gravado no primeiro kickoff (ver
@@ -94,7 +97,7 @@ export function ReadOnlyMatch({ matchId, opponent, roster, format }: Props) {
       <div className="scoreboard" style={{ flexDirection: "column" }}>
         <div style={{ display: "flex", width: "100%", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
           <div className="score-side">
-            <div className="lbl">Nós</div>
+            <div className="lbl">{ourLabel}</div>
             <div className="val">{score.nos}</div>
           </div>
           <div className="score-side">
@@ -102,9 +105,19 @@ export function ReadOnlyMatch({ matchId, opponent, roster, format }: Props) {
             <div className="val">{score.advers}</div>
           </div>
         </div>
+        <div className="scoreboard-timeouts" style={{ width: "100%" }}>
+          <div className="timeout-box">
+            <span className="lbl">Timeout</span>
+            <span className="box">{timeoutNosUsed ? 1 : 0}</span>
+          </div>
+          <div className="timeout-box">
+            <span className="lbl">Timeout</span>
+            <span className="box">{timeoutAdversUsed ? 1 : 0}</span>
+          </div>
+        </div>
         <div className="scoreboard-fouls">
           <div className={`foul${fouls.nos >= 5 ? " warn" : ""}`}>
-            Faltas nós
+            Faltas {ourLabel}
             <span className="n">{fouls.nos}</span>
           </div>
           <div className={`foul${fouls.advers >= 5 ? " warn" : ""}`}>

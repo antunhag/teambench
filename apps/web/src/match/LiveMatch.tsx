@@ -1,6 +1,6 @@
 import { describeEvent, isLastPeriod, TIPOS_GOLO, timeoutUsedInPeriod, ZONAS_GOLO } from "@teambench/engine";
 import type { ComponentChildren } from "preact";
-import { useEffect, useState } from "preact/hooks";
+import { useState } from "preact/hooks";
 import type { PlayerRow } from "../team/usePlayers";
 import { isGoalkeeper, posAbbr } from "../team/positions";
 import type { useLiveMatch } from "./useLiveMatch";
@@ -10,6 +10,8 @@ interface Props {
   roster: PlayerRow[];
   opponent: string | null;
   onViewSummary: () => void;
+  /** Nome/sigla do clube (ex.: "AAL") — o app serve vários clubes, nunca fixo como "Nós". */
+  ourLabel: string;
 }
 
 function fmtMinSec(ms: number): string {
@@ -18,12 +20,6 @@ function fmtMinSec(ms: number): string {
   const s = totalSec % 60;
   return `${m < 10 ? "0" : ""}${m}:${s < 10 ? "0" : ""}${s}`;
 }
-
-const PAUSE_REASONS = [
-  { id: "tempo_nos", label: "Pedido de Tempo — Nós" },
-  { id: "tempo_advers", label: "Pedido de Tempo — Adversário" },
-  { id: "outro", label: "Outro motivo (lesão, árbitro, etc.)" },
-];
 
 type Picker =
   | { kind: "golo-scorer" }
@@ -64,7 +60,7 @@ function Sheet({ title, sub, onClose, children }: { title: string; sub?: string;
   );
 }
 
-export function LiveMatch({ live, roster, opponent, onViewSummary }: Props) {
+export function LiveMatch({ live, roster, opponent, onViewSummary, ourLabel }: Props) {
   const { state, elapsedMs } = live;
   const isFinalPeriod = isLastPeriod(state.period, live.format);
   const byId = new Map(roster.map((p) => [p.id, p]));
@@ -77,6 +73,12 @@ export function LiveMatch({ live, roster, opponent, onViewSummary }: Props) {
   const [showPauseReasons, setShowPauseReasons] = useState(false);
   const [picker, setPicker] = useState<Picker>(null);
 
+  const PAUSE_REASONS = [
+    { id: "tempo_nos", label: `Pedido de Tempo — ${ourLabel}` },
+    { id: "tempo_advers", label: "Pedido de Tempo — Adversário" },
+    { id: "outro", label: "Outro motivo (lesão, árbitro, etc.)" },
+  ];
+
   // Antes do primeiro "Iniciar Parte 1", o cinco inicial ainda pode estar
   // incompleto (ver PreMatch) — tocar num jogador aqui só ajusta quem fica
   // em campo (toggleTitular, sem gerar evento), em vez de contar como
@@ -84,34 +86,19 @@ export function LiveMatch({ live, roster, opponent, onViewSummary }: Props) {
   // cinco inicial até o apito real, sem travar o treinador na tela anterior.
   const preKickoff = !state.started;
 
-  const hasKickoffThisPeriod = state.events.some((e) => e.type === "kickoff" && e.period === state.period);
-  const clockLabel = state.clock.running ? "Pausar" : hasKickoffThisPeriod ? "Retomar" : `Iniciar Parte ${state.period}`;
-
   // Pedido de tempo: 1 por equipa por parte (regra do futsal) — reconstruído
   // dos eventos, reseta sozinho a cada parte nova. "Outro motivo" (lesão,
   // árbitro) nunca conta como pedido de tempo, então não tem limite.
   const timeoutNosUsed = timeoutUsedInPeriod(state.events, state.period, "tempo_nos");
   const timeoutAdversUsed = timeoutUsedInPeriod(state.events, state.period, "tempo_advers");
 
-  // Enquanto pausado por um pedido de tempo (não por outro motivo), mostra
-  // ao lado há quanto tempo já passou — o relógio do jogo fica parado (não
-  // conta para a parte nem para o tempo em quadra), isto é só um cronómetro
-  // à parte, em tempo real, pro treinador saber quando o minuto acabou.
-  const lastEvent = state.events[state.events.length - 1];
-  const isTimeoutPause =
-    !state.clock.running && lastEvent?.type === "pausa" && (lastEvent.reasonId === "tempo_nos" || lastEvent.reasonId === "tempo_advers");
-  const [, forcePauseTick] = useState(0);
-  useEffect(() => {
-    if (!isTimeoutPause) return;
-    const id = setInterval(() => forcePauseTick((t) => t + 1), 1000);
-    return () => clearInterval(id);
-  }, [isTimeoutPause]);
-  const pauseElapsedMs = isTimeoutPause ? Date.now() - lastEvent.ts : 0;
-
-  function handleClockClick() {
-    if (state.clock.running) setShowPauseReasons(true);
-    else live.resumeOrStart();
-  }
+  // O relógio da parte NUNCA para durante uma pausa (ver liveMatch.ts) — o
+  // risco de esquecer de retomar um relógio parado é maior do que o
+  // benefício de o parar de verdade. `elapsedMs` já atualiza a cada segundo
+  // (o tick de useLiveMatch roda sempre que o relógio está "running", e ele
+  // fica running o tempo todo depois do apito), então o cronómetro da pausa
+  // é só a diferença — sem precisar de nenhum timer à parte.
+  const pauseElapsedMs = state.activePause ? elapsedMs - state.activePause.startedAtMs : 0;
 
   function handleBenchTap(p: PlayerRow) {
     if (preKickoff) {
@@ -133,15 +120,15 @@ export function LiveMatch({ live, roster, opponent, onViewSummary }: Props) {
       <div className="scoreboard" style={{ flexDirection: "column" }}>
         <div style={{ display: "flex", width: "100%", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
           <div className="score-side">
-            <div className="lbl">Nós</div>
+            <div className="lbl">{ourLabel}</div>
             <div className="val">{state.score.nos}</div>
           </div>
           <div className="clock-mid">
             <div className="lbl" style={{ fontSize: 10.5, opacity: 0.85 }}>Parte {state.period}</div>
             <div className="time">{fmtMinSec(elapsedMs)}</div>
-            {!state.finished && (
-              <button type="button" className="clock-btn" onClick={handleClockClick}>
-                {clockLabel}
+            {preKickoff && !state.finished && (
+              <button type="button" className="clock-btn" onClick={() => live.resumeOrStart()}>
+                Iniciar Parte {state.period}
               </button>
             )}
           </div>
@@ -153,9 +140,19 @@ export function LiveMatch({ live, roster, opponent, onViewSummary }: Props) {
             </button>
           </div>
         </div>
+        <div className="scoreboard-timeouts" style={{ width: "100%" }}>
+          <div className="timeout-box">
+            <span className="lbl">Timeout</span>
+            <span className="box">{timeoutNosUsed ? 1 : 0}</span>
+          </div>
+          <div className="timeout-box">
+            <span className="lbl">Timeout</span>
+            <span className="box">{timeoutAdversUsed ? 1 : 0}</span>
+          </div>
+        </div>
         <div className="scoreboard-fouls">
           <div className={`foul${state.periodFouls >= 5 ? " warn" : ""}`}>
-            Faltas nós
+            Faltas {ourLabel}
             <span className="n">{state.periodFouls}</span>
           </div>
           <div className={`foul${state.periodFoulsAdvers >= 5 ? " warn" : ""}`}>
@@ -187,19 +184,22 @@ export function LiveMatch({ live, roster, opponent, onViewSummary }: Props) {
               </button>
             );
           })}
+          <button type="button" className="btn ghost block" onClick={() => setShowPauseReasons(false)} style={{ marginTop: 4 }}>
+            Cancelar
+          </button>
         </div>
       )}
 
-      {isTimeoutPause && (
+      {state.activePause && (
         <div className="banner warn" style={{ marginTop: 12, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          ⏱️ {lastEvent.label}
+          ⏱️ {state.activePause.label}
           <strong className="num">{fmtMinSec(pauseElapsedMs)}</strong>
         </div>
       )}
 
       {state.finished && (
         <div className="banner success" style={{ textAlign: "center", marginTop: 12 }}>
-          <strong>Jogo terminado</strong> — Nós {state.score.nos} – {state.score.advers} {opponent}
+          <strong>Jogo terminado</strong> — {ourLabel} {state.score.nos} – {state.score.advers} {opponent}
           <div style={{ marginTop: 6 }}>
             <button type="button" className="btn primary" onClick={onViewSummary}>
               📋 Ver Resumo
@@ -218,7 +218,7 @@ export function LiveMatch({ live, roster, opponent, onViewSummary }: Props) {
       {preKickoff ? (
         <p className="hint">
           Ainda ajustando o cinco inicial ({state.onCourt.length}/5) — toca nos jogadores pra adicionar/remover. Toca
-          em "{clockLabel}" quando o jogo começar de verdade.
+          em "Iniciar Parte {state.period}" quando o jogo começar de verdade.
         </p>
       ) : (
         !state.finished && (
@@ -230,6 +230,15 @@ export function LiveMatch({ live, roster, opponent, onViewSummary }: Props) {
               <button type="button" className="btn primary" onClick={() => setPicker({ kind: "golo-scorer" })}>
                 ⚽ Golo
               </button>
+              {state.activePause ? (
+                <button type="button" className="btn" onClick={live.endPause}>
+                  ▶️ Retomar
+                </button>
+              ) : (
+                <button type="button" className="btn" onClick={() => setShowPauseReasons(true)}>
+                  ⏱️ Pausa
+                </button>
+              )}
               <button type="button" className="btn" onClick={() => setPicker({ kind: "sub-out" })} disabled={bench.length === 0}>
                 🔁 Substituição
               </button>

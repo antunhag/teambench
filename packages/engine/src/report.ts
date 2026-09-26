@@ -28,6 +28,9 @@ export function describeEvent(e: MatchEvent, playerById: PlayerLookup, format?: 
     case "pausa":
       body = e.label || "Pausa";
       break;
+    case "fim_pausa":
+      body = `Fim da pausa — ${e.label || "Pausa"} (${fmtMinSec((e.duracaoSec || 0) * 1000)})`;
+      break;
     case "fim_periodo": {
       body = `${e.label || "Fim da parte"} (${fmtMinSec((e.duracaoSec || 0) * 1000)} jogados)`;
       const ps = e.playerSeconds || {};

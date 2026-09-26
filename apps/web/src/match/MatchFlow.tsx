@@ -1,6 +1,7 @@
 import type { MatchFormat } from "@teambench/engine";
 import { useState } from "preact/hooks";
 import type { useOutboxSync } from "../sync/useOutboxSync";
+import { useClubLabel } from "../team/useClubLabel";
 import { useMatchFormats } from "../team/useMatchFormats";
 import { usePlayers, type PlayerRow } from "../team/usePlayers";
 import { LiveMatch } from "./LiveMatch";
@@ -26,6 +27,7 @@ const FALLBACK_FORMAT: MatchFormat = { periodCount: 2, periodMinutes: 25, overti
 export function MatchFlow({ teamId, matchId, opponent, formatId, onExit, sync }: Props) {
   const { players, status } = usePlayers(teamId);
   const { formats } = useMatchFormats(teamId);
+  const ourLabel = useClubLabel(teamId);
   const activeRoster = players.filter((p) => p.active); // jogo ao vivo só convoca atletas ativos
 
   // O formato deste jogo específico (definido na criação/edição do jogo),
@@ -54,7 +56,7 @@ export function MatchFlow({ teamId, matchId, opponent, formatId, onExit, sync }:
         )}
       </div>
       {lock.status === "readonly" ? (
-        <ReadOnlyMatch matchId={matchId} opponent={opponent} roster={activeRoster} format={format} />
+        <ReadOnlyMatch matchId={matchId} opponent={opponent} roster={activeRoster} format={format} ourLabel={ourLabel} />
       ) : (
         <MatchFlowEditor
           teamId={teamId}
@@ -62,6 +64,7 @@ export function MatchFlow({ teamId, matchId, opponent, formatId, onExit, sync }:
           opponent={opponent}
           format={format}
           activeRoster={activeRoster}
+          ourLabel={ourLabel}
         />
       )}
     </div>
@@ -74,12 +77,14 @@ function MatchFlowEditor({
   opponent,
   format,
   activeRoster,
+  ourLabel,
 }: {
   teamId: string;
   matchId: string;
   opponent: string | null;
   format: MatchFormat;
   activeRoster: PlayerRow[];
+  ourLabel: string;
 }) {
   const live = useLiveMatch(matchId, teamId, format);
   const [showSummary, setShowSummary] = useState(false);
@@ -97,11 +102,11 @@ function MatchFlowEditor({
         </div>
       )}
       {showSummary ? (
-        <MatchSummary live={live} roster={activeRoster} opponent={opponent} matchId={matchId} onClose={() => setShowSummary(false)} />
+        <MatchSummary live={live} roster={activeRoster} opponent={opponent} matchId={matchId} onClose={() => setShowSummary(false)} ourLabel={ourLabel} />
       ) : showPreMatch ? (
         <PreMatch live={live} roster={activeRoster} opponent={opponent} onConfirm={() => setConfirmed(true)} />
       ) : (
-        <LiveMatch live={live} roster={activeRoster} opponent={opponent} onViewSummary={() => setShowSummary(true)} />
+        <LiveMatch live={live} roster={activeRoster} opponent={opponent} onViewSummary={() => setShowSummary(true)} ourLabel={ourLabel} />
       )}
     </>
   );

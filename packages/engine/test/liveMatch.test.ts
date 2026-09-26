@@ -8,6 +8,7 @@ import {
   doGoal,
   doOppGoal,
   doSub,
+  endPause,
   endPeriod,
   endTreatment,
   foulsInPeriod,
@@ -81,7 +82,7 @@ describe("liveMatch — relógio, golos, cartões", () => {
     s = goLive(s);
     s = resumeOrStart(s, 0); // kickoff da parte 1 — sem nenhum golo no jogo
     s = pause(s, 10_000, "Pedido de Tempo — Nós", "tempo_nos");
-    s = resumeOrStart(s, 20_000); // retomada = outro evento "kickoff", mesma parte
+    s = endPause(s, 20_000); // fecha a pausa — o relógio nunca chegou a parar
     expect(titularIdsFromEvents(s.events).sort()).toEqual([guarda, salvador].sort());
   });
 
@@ -97,21 +98,45 @@ describe("liveMatch — relógio, golos, cartões", () => {
     expect(timeoutUsedInPeriod(s.events, 1, "tempo_nos")).toBe(true);
     expect(timeoutUsedInPeriod(s.events, 1, "tempo_advers")).toBe(false); // times independentes
 
-    s = resumeOrStart(s, 20_000);
+    s = endPause(s, 20_000);
     s = endPeriod(s, SUB15, 30_000);
     expect(timeoutUsedInPeriod(s.events, 2, "tempo_nos")).toBe(false); // parte nova, pedido zerado
     expect(timeoutUsedInPeriod(s.events, 1, "tempo_nos")).toBe(true); // histórico da parte 1 continua lá
   });
 
-  it("pause assenta o tempo de todos em campo e para o relógio", () => {
+  it("pause NÃO para o relógio — só marca o início; endPause desconta o tempo em quadra", () => {
     let s = createLiveMatchState([salvador]);
     s = toggleTitular(s, salvador);
     s = goLive(s);
     s = resumeOrStart(s, 0);
     s = pause(s, 30_000, "Pedido de Tempo — Nós", "tempo_nos");
-    expect(s.clock.running).toBe(false);
-    expect(playerCurrentSeconds(s, salvador, 999_000)).toBe(30); // não conta mais depois de pausado
+    expect(s.clock.running).toBe(true); // relógio nunca para
+    expect(s.activePause).toEqual({ startedAtMs: 30_000, label: "Pedido de Tempo — Nós", reasonId: "tempo_nos" });
+    expect(playerCurrentSeconds(s, salvador, 60_000)).toBe(60); // continua contando durante a pausa
     expect(s.events.at(-1)?.type).toBe("pausa");
+
+    s = endPause(s, 90_000); // pausa durou 60s (30_000 -> 90_000)
+    expect(s.activePause).toBeNull();
+    expect(s.events.at(-1)?.type).toBe("fim_pausa");
+    // 90s decorridos no total, menos os 60s da pausa descontados = 30s jogados de verdade
+    expect(playerCurrentSeconds(s, salvador, 90_000)).toBe(30);
+  });
+
+  it("endPause é idempotente sem pausa em curso, e endPeriod fecha sozinho uma pausa esquecida aberta", () => {
+    let s = createLiveMatchState([salvador]);
+    s = toggleTitular(s, salvador);
+    s = goLive(s);
+    s = resumeOrStart(s, 0);
+    const before = s;
+    s = endPause(s, 5_000); // nada para fechar — no-op
+    expect(s).toBe(before);
+
+    s = pause(s, 10_000, "Pedido de Tempo — Nós", "tempo_nos");
+    s = endPeriod(s, SUB15, 40_000); // esqueceu de fechar a pausa antes de terminar a parte
+    expect(s.activePause).toBeNull();
+    expect(s.events.some((e) => e.type === "fim_pausa")).toBe(true);
+    // 30s de pausa (10_000 -> 40_000) descontados do tempo em quadra da parte 1
+    expect(playerCurrentSeconds(s, salvador, 999_000)).toBe(10);
   });
 
   it("doGoal e doOppGoal recalculam o placar a partir dos eventos", () => {

@@ -11,13 +11,14 @@ interface Props {
   opponent: string | null;
   matchId: string;
   onClose: () => void;
+  ourLabel: string;
 }
 
 function toEnginePlayer(p: PlayerRow): engine.Player {
   return { id: p.id, num: p.num ?? "", name: p.name, pos: p.position ?? "Universal" };
 }
 
-export function MatchSummary({ live, roster, opponent, matchId, onClose }: Props) {
+export function MatchSummary({ live, roster, opponent, matchId, onClose, ourLabel }: Props) {
   const { state } = live;
   const players = roster.map(toEnginePlayer);
   const byId = (id: string) => players.find((p) => p.id === id);
@@ -66,7 +67,7 @@ export function MatchSummary({ live, roster, opponent, matchId, onClose }: Props
       </button>
       <h2 style={{ fontSize: 18 }}>Resumo — vs {opponent}</h2>
       <p className="hint" style={{ fontSize: 15, fontWeight: 600, color: "var(--ink)" }}>
-        Nós {state.score.nos} – {state.score.advers} {opponent}
+        {ourLabel} {state.score.nos} – {state.score.advers} {opponent}
       </p>
 
       <div className="tablewrap">

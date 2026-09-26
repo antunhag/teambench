@@ -114,6 +114,7 @@ export function useLiveMatch(matchId: string, teamId: string, format: engine.Mat
         return engine.resumeOrStart(withTitulars, now());
       }),
     pause: (label: string, reasonId?: string) => apply((s) => engine.pause(s, now(), label, reasonId)),
+    endPause: () => apply((s) => engine.endPause(s, now())),
     doGoal: (scorerId: string, assistId: string | null, tipo?: string | null, zona?: number | null) =>
       apply((s) => engine.doGoal(s, scorerId, assistId, now(), tipo, zona)),
     doOppGoal: (tipo?: string | null, zona?: number | null) => apply((s) => engine.doOppGoal(s, now(), tipo, zona)),

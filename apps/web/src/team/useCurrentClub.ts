@@ -5,6 +5,7 @@ import { supabase } from "../supabaseClient";
 export interface CurrentClub {
   clubId: string;
   clubName: string;
+  clubShortName: string | null;
 }
 
 type Status = "loading" | "no-club" | "has-club" | "error";
@@ -24,7 +25,7 @@ export function useCurrentClub(session: Session | null) {
     setStatus("loading");
     const { data, error } = await supabase
       .from("club_members")
-      .select("clubs(id, name)")
+      .select("clubs(id, name, short_name)")
       .eq("user_id", session.user.id)
       .limit(1)
       .maybeSingle();
@@ -40,7 +41,7 @@ export function useCurrentClub(session: Session | null) {
       return;
     }
     const clubRow = Array.isArray(data.clubs) ? data.clubs[0] : data.clubs;
-    setClub({ clubId: clubRow.id, clubName: clubRow.name });
+    setClub({ clubId: clubRow.id, clubName: clubRow.name, clubShortName: clubRow.short_name });
     setStatus("has-club");
   }, [session]);
 

@@ -165,7 +165,12 @@ function TeamApp({
               membro convidado só para esta equipa (ex.: Lançador de dados) nunca terá
               club.status === "has-club", já que não faz parte de club_members. */}
           {club.status === "has-club" && (
-            <ClubSettings clubId={club.club!.clubId} clubName={club.club!.clubName} onUpdated={club.refresh} />
+            <ClubSettings
+              clubId={club.club!.clubId}
+              clubName={club.club!.clubName}
+              clubShortName={club.club!.clubShortName}
+              onUpdated={club.refresh}
+            />
           )}
 
           <Roster teamId={team.teamId} canManage={team.role === "team_admin"} />
