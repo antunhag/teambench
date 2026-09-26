@@ -135,9 +135,6 @@ export function LiveMatch({ live, roster, opponent, onViewSummary, ourLabel }: P
           <div className="score-side">
             <div className="lbl">{opponent || "Advers."}</div>
             <div className="val">{state.score.advers}</div>
-            <button type="button" className="oppgoal" onClick={() => setPicker({ kind: "opp-golo-tipo" })} style={{ marginTop: 4 }}>
-              +1 golo advers.
-            </button>
           </div>
         </div>
         <div className="scoreboard-timeouts" style={{ width: "100%" }}>
@@ -161,6 +158,14 @@ export function LiveMatch({ live, roster, opponent, onViewSummary, ourLabel }: P
           </div>
         </div>
       </div>
+
+      {!preKickoff && !state.finished && (
+        <div style={{ textAlign: "right", marginTop: 8 }}>
+          <button type="button" className="btn sm ghost" onClick={() => setPicker({ kind: "opp-golo-tipo" })}>
+            🥅 +1 golo advers.
+          </button>
+        </div>
+      )}
 
       {showPauseReasons && (
         <div className="card">

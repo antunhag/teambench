@@ -327,16 +327,6 @@ a {
 .scoreboard-fouls .foul.warn .n {
   color: var(--yellow);
 }
-.oppgoal {
-  border: none;
-  background: rgba(0, 0, 0, 0.15);
-  color: var(--court-ink);
-  border-radius: 10px;
-  padding: 6px 8px;
-  font-size: 11px;
-  font-weight: 600;
-  cursor: pointer;
-}
 
 /* ---------- action tray ---------- */
 .tray {

@@ -8,13 +8,22 @@ type Status = "idle" | "sending" | "sent" | "error";
  * Tela de login. Magic-link é o método principal (mais prático em campo do
  * que digitar senha num telemóvel a meio de um jogo); senha fica como
  * alternativa para quem preferir.
+ *
+ * O mesmo email de link mágico também traz um código de 6 dígitos — é o
+ * caminho pensado para um tablet/telemóvel do clube, partilhado por várias
+ * pessoas: em vez de abrir o email da conta pessoal no aparelho do clube
+ * (exigindo login nele), o treinador recebe o código no seu telemóvel e só
+ * digita esse código no aparelho do clube.
  */
 export function Login() {
   const [mode, setMode] = useState<Mode>("magic-link");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [code, setCode] = useState("");
   const [status, setStatus] = useState<Status>("idle");
   const [errorMessage, setErrorMessage] = useState("");
+  const [codeStatus, setCodeStatus] = useState<"idle" | "checking" | "error">("idle");
+  const [codeError, setCodeError] = useState("");
 
   async function sendMagicLink(e: Event) {
     e.preventDefault();
@@ -33,6 +42,19 @@ export function Login() {
       return;
     }
     setStatus("sent");
+  }
+
+  async function confirmCode(e: Event) {
+    e.preventDefault();
+    setCodeStatus("checking");
+    setCodeError("");
+    const { error } = await supabase.auth.verifyOtp({ email, token: code, type: "email" });
+    if (error) {
+      setCodeStatus("error");
+      setCodeError(error.message);
+      return;
+    }
+    // onAuthStateChange no App cuida do redirecionamento pós-login.
   }
 
   async function signInWithPassword(e: Event) {
@@ -63,7 +85,32 @@ export function Login() {
       </div>
 
       {mode === "magic-link" && status === "sent" ? (
-        <p>Enviámos um link de acesso para <strong>{email}</strong>. Abra-o neste mesmo telemóvel/navegador.</p>
+        <div className="card">
+          <p style={{ marginTop: 0 }}>
+            Enviámos um link de acesso e um código para <strong>{email}</strong>.
+          </p>
+          <p className="hint">
+            Se abrir o email neste aparelho, é só clicar no link. Se o email está noutro telemóvel (ex.: tablet
+            partilhado do clube), digite abaixo o código de 6 dígitos que recebeu.
+          </p>
+          <form onSubmit={confirmCode} className="inline-fields">
+            <div className="field" style={{ marginBottom: 0 }}>
+              <label>Código</label>
+              <input
+                inputMode="numeric"
+                required
+                value={code}
+                onInput={(e) => setCode((e.target as HTMLInputElement).value)}
+                placeholder="123456"
+                style={{ width: 120 }}
+              />
+            </div>
+            <button type="submit" className="btn primary" disabled={codeStatus === "checking"}>
+              {codeStatus === "checking" ? "A confirmar..." : "Confirmar código"}
+            </button>
+          </form>
+          {codeStatus === "error" && <p className="banner error" style={{ marginTop: 8 }}>{codeError}</p>}
+        </div>
       ) : (
         <form onSubmit={mode === "magic-link" ? sendMagicLink : signInWithPassword}>
           <div className="field">
