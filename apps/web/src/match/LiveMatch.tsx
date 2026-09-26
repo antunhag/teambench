@@ -1,6 +1,6 @@
-import { describeEvent, isLastPeriod, TIPOS_GOLO, ZONAS_GOLO } from "@teambench/engine";
+import { describeEvent, isLastPeriod, TIPOS_GOLO, timeoutUsedInPeriod, ZONAS_GOLO } from "@teambench/engine";
 import type { ComponentChildren } from "preact";
-import { useState } from "preact/hooks";
+import { useEffect, useState } from "preact/hooks";
 import type { PlayerRow } from "../team/usePlayers";
 import { isGoalkeeper, posAbbr } from "../team/positions";
 import type { useLiveMatch } from "./useLiveMatch";
@@ -87,6 +87,27 @@ export function LiveMatch({ live, roster, opponent, onViewSummary }: Props) {
   const hasKickoffThisPeriod = state.events.some((e) => e.type === "kickoff" && e.period === state.period);
   const clockLabel = state.clock.running ? "Pausar" : hasKickoffThisPeriod ? "Retomar" : `Iniciar Parte ${state.period}`;
 
+  // Pedido de tempo: 1 por equipa por parte (regra do futsal) — reconstruído
+  // dos eventos, reseta sozinho a cada parte nova. "Outro motivo" (lesão,
+  // árbitro) nunca conta como pedido de tempo, então não tem limite.
+  const timeoutNosUsed = timeoutUsedInPeriod(state.events, state.period, "tempo_nos");
+  const timeoutAdversUsed = timeoutUsedInPeriod(state.events, state.period, "tempo_advers");
+
+  // Enquanto pausado por um pedido de tempo (não por outro motivo), mostra
+  // ao lado há quanto tempo já passou — o relógio do jogo fica parado (não
+  // conta para a parte nem para o tempo em quadra), isto é só um cronómetro
+  // à parte, em tempo real, pro treinador saber quando o minuto acabou.
+  const lastEvent = state.events[state.events.length - 1];
+  const isTimeoutPause =
+    !state.clock.running && lastEvent?.type === "pausa" && (lastEvent.reasonId === "tempo_nos" || lastEvent.reasonId === "tempo_advers");
+  const [, forcePauseTick] = useState(0);
+  useEffect(() => {
+    if (!isTimeoutPause) return;
+    const id = setInterval(() => forcePauseTick((t) => t + 1), 1000);
+    return () => clearInterval(id);
+  }, [isTimeoutPause]);
+  const pauseElapsedMs = isTimeoutPause ? Date.now() - lastEvent.ts : 0;
+
   function handleClockClick() {
     if (state.clock.running) setShowPauseReasons(true);
     else live.resumeOrStart();
@@ -147,20 +168,32 @@ export function LiveMatch({ live, roster, opponent, onViewSummary }: Props) {
       {showPauseReasons && (
         <div className="card">
           <p className="hint" style={{ marginTop: 0 }}>Motivo da pausa:</p>
-          {PAUSE_REASONS.map((r) => (
-            <button
-              key={r.id}
-              type="button"
-              className="btn ghost block"
-              onClick={() => {
-                live.pause(r.label, r.id);
-                setShowPauseReasons(false);
-              }}
-              style={{ marginBottom: 4, textAlign: "left" }}
-            >
-              {r.label}
-            </button>
-          ))}
+          {PAUSE_REASONS.map((r) => {
+            const alreadyUsed = (r.id === "tempo_nos" && timeoutNosUsed) || (r.id === "tempo_advers" && timeoutAdversUsed);
+            return (
+              <button
+                key={r.id}
+                type="button"
+                className="btn ghost block"
+                disabled={alreadyUsed}
+                onClick={() => {
+                  live.pause(r.label, r.id);
+                  setShowPauseReasons(false);
+                }}
+                style={{ marginBottom: 4, textAlign: "left" }}
+              >
+                {r.label}
+                {alreadyUsed ? " (já usado nesta parte)" : ""}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {isTimeoutPause && (
+        <div className="banner warn" style={{ marginTop: 12, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          ⏱️ {lastEvent.label}
+          <strong className="num">{fmtMinSec(pauseElapsedMs)}</strong>
         </div>
       )}
 

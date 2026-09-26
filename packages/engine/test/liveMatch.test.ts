@@ -16,6 +16,7 @@ import {
   playerCurrentSeconds,
   resumeOrStart,
   startTreatment,
+  timeoutUsedInPeriod,
   titularIdsFromEvents,
   toggleConvocado,
   toggleTitular,
@@ -82,6 +83,24 @@ describe("liveMatch — relógio, golos, cartões", () => {
     s = pause(s, 10_000, "Pedido de Tempo — Nós", "tempo_nos");
     s = resumeOrStart(s, 20_000); // retomada = outro evento "kickoff", mesma parte
     expect(titularIdsFromEvents(s.events).sort()).toEqual([guarda, salvador].sort());
+  });
+
+  it("timeoutUsedInPeriod reconhece o pedido de tempo já feito na parte, e reseta na parte seguinte", () => {
+    let s = createLiveMatchState([salvador]);
+    s = toggleTitular(s, salvador);
+    s = goLive(s);
+    s = resumeOrStart(s, 0);
+    expect(timeoutUsedInPeriod(s.events, 1, "tempo_nos")).toBe(false);
+    expect(timeoutUsedInPeriod(s.events, 1, "tempo_advers")).toBe(false);
+
+    s = pause(s, 10_000, "Pedido de Tempo — Nós", "tempo_nos");
+    expect(timeoutUsedInPeriod(s.events, 1, "tempo_nos")).toBe(true);
+    expect(timeoutUsedInPeriod(s.events, 1, "tempo_advers")).toBe(false); // times independentes
+
+    s = resumeOrStart(s, 20_000);
+    s = endPeriod(s, SUB15, 30_000);
+    expect(timeoutUsedInPeriod(s.events, 2, "tempo_nos")).toBe(false); // parte nova, pedido zerado
+    expect(timeoutUsedInPeriod(s.events, 1, "tempo_nos")).toBe(true); // histórico da parte 1 continua lá
   });
 
   it("pause assenta o tempo de todos em campo e para o relógio", () => {

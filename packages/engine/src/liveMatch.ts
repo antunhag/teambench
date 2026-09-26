@@ -252,6 +252,16 @@ export function foulsInPeriod(events: MatchEvent[], period: number): { nos: numb
 }
 
 /**
+ * Se a equipa já pediu tempo (1 por parte, por regra do futsal) nesta
+ * parte — reconstruído dos eventos "pausa", nunca um contador guardado à
+ * parte. Reseta sozinho a cada parte nova porque o filtro já exige
+ * `e.period === period`.
+ */
+export function timeoutUsedInPeriod(events: MatchEvent[], period: number, reasonId: "tempo_nos" | "tempo_advers"): boolean {
+  return events.some((e) => e.type === "pausa" && e.period === period && e.reasonId === reasonId);
+}
+
+/**
  * Titulares da parte 1, reconstruídos a partir do primeiro evento "kickoff"
  * — para quem só tem os eventos sincronizados (sem LiveMatchState local),
  * ex.: o modo leitura, que precisa disto pra montar a timeline/minutos.
