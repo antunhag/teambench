@@ -66,6 +66,32 @@ describe("buildTimelineData", () => {
     expect(halves[0].goals[0]).toMatchObject({ side: "adv", scorerId: null, marcha: [0, 1] });
   });
 
+  it("desconta o pedido de tempo do intervalo de quem está em quadra, abrindo um buraco na barra", () => {
+    const events: MatchEvent[] = [
+      createEvent("pausa", null, 200_000, 1, 0, { label: "Pedido de Tempo — Nós", reasonId: "tempo_nos" }),
+      createEvent("fim_pausa", null, 260_000, 1, 0, { duracaoSec: 60 }),
+      createEvent("fim_periodo", null, 600_000, 1, 0, { duracaoSec: 600 }),
+    ];
+    const halves = buildTimelineData(events, roster, [salvador.id]);
+    const salvadorBar = halves[0].players.find((p) => p.id === salvador.id)!;
+    // Intervalo cortado em dois pedaços — nada entre 200s e 260s (os 60s da pausa).
+    expect(salvadorBar.intervals).toEqual([[0, 200], [260, 600]]);
+    expect(salvadorBar.totalSec).toBe(540); // 600 - 60 de pausa
+  });
+
+  it("quem entra durante um pedido de tempo em curso só começa a contar tempo depois do fim_pausa", () => {
+    const events: MatchEvent[] = [
+      createEvent("pausa", null, 200_000, 1, 0, { reasonId: "tempo_nos" }),
+      createEvent("substituicao", suplente.id, 220_000, 1, 0, { outId: salvador.id }),
+      createEvent("fim_pausa", null, 260_000, 1, 0, { duracaoSec: 60 }),
+      createEvent("fim_periodo", null, 600_000, 1, 0, { duracaoSec: 600 }),
+    ];
+    const halves = buildTimelineData(events, roster, [salvador.id]);
+    const suplenteBar = halves[0].players.find((p) => p.id === suplente.id)!;
+    expect(suplenteBar.intervals).toEqual([[260, 600]]);
+    expect(suplenteBar.totalSec).toBe(340);
+  });
+
   it("mantém quem está em campo entre partes (titular só da 1ª parte continua se ninguém saiu)", () => {
     const events: MatchEvent[] = [
       createEvent("fim_periodo", null, 600_000, 1, 0, { duracaoSec: 600 }),

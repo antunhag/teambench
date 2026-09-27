@@ -12,6 +12,7 @@ import { CreateTeam } from "./team/CreateTeam";
 import { MatchFormats } from "./team/MatchFormats";
 import { Roster } from "./team/Roster";
 import { TeamMembers } from "./team/TeamMembers";
+import { useClubLabel } from "./team/useClubLabel";
 import { useCurrentClub } from "./team/useCurrentClub";
 import { useCurrentTeam, type CurrentTeam } from "./team/useCurrentTeam";
 import { useOutboxSync } from "./sync/useOutboxSync";
@@ -159,6 +160,7 @@ function TeamApp({
   const [activeMatch, setActiveMatch] = useState<{ id: string; opponent: string | null; formatId: string | null } | null>(null);
   const [correctionMatch, setCorrectionMatch] = useState<{ id: string; opponent: string | null } | null>(null);
   const canTrackLive = team.role === "team_admin" || team.role === "data_entry";
+  const ourLabel = useClubLabel(team.teamId);
 
   return (
     <div className={activeMatch || correctionMatch ? "page wide" : "page"}>
@@ -178,6 +180,7 @@ function TeamApp({
           opponent={correctionMatch.opponent}
           onClose={() => setCorrectionMatch(null)}
           canDelete={team.role === "team_admin"}
+          ourLabel={ourLabel}
         />
       ) : (
         <>

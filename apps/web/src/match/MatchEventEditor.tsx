@@ -11,6 +11,8 @@ interface Props {
   onClose: () => void;
   /** Remover é a ação mais irreversível daqui — só Admin da Equipa, nunca Lançador de dados (ver 0011_match_events_delete.sql). */
   canDelete: boolean;
+  /** Nome/sigla do clube — usado nos motivos de pausa ("Pedido de Tempo — {ourLabel}"), igual ao jogo ao vivo. */
+  ourLabel: string;
 }
 
 interface EventRow {
@@ -32,10 +34,13 @@ interface Draft {
   transicaoBalizaDeserta: boolean;
   /** Quem estava em quadra no apito — só existe (e só importa) em eventos "kickoff". */
   lineup: string[] | null;
+  /** Motivo da pausa — só existe (e só importa) em "pausa"/"fim_pausa". */
+  reasonId: string | null;
+  label: string;
 }
 
 type DetailPicker =
-  | { rowId: string; kind: "player" | "scorer" | "assist" | "in" | "out" | "tipo" | "zona" | "transicao" | "lineup" }
+  | { rowId: string; kind: "player" | "scorer" | "assist" | "in" | "out" | "tipo" | "zona" | "transicao" | "lineup" | "motivo" }
   | null;
 
 function sameIds(a: string[], b: string[]): boolean {
@@ -91,13 +96,15 @@ function draftFromRow(r: EventRow): Draft {
     transicaoNumeros: p.transicaoNumeros ?? null,
     transicaoBalizaDeserta: p.transicaoBalizaDeserta ?? false,
     lineup: p.lineup ?? null,
+    reasonId: p.reasonId ?? null,
+    label: p.label ?? "",
   };
 }
 
 function draftsEqual(a: Draft, b: Draft): boolean {
   return a.period === b.period && a.time === b.time && a.playerId === b.playerId && a.assistId === b.assistId &&
     a.outId === b.outId && a.tipo === b.tipo && a.zona === b.zona && a.transicaoNumeros === b.transicaoNumeros &&
-    a.transicaoBalizaDeserta === b.transicaoBalizaDeserta &&
+    a.transicaoBalizaDeserta === b.transicaoBalizaDeserta && a.reasonId === b.reasonId && a.label === b.label &&
     (a.lineup == null && b.lineup == null ? true : a.lineup != null && b.lineup != null && sameIds(a.lineup, b.lineup));
 }
 
@@ -122,7 +129,7 @@ function draftsEqual(a: Draft, b: Draft): boolean {
  * fica restrita ao Admin da Equipa (`canDelete`), nunca ao Lançador de
  * dados.
  */
-export function MatchEventEditor({ teamId, matchId, opponent, onClose, canDelete }: Props) {
+export function MatchEventEditor({ teamId, matchId, opponent, onClose, canDelete, ourLabel }: Props) {
   const { players: roster } = usePlayers(teamId);
   const [rows, setRows] = useState<EventRow[] | null>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
@@ -150,10 +157,12 @@ export function MatchEventEditor({ teamId, matchId, opponent, onClose, canDelete
   const [newTransicaoNumeros, setNewTransicaoNumeros] = useState<string | null>(null);
   const [newBalizaDeserta, setNewBalizaDeserta] = useState(false);
   const [newLabel, setNewLabel] = useState("");
+  const [newReasonId, setNewReasonId] = useState<string | null>(null);
   const [newLineup, setNewLineup] = useState<string[] | null>(null);
   const [addStatus, setAddStatus] = useState<"idle" | "saving" | "error">("idle");
   const [addError, setAddError] = useState("");
   const [transicaoCustom, setTransicaoCustom] = useState("");
+  const [motivoCustom, setMotivoCustom] = useState("");
 
   function resetNewForm() {
     setNewPlayerId(null);
@@ -164,6 +173,7 @@ export function MatchEventEditor({ teamId, matchId, opponent, onClose, canDelete
     setNewTransicaoNumeros(null);
     setNewBalizaDeserta(false);
     setNewLabel("");
+    setNewReasonId(null);
     setNewLineup(null);
   }
 
@@ -207,7 +217,10 @@ export function MatchEventEditor({ teamId, matchId, opponent, onClose, canDelete
       extra.transicaoBalizaDeserta = newTipo === "trs" && newBalizaDeserta;
     }
     if (newType === "substituicao") extra.outId = newOutId;
-    if (newType === "pausa" || newType === "fim_pausa") extra.label = newLabel || undefined;
+    if (newType === "pausa" || newType === "fim_pausa") {
+      extra.label = newLabel || undefined;
+      extra.reasonId = newReasonId ?? undefined;
+    }
     if (newType === "kickoff" && newLineup) extra.lineup = newLineup;
     const ev = engine.createEvent(newType, newPlayerId, ms, period, Date.now(), extra);
     setAddStatus("saving");
@@ -294,6 +307,19 @@ export function MatchEventEditor({ teamId, matchId, opponent, onClose, canDelete
     else setDraftField(picker.rowId, { lineup: next });
   }
 
+  // Motivo da pausa junta duas colunas de uma vez (reasonId + label) — por
+  // isso fica fora do applyPickerField genérico, igual à "baliza deserta"/"em quadra".
+  function applyMotivo(reasonId: string | null, label: string) {
+    if (!picker) return;
+    if (picker.rowId === NEW_ROW_ID) {
+      setNewReasonId(reasonId);
+      setNewLabel(label);
+    } else {
+      setDraftField(picker.rowId, { reasonId, label });
+    }
+    setPicker(null);
+  }
+
   async function load() {
     setStatus("loading");
     const { data, error } = await supabase
@@ -340,6 +366,8 @@ export function MatchEventEditor({ teamId, matchId, opponent, onClose, canDelete
       transicaoNumeros: draft.tipo === "trs" ? draft.transicaoNumeros : null,
       transicaoBalizaDeserta: draft.tipo === "trs" && draft.transicaoBalizaDeserta,
       lineup: draft.lineup,
+      reasonId: draft.reasonId,
+      label: draft.label,
     };
     // .select() confirma que a linha foi mesmo atualizada — sem ele, um
     // UPDATE bloqueado pela RLS devolveria "sucesso" mesmo sem mudar nada
@@ -462,6 +490,9 @@ export function MatchEventEditor({ teamId, matchId, opponent, onClose, canDelete
         );
       case "kickoff":
         return btn(`Em quadra: ${lineupLabel(draft.lineup)}`, "lineup");
+      case "pausa":
+      case "fim_pausa":
+        return btn(`Motivo: ${draft.label || "—"}`, "motivo");
       default:
         return null;
     }
@@ -514,15 +545,7 @@ export function MatchEventEditor({ teamId, matchId, opponent, onClose, canDelete
         );
       case "pausa":
       case "fim_pausa":
-        return (
-          <input
-            type="text"
-            placeholder="Motivo (ex.: Pedido de Tempo — Nós)"
-            value={newLabel}
-            onInput={(e) => setNewLabel((e.target as HTMLInputElement).value)}
-            style={{ width: 240 }}
-          />
-        );
+        return btn(`Motivo: ${newLabel || "—"}`, "motivo");
       case "kickoff":
         return btn(`Em quadra: ${lineupLabel(newLineup)}`, "lineup");
       default:
@@ -632,6 +655,8 @@ export function MatchEventEditor({ teamId, matchId, opponent, onClose, canDelete
                     transicaoNumeros: d.transicaoNumeros,
                     transicaoBalizaDeserta: d.transicaoBalizaDeserta,
                     lineup: d.lineup ?? undefined,
+                    reasonId: d.reasonId ?? undefined,
+                    label: d.label || undefined,
                   };
                 }
                 const descriptions = engine.describeEvents(rows.map(previewEventFor), byId);
@@ -867,6 +892,48 @@ export function MatchEventEditor({ teamId, matchId, opponent, onClose, canDelete
           <button type="button" className="btn primary block" onClick={() => setPicker(null)} style={{ marginTop: 10 }}>
             Concluído ({currentLineup().length})
           </button>
+        </Sheet>
+      )}
+
+      {picker && (pickerRow || pickerIsNew) && picker.kind === "motivo" && (
+        <Sheet title="Motivo da pausa" sub="Toca num dos motivos, ou escreve outro abaixo" onClose={() => setPicker(null)}>
+          <button
+            type="button"
+            className="btn ghost block"
+            onClick={() => applyMotivo("tempo_nos", `Pedido de Tempo — ${ourLabel}`)}
+            style={{ marginBottom: 6, textAlign: "left" }}
+          >
+            Pedido de Tempo — {ourLabel}
+          </button>
+          <button
+            type="button"
+            className="btn ghost block"
+            onClick={() => applyMotivo("tempo_advers", "Pedido de Tempo — Adversário")}
+            style={{ marginBottom: 10, textAlign: "left" }}
+          >
+            Pedido de Tempo — Adversário
+          </button>
+          <form
+            className="inline-fields"
+            onSubmit={(e) => {
+              e.preventDefault();
+              const value = motivoCustom.trim();
+              if (!value) return;
+              applyMotivo("outro", value);
+              setMotivoCustom("");
+            }}
+          >
+            <div className="field" style={{ marginBottom: 0, flex: 1 }}>
+              <input
+                type="text"
+                placeholder="Outro motivo (ex.: lesão, árbitro)"
+                value={motivoCustom}
+                onInput={(e) => setMotivoCustom((e.target as HTMLInputElement).value)}
+                style={{ width: "100%" }}
+              />
+            </div>
+            <button type="submit" className="btn primary">Usar</button>
+          </form>
         </Sheet>
       )}
     </div>

@@ -76,10 +76,32 @@ export function buildTimelineData(events: MatchEvent[], playersList: Player[], t
     const goals: TimelineGoal[] = [];
     const cards: TimelineCard[] = [];
     const fouls: TimelineFoul[] = [];
+    // Pedido de tempo NUNCA para o relógio de jogo de verdade (ver liveMatch.ts) —
+    // é descontado depois do tempo em quadra de quem estava dentro. Aqui, na
+    // timeline, o mesmo efeito é um corte no intervalo aberto: fecha tudo na
+    // "pausa" e só reabre no "fim_pausa", criando o buraco na barra visual e
+    // tirando esse trecho da soma de minutos — sem isto, a timeline mostrava
+    // mais minutos do que o Resumo principal (que já descontava via clockAcc).
+    let paused = false;
 
     evs.forEach((e) => {
       const sec = (e.ms || 0) / 1000;
-      if (e.type === "substituicao") {
+      if (e.type === "pausa") {
+        paused = true;
+        onCourtSet.forEach((id) => {
+          if (openStart.has(id)) {
+            const arr = intervals.get(id) || [];
+            arr.push([openStart.get(id)!, sec]);
+            intervals.set(id, arr);
+            openStart.delete(id);
+          }
+        });
+      } else if (e.type === "fim_pausa") {
+        paused = false;
+        onCourtSet.forEach((id) => {
+          if (!openStart.has(id)) openStart.set(id, sec);
+        });
+      } else if (e.type === "substituicao") {
         const inId = e.playerId!;
         const outId = e.outId ?? null;
         if (outId && openStart.has(outId)) {
@@ -87,10 +109,12 @@ export function buildTimelineData(events: MatchEvent[], playersList: Player[], t
           arr.push([openStart.get(outId)!, sec]);
           intervals.set(outId, arr);
           openStart.delete(outId);
-          onCourtSet.delete(outId);
         }
-        openStart.set(inId, sec);
+        if (outId) onCourtSet.delete(outId);
         onCourtSet.add(inId);
+        // Se entrou durante um pedido de tempo em curso, o intervalo dele só abre
+        // no fim_pausa (senão contaria o próprio tempo parado como jogado).
+        if (!paused) openStart.set(inId, sec);
       } else if (e.type === "cartao_vermelho") {
         cards.push({ sec, playerId: e.playerId!, kind: "vermelho" });
         if (e.playerId && openStart.has(e.playerId)) {
