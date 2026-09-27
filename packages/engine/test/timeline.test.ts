@@ -126,6 +126,18 @@ describe("buildTimelineHtml", () => {
     expect(html).toContain("Salvador Silva Gonçalves");
   });
 
+  it("usa o nome do clube em vez de 'Nós' fixo — é um relatório que pode ser partilhado fora do app", () => {
+    const events: MatchEvent[] = [
+      createEvent("golo", salvador.id, 100_000, 1, 0),
+      createEvent("golo_sofrido", null, 200_000, 1, 0),
+      createEvent("fim_periodo", null, 600_000, 1, 0, { duracaoSec: 600 }),
+    ];
+    const halves = buildTimelineData(events, roster, [salvador.id]);
+    const html = buildTimelineHtml({ adversario: "Ordem", ourLabel: "AAL" }, halves, 1, 1, byId);
+    expect(html).toContain(">AAL<");
+    expect(html).not.toContain(">Nós<");
+  });
+
   it("força as cores a aparecerem na impressão/PDF (senão as barras somem)", () => {
     const halves = buildTimelineData(
       [createEvent("fim_periodo", null, 600_000, 1, 0, { duracaoSec: 600 })],

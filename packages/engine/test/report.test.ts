@@ -78,4 +78,9 @@ describe("exportText", () => {
     expect(text).toContain("Resultado: Nós 1 - 0 Adversário");
     expect(text).toContain("GOLO — #30 Salvador Silva Gonçalves");
   });
+
+  it("usa o nome do clube e do adversário quando informados, em vez de 'Nós'/'Adversário'", () => {
+    const text = exportText([], [], { nos: 2, advers: 1 }, byId, undefined, "AAL", "Ordem SC");
+    expect(text).toContain("Resultado: AAL 2 - 1 Ordem SC");
+  });
 });

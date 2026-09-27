@@ -143,7 +143,15 @@ export interface MatchMeta {
 }
 
 /** Texto tabulado pronto para colar na folha "Jogo - Registo" do Excel do clube. */
-export function exportText(rows: MatchRow[], events: MatchEvent[], score: Score, playerById: PlayerLookup, format?: MatchFormat): string {
+export function exportText(
+  rows: MatchRow[],
+  events: MatchEvent[],
+  score: Score,
+  playerById: PlayerLookup,
+  format?: MatchFormat,
+  ourLabel?: string | null,
+  opponentLabel?: string | null
+): string {
   const lines: string[] = [];
   lines.push('REGISTO DE JOGO — cole estas linhas na folha "Jogo - Registo" (uma por atleta)');
   lines.push("Jornada\tData\tAdversário\tAtleta\tConvocado?\tTitular?\tMinutos Jogados\tGolos\tAssistências\tCartão Amarelo\tCartão Vermelho\tNotas");
@@ -151,7 +159,7 @@ export function exportText(rows: MatchRow[], events: MatchEvent[], score: Score,
     lines.push([r.num, r.nome, r.convocado, r.titular, r.min, r.golos, r.assist, r.ca, r.cv, ""].join("\t"));
   });
   lines.push("");
-  lines.push(`Resultado: Nós ${score.nos} - ${score.advers} Adversário`);
+  lines.push(`Resultado: ${ourLabel || "Nós"} ${score.nos} - ${score.advers} ${opponentLabel || "Adversário"}`);
   lines.push("");
   lines.push("REGISTO CRONOLÓGICO (golos, cartões, faltas, atendimentos, substituições)");
   const descriptions = describeEvents(events, playerById, format);

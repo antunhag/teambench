@@ -78,7 +78,7 @@ export function MatchSummary({ live, roster, opponent, matchId, onClose, ourLabe
   const [finishStatus, setFinishStatus] = useState<"idle" | "saving" | "done" | "error">("idle");
 
   async function handleCopy() {
-    const text = engine.exportText(rows, state.events, state.score, byId);
+    const text = engine.exportText(rows, state.events, state.score, byId, live.format, ourLabel, opponent);
     try {
       await navigator.clipboard.writeText(text);
       setCopyMsg("Copiado! Cola no Excel/Sheets do clube.");
@@ -89,7 +89,7 @@ export function MatchSummary({ live, roster, opponent, matchId, onClose, ourLabe
 
   function handleDownloadTimeline() {
     const halves = engine.buildTimelineData(state.events, players, state.titularIds);
-    const html = engine.buildTimelineHtml({ adversario: opponent }, halves, state.score.nos, state.score.advers, byId);
+    const html = engine.buildTimelineHtml({ adversario: opponent, ourLabel }, halves, state.score.nos, state.score.advers, byId);
     const blob = new Blob([html], { type: "text/html;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");

@@ -182,6 +182,9 @@ export interface TimelineMatchInfo {
   date?: string | null;
   adversario?: string | null;
   local?: string | null;
+  /** Nome/sigla do clube (ex.: "AAL") — este é um relatório estatístico que
+   *  pode ser partilhado fora do app, então nunca deve mostrar "Nós" fixo. */
+  ourLabel?: string | null;
 }
 
 function esc(s: unknown): string {
@@ -208,6 +211,7 @@ export function buildTimelineHtml(
   function pct2(sec: number, dur: number): string {
     return `${((Math.min(sec, dur) / dur) * 100).toFixed(2)}%`;
   }
+  const ourLabel = matchInfo.ourLabel || "Nós";
 
   const totalsByPid = new Map<string, { id: string; num: string; name: string; totalSec: number }>();
   halves.forEach((half) => {
@@ -320,7 +324,7 @@ export function buildTimelineHtml(
       const scorer = isNos && g.scorerId ? playerById(g.scorerId) : undefined;
       goalsRows +=
         `<tr><td>${esc(half.label)}</td><td class="num">${fmtMinSec(g.sec * 1000)}</td>` +
-        `<td class="${isNos ? "side-nos" : "side-adv"}">${isNos ? "Nós" : esc(matchInfo.adversario || "Adversário")}</td>` +
+        `<td class="${isNos ? "side-nos" : "side-adv"}">${isNos ? esc(ourLabel) : esc(matchInfo.adversario || "Adversário")}</td>` +
         `<td>${scorer ? `#${esc(scorer.num)} ${esc(scorer.name)}` : "—"}</td>` +
         `<td>${esc(goalTipoLabelComDetalhe(g) ?? "—")}</td>` +
         `<td class="num">${g.zona || "—"}</td>` +
@@ -387,7 +391,7 @@ export function buildTimelineHtml(
     "</style></head><body><div class=\"wrap\">" +
     '<div class="card"><div class="hdr-top"><h1>Timeline de jogo</h1>' +
     `<div class="hdr-meta">${matchInfo.jornada ? `Jornada ${esc(matchInfo.jornada)} · ` : ""}${esc(matchInfo.date || "")}</div></div>` +
-    '<div class="scoreline"><div class="team home">Nós</div>' +
+    `<div class="scoreline"><div class="team home">${esc(ourLabel)}</div>` +
     `<div class="score"><span>${scoreNos}</span><span class="dash">–</span><span>${scoreAdv}</span></div>` +
     `<div class="team away">${esc(matchInfo.adversario || "Adversário")}</div></div>` +
     (matchInfo.local ? `<div class="subinfo">${esc(matchInfo.local)}</div>` : "") +
