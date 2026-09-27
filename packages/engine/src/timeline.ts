@@ -268,7 +268,7 @@ export function buildTimelineHtml(
           (g) =>
             `<span class="conceded-ball" style="left:${pct2(g.sec, half.durSec)}" title="Golo sofrido — ${fmtMinSec(
               g.sec * 1000
-            )}"></span>`
+            )}">⚽</span>`
         )
         .join("");
       const ruler = `<div class="ruler">${ticks
@@ -395,11 +395,11 @@ export function buildTimelineHtml(
     ".mk.foul.sofrida{background:var(--surface-1);color:var(--series-1);border-color:var(--series-1);}" +
     ".half-block{margin-top:18px;}.half-block:first-of-type{margin-top:4px;}.rows{display:flex;flex-direction:column;gap:6px;}" +
     ".pause-band{position:absolute;top:-6px;bottom:-6px;background:repeating-linear-gradient(45deg,var(--pause) 0,var(--pause) 4px,transparent 4px,transparent 9px);opacity:.4;border-left:1px dashed var(--pause);border-right:1px dashed var(--pause);}" +
-    ".ruler .conceded-ball{position:absolute;top:50%;width:8px;height:8px;border-radius:50%;background:var(--critical);transform:translate(-50%,-50%);border:1.5px solid var(--surface-1);}" +
+    ".ruler .conceded-ball{position:absolute;top:50%;width:14px;height:14px;border-radius:50%;background:var(--critical);color:#fff;display:flex;align-items:center;justify-content:center;font-size:8.5px;line-height:1;transform:translate(-50%,-50%);border:1.5px solid var(--surface-1);}" +
     ".legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:16px;padding-top:14px;border-top:1px solid var(--grid);font-size:11.5px;color:var(--text-secondary);}" +
     ".legend .it{display:flex;align-items:center;gap:6px;}.legend .sw{width:18px;height:8px;border-radius:4px;background:var(--series-1);}" +
     ".legend .sw.pause{background:repeating-linear-gradient(45deg,var(--pause) 0,var(--pause) 3px,transparent 3px,transparent 6px);border:1px dashed var(--pause);}" +
-    ".legend .ball-sample{width:10px;height:10px;border-radius:50%;background:var(--critical);flex:0 0 auto;}" +
+    ".legend .ball-sample{width:14px;height:14px;border-radius:50%;background:var(--critical);color:#fff;display:flex;align-items:center;justify-content:center;font-size:8.5px;flex:0 0 auto;}" +
     ".legend .mk-sample{width:14px;height:14px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:800;flex:0 0 auto;border:1.5px solid var(--surface-1);}" +
     ".legend .mk-sample.foul.cometida{background:var(--muted);color:#fff;}" +
     ".legend .mk-sample.foul.sofrida{background:var(--surface-1);color:var(--series-1);border-color:var(--series-1);}" +
@@ -426,7 +426,7 @@ export function buildTimelineHtml(
     `<div class="card">${halvesHtml}` +
     '<div class="legend"><div class="it"><span class="sw"></span>Em campo</div><div class="it">⚽ Golo marcado</div><div class="it">🟨/🟥 Cartão</div>' +
     '<div class="it"><span class="mk-sample foul cometida">F</span>Falta cometida</div><div class="it"><span class="mk-sample foul sofrida">F</span>Falta sofrida</div>' +
-    '<div class="it"><span class="sw pause"></span>Pedido de tempo</div><div class="it"><span class="ball-sample"></span>Golo sofrido</div></div>' +
+    '<div class="it"><span class="sw pause"></span>Pedido de tempo</div><div class="it"><span class="ball-sample">⚽</span>Golo sofrido</div></div>' +
     "</div>" +
     '<div class="card"><div class="half-title" style="margin-bottom:8px;"><h2>Minutos em campo (total do jogo)</h2></div>' +
     '<div class="tablewrap"><table class="gtable"><thead><tr><th>Atleta</th><th class="num">Min</th></tr></thead>' +
