@@ -255,6 +255,20 @@ export function buildTimelineHtml(
         .map((t) => `<span style="left:${pct2(t, half.durSec)}">${Math.round(t / 60)}′</span>`)
         .join("")}</div>`;
 
+      // Mesmo pct2() das barras/marcas — nunca um calc() aproximado sobre a
+      // linha inteira, que ficava desalinhado da faixa real do .track (esta
+      // é mais estreita que a linha, já que reserva espaço pra coluna dos
+      // minutos à direita).
+      const pauseBandsHtml = half.pauses
+        .map((p) => {
+          const title = p.label ? `${esc(p.label)} — ` : "Pausa — ";
+          return `<div class="pause-band" style="left:${pct2(p.start, half.durSec)};width:${pct2(
+            Math.max(0, p.end - p.start),
+            half.durSec
+          )};" title="${title}${fmtMinSec(p.start * 1000)} a ${fmtMinSec(p.end * 1000)}"></div>`;
+        })
+        .join("");
+
       const rows = half.players
         .map((p) => {
           const bars = p.intervals
@@ -283,25 +297,8 @@ export function buildTimelineHtml(
           });
           return (
             `<div class="row"><div class="label"><span class="num">${esc(p.num)}</span><span class="nm">${esc(p.name)}</span></div>` +
-            `<div class="track">${bars}${marks}</div>` +
+            `<div class="track">${pauseBandsHtml}${bars}${marks}</div>` +
             `<div class="mins" title="Minutos em campo nesta parte">${Math.round((p.totalSec || 0) / 60)}'</div></div>`
-          );
-        })
-        .join("");
-
-      // Posicionado com calc() em cima de --label-w (não pct2 puro) porque a faixa
-      // de pausa precisa cobrir só a coluna do "track" (à direita do nome/número do
-      // atleta), igual à régua de tempo acima — nunca a linha toda, senão tapava o
-      // nome dos jogadores.
-      const pauseBands = half.pauses
-        .map((p) => {
-          const leftFrac = Math.min(Math.max(0, p.start), half.durSec) / half.durSec;
-          const widthFrac = Math.max(0, Math.min(p.end, half.durSec) - Math.min(p.start, half.durSec)) / half.durSec;
-          const title = p.label ? `${esc(p.label)} — ` : "Pausa — ";
-          return (
-            `<div class="pause-band" style="left:calc(var(--label-w) + (100% - var(--label-w)) * ${leftFrac});` +
-            `width:calc((100% - var(--label-w)) * ${widthFrac});" ` +
-            `title="${title}${fmtMinSec(p.start * 1000)} a ${fmtMinSec(p.end * 1000)}"></div>`
           );
         })
         .join("");
@@ -311,7 +308,7 @@ export function buildTimelineHtml(
         `<div class="dur">0′ – ${Math.round(half.durSec / 60)}′</div></div>` +
         marcha +
         ruler +
-        `<div class="rows-wrap"><div class="rows">${rows}</div>${pauseBands}</div></div>`
+        `<div class="rows">${rows}</div></div>`
       );
     })
     .join("");
@@ -357,7 +354,7 @@ export function buildTimelineHtml(
     ".marcha-chip.nos{color:var(--good);}.marcha-chip.adv{color:var(--critical);}.marcha-chip .t{color:var(--muted);font-weight:500;}" +
     ".ruler{display:flex;margin:0 0 4px var(--label-w);position:relative;height:16px;}" +
     ".ruler span{position:absolute;font-size:10px;color:var(--muted);transform:translateX(-50%);font-variant-numeric:tabular-nums;}" +
-    ".row{display:flex;align-items:center;gap:8px;min-height:30px;position:relative;z-index:1;}" +
+    ".row{display:flex;align-items:center;gap:8px;min-height:30px;}" +
     ".row .label{width:var(--label-w);flex:0 0 var(--label-w);display:flex;align-items:center;gap:6px;font-size:12px;overflow:hidden;}" +
     ".row .num{font-weight:800;font-size:10.5px;color:var(--surface-1);background:var(--text-secondary);width:18px;height:18px;border-radius:5px;display:flex;align-items:center;justify-content:center;flex:0 0 auto;}" +
     ".row .nm{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}" +
@@ -370,9 +367,8 @@ export function buildTimelineHtml(
     ".mk.card.yellow{background:var(--warning);}" +
     ".mk.card.red{background:var(--critical);}" +
     ".mk.foul{background:var(--muted);width:6px;height:6px;border:none;}" +
-    ".half-block{margin-top:18px;}.half-block:first-of-type{margin-top:4px;}" +
-    ".rows-wrap{position:relative;}.rows{display:flex;flex-direction:column;gap:6px;}" +
-    ".pause-band{position:absolute;top:0;bottom:0;background:repeating-linear-gradient(45deg,var(--pause) 0,var(--pause) 4px,transparent 4px,transparent 9px);opacity:.35;border-left:1px dashed var(--pause);border-right:1px dashed var(--pause);pointer-events:auto;}" +
+    ".half-block{margin-top:18px;}.half-block:first-of-type{margin-top:4px;}.rows{display:flex;flex-direction:column;gap:6px;}" +
+    ".pause-band{position:absolute;top:-6px;bottom:-6px;background:repeating-linear-gradient(45deg,var(--pause) 0,var(--pause) 4px,transparent 4px,transparent 9px);opacity:.4;border-left:1px dashed var(--pause);border-right:1px dashed var(--pause);}" +
     ".legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:16px;padding-top:14px;border-top:1px solid var(--grid);font-size:11.5px;color:var(--text-secondary);}" +
     ".legend .it{display:flex;align-items:center;gap:6px;}.legend .sw{width:18px;height:8px;border-radius:4px;background:var(--series-1);}" +
     ".legend .sw.pause{background:repeating-linear-gradient(45deg,var(--pause) 0,var(--pause) 3px,transparent 3px,transparent 6px);border:1px dashed var(--pause);}" +
