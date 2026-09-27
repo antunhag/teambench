@@ -695,8 +695,25 @@ export function MatchEventEditor({ teamId, matchId, opponent, onClose, canDelete
 
       {picker && picker.kind === "tipo" && (
         <Sheet title="Tipo de jogada?" onClose={() => setPicker(null)}>
+          <p className="sub" style={{ marginTop: 0 }}>⚽ Jogo aberto</p>
           <div className="actiongrid">
-            {engine.TIPOS_GOLO.map((t) => (
+            {engine.TIPOS_GOLO_JOGO_ABERTO.map((t) => (
+              <button key={t.id} type="button" className="abtn" onClick={() => applyPickerField("tipo", t.id)}>
+                {t.label}
+              </button>
+            ))}
+          </div>
+          <p className="sub">🎯 Bola parada</p>
+          <div className="actiongrid">
+            {engine.TIPOS_GOLO_BOLA_PARADA.map((t) => (
+              <button key={t.id} type="button" className="abtn" onClick={() => applyPickerField("tipo", t.id)}>
+                {t.label}
+              </button>
+            ))}
+          </div>
+          <p className="sub">⚠️ Penalidades e situações especiais</p>
+          <div className="actiongrid">
+            {engine.TIPOS_GOLO_ESPECIAL.map((t) => (
               <button key={t.id} type="button" className="abtn" onClick={() => applyPickerField("tipo", t.id)}>
                 {t.label}
               </button>

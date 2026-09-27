@@ -1,7 +1,9 @@
 import {
   describeEvent,
   isLastPeriod,
-  TIPOS_GOLO,
+  TIPOS_GOLO_BOLA_PARADA,
+  TIPOS_GOLO_ESPECIAL,
+  TIPOS_GOLO_JOGO_ABERTO,
   timeoutUsedInPeriod,
   TRANSICAO_NUMEROS_IGUALDADE_OU_DESVANTAGEM,
   TRANSICAO_NUMEROS_VANTAGEM,
@@ -456,9 +458,35 @@ export function LiveMatch({ live, roster, opponent, onViewSummary, ourLabel }: P
             </>
           )}
 
-          <p className="sub">Tipo de jogada?</p>
+          <p className="sub">Tipo de jogada? — ⚽ Jogo aberto</p>
           <div className="actiongrid">
-            {TIPOS_GOLO.map((t) => (
+            {TIPOS_GOLO_JOGO_ABERTO.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                className={`abtn${goloForm.tipo === t.id ? " selected" : ""}`}
+                onClick={() => selectTipo(t.id)}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+          <p className="sub">🎯 Bola parada</p>
+          <div className="actiongrid">
+            {TIPOS_GOLO_BOLA_PARADA.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                className={`abtn${goloForm.tipo === t.id ? " selected" : ""}`}
+                onClick={() => selectTipo(t.id)}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+          <p className="sub">⚠️ Penalidades e situações especiais</p>
+          <div className="actiongrid">
+            {TIPOS_GOLO_ESPECIAL.map((t) => (
               <button
                 key={t.id}
                 type="button"

@@ -1,19 +1,33 @@
 // Tipo de jogada que originou o golo — mesmas categorias usadas na folha de
-// estatísticas em Excel do banco.html original (ORG/TRS/LVR/PNT/CNT/PPB).
+// estatísticas em Excel do banco.html original, agrupadas por natureza da
+// jogada (jogo aberto / bola parada / situação especial) pra não virar uma
+// grelha só de 10 botões sem organização nenhuma na tela.
 export interface GoalType {
   id: string;
   abbr: string;
   label: string;
 }
 
-export const TIPOS_GOLO: GoalType[] = [
+export const TIPOS_GOLO_JOGO_ABERTO: GoalType[] = [
   { id: "org", abbr: "ORG", label: "Organização ofensiva" },
   { id: "trs", abbr: "TRS", label: "Transição" },
-  { id: "lvr", abbr: "LVR", label: "Livre (frontal/lateral)" },
-  { id: "pnt", abbr: "PNT", label: "Penálti" },
+  { id: "atr", abbr: "ATR", label: "Ataque rápido (erro na saída)" },
+];
+
+export const TIPOS_GOLO_BOLA_PARADA: GoalType[] = [
   { id: "cnt", abbr: "CNT", label: "Canto" },
+  { id: "lat", abbr: "LAT", label: "Lateral de ataque" },
+  { id: "lvr", abbr: "LVR", label: "Livre (frontal/lateral)" },
+];
+
+export const TIPOS_GOLO_ESPECIAL: GoalType[] = [
+  { id: "pnt", abbr: "PNT", label: "Penálti (6 metros)" },
+  { id: "l10", abbr: "L10", label: "Livre direto (10 metros)" },
+  { id: "gll", abbr: "GLL", label: "Goleiro-linha (5x4)" },
   { id: "ppb", abbr: "PPB", label: "Própria baliza" },
 ];
+
+export const TIPOS_GOLO: GoalType[] = [...TIPOS_GOLO_JOGO_ABERTO, ...TIPOS_GOLO_BOLA_PARADA, ...TIPOS_GOLO_ESPECIAL];
 
 export function tipoGoloLabel(id: string | null | undefined): string | null {
   const t = TIPOS_GOLO.find((x) => x.id === id);
