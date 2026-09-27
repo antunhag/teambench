@@ -32,10 +32,26 @@ export function useLiveMatch(matchId: string, teamId: string, format: engine.Mat
   // aqui o "agora" deixa de ser Date.now() e passa a ser um tempo decorrido
   // controlado à mão (ver setManualElapsedMs). Cada parte decide o próprio
   // modo no instante do apito: resumeOrStart() sempre usa tempo real,
-  // manualResumeOrStart() sempre começa em 0 e liga o modo manual — dá pra
-  // misturar (ex.: parte 1 ao vivo, parte 2 reconstruída depois).
-  const [manual, setManual] = useState(false);
-  const [manualElapsedMs, setManualElapsedMsState] = useState(0);
+  // manualResumeOrStart() sempre começa em 0 e ancora clock.startTs em 0.
+  //
+  // `manual` é DERIVADO do próprio clock persistido (startTs===0), nunca
+  // guardado à parte — startTs=0 é um valor que Date.now() jamais produz,
+  // então serve de sinal inequívoco. Isto importa porque só o `state` (via
+  // localStorage) sobrevive a um recarregar de página; um booleano React
+  // solto aqui voltaria a `false` no reload enquanto o relógio continuasse
+  // ancorado em 0 — e então `matchElapsedMs` passaria a devolver o
+  // Date.now() em bruto (um número gigante), corrompendo o relógio e os
+  // minutos de todo mundo. (Bug real que já aconteceu — ver commit.)
+  const manual = state.clock.running && state.clock.startTs === 0;
+  // Ao recarregar a página em plena parte manual, não há "posição atual do
+  // scrub" persistida (só o instante do apito é guardado) — recupera-se o
+  // melhor palpite: o ms do último evento já lançado nesta parte, em vez de
+  // voltar sempre para 00:00.
+  const [manualElapsedMs, setManualElapsedMsState] = useState(() => {
+    if (!manual) return 0;
+    const inPeriod = state.events.filter((e) => e.period === state.period && e.type !== "fim_periodo");
+    return inPeriod.length ? Math.max(...inPeriod.map((e) => e.ms)) : 0;
+  });
 
   useEffect(() => {
     localStorage.setItem(STORAGE_PREFIX + matchId, JSON.stringify(state));
@@ -139,10 +155,11 @@ export function useLiveMatch(matchId: string, teamId: string, format: engine.Mat
   stateRef.current = state;
   useEffect(() => {
     const id = setInterval(() => {
-      if (!manual && stateRef.current.clock.running) setTick((t) => t + 1);
+      const s = stateRef.current;
+      if (s.clock.running && s.clock.startTs !== 0) setTick((t) => t + 1);
     }, 1000);
     return () => clearInterval(id);
-  }, [manual]);
+  }, []);
 
   const now = () => (manual ? manualElapsedMs : Date.now());
   const elapsedMs = engine.matchElapsedMs(state, now());
@@ -169,7 +186,6 @@ export function useLiveMatch(matchId: string, teamId: string, format: engine.Mat
     // ajustando o cinco inicial até apitar o início.
     resumeOrStart: () =>
       apply((s) => {
-        setManual(false);
         const withTitulars = s.started ? s : engine.goLive(s);
         return engine.resumeOrStart(withTitulars, Date.now());
       }),
@@ -180,7 +196,6 @@ export function useLiveMatch(matchId: string, teamId: string, format: engine.Mat
     // treinador escolher (ver setManualElapsedMs), nunca no tempo real.
     manualResumeOrStart: () =>
       apply((s) => {
-        setManual(true);
         setManualElapsedMsState(0);
         const withTitulars = s.started ? s : engine.goLive(s);
         return engine.resumeOrStart(withTitulars, 0);
