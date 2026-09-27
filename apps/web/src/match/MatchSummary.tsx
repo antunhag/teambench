@@ -1,5 +1,5 @@
 import * as engine from "@teambench/engine";
-import { useState } from "preact/hooks";
+import { useEffect, useState } from "preact/hooks";
 import { supabase } from "../supabaseClient";
 import { posAbbr } from "../team/positions";
 import type { PlayerRow } from "../team/usePlayers";
@@ -18,11 +18,58 @@ function toEnginePlayer(p: PlayerRow): engine.Player {
   return { id: p.id, num: p.num ?? "", name: p.name, pos: p.position ?? "Universal" };
 }
 
+/**
+ * Junta o que já sincronizou (Supabase — pode incluir correções feitas de
+ * outro aparelho via "Corrigir registo", inclusive em eventos já existentes)
+ * com o que ainda só existe neste aparelho (outbox por sincronizar). O
+ * servidor manda em qualquer evento que já tenha lá — é ele quem carrega a
+ * versão corrigida; só entra da lista local quem ainda não tem na fila.
+ */
+function mergeEvents(local: engine.MatchEvent[], remote: engine.MatchEvent[]): engine.MatchEvent[] {
+  const remoteIds = new Set(remote.map((e) => e.clientEventId ?? e.id));
+  const localOnly = local.filter((e) => !remoteIds.has(e.clientEventId ?? e.id));
+  return [...remote, ...localOnly];
+}
+
 export function MatchSummary({ live, roster, opponent, matchId, onClose, ourLabel }: Props) {
-  const { state } = live;
   const players = roster.map(toEnginePlayer);
   const byId = (id: string) => players.find((p) => p.id === id);
-  const nowMs = Date.now();
+
+  // Tempo em quadra e placar são recalculados a partir do registo mais
+  // completo que der pra reunir (Supabase + o que falta sincronizar), nunca
+  // só do que este aparelho acumulou ao vivo — uma substituição corrigida
+  // depois (de outro aparelho, ou via "Corrigir registo") muda quem estava
+  // em quadra e por quanto tempo em TODOS os lances daquele ponto em diante,
+  // não só no lance mais próximo. Sem rede, cai de volta pro que já se tinha
+  // (o jogo continua funcionando offline; só o "conferir depois" precisa de
+  // rede pra pegar correções feitas noutro aparelho).
+  const [remoteEvents, setRemoteEvents] = useState<engine.MatchEvent[] | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    supabase
+      .from("match_events")
+      .select("payload")
+      .eq("match_id", matchId)
+      .order("period", { ascending: true })
+      .order("ms", { ascending: true })
+      .then(({ data, error }) => {
+        if (cancelled || error || !data) return;
+        setRemoteEvents(data.map((row) => row.payload as engine.MatchEvent));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [matchId]);
+
+  const effectiveEvents = remoteEvents ? mergeEvents(live.state.events, remoteEvents) : live.state.events;
+  const state = remoteEvents ? engine.replayEvents(live.state.convocadoIds, effectiveEvents, live.format) : live.state;
+  // NUNCA usar Date.now() cru aqui: um estado reconstruído por replay (ver
+  // replayEvents) nunca ancora o relógio no tempo real — "agora" nesse caso
+  // é sempre o clock.elapsedMs interno do próprio estado (matchElapsedMs já
+  // resolve isso certo pros dois casos, ao vivo ou reconstruído). Usar
+  // Date.now() direto aqui já causou uma vez minutos absurdos (a diferença
+  // entre uma marca de tempo em ms-de-jogo e a época real, em milissegundos).
+  const nowMs = engine.matchElapsedMs(state, Date.now());
 
   const convocados = players.filter((p) => state.convocadoIds.includes(p.id));
   const rows = engine.buildRows({ convocados, titularIds: state.titularIds, events: state.events, clock: state.clockAcc, nowMs });
@@ -129,7 +176,9 @@ export function MatchSummary({ live, roster, opponent, matchId, onClose, ourLabe
       </div>
 
       <p className="hint" style={{ marginTop: 8 }}>
-        A tabela de posições/nomes usa o registo local deste telemóvel. O que já sincronizou também está guardado no Supabase (tabela match_events).
+        {remoteEvents
+          ? "Minutos e placar já incluem qualquer correção feita depois (noutro aparelho ou em \"Corrigir registo\")."
+          : "Sem rede agora — mostrando o que este aparelho já tem registado; correções feitas noutro aparelho só aparecem quando a rede voltar."}
       </p>
     </div>
   );

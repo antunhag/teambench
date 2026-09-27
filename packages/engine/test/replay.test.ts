@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { createEvent } from "../src/events";
 import {
   createLiveMatchState,
   doFoul,
@@ -81,5 +82,28 @@ describe("replayEvents", () => {
     expect(playerCurrentSeconds(replayed, p1, 999_999)).toBeCloseTo(25 * 60, 0);
     // p3 entrou exatamente no instante em que o relógio ficou parado (última posição conhecida) — zero decorrido.
     expect(playerCurrentSeconds(replayed, p3, 999_999)).toBeCloseTo(0, 0);
+  });
+
+  it("uma substituição inserida depois com tempo anterior a um golo já registado corrige os minutos de ambos os atletas envolvidos", () => {
+    // Cenário real relatado: golo registado aos 7:34 (454s) com p1/p2 em quadra, e só depois disso
+    // percebeu-se que faltava uma substituição às 6:21 (381s) — sai p2, entra p3 — antes do golo.
+    let live = createLiveMatchState(convocados);
+    live = { ...live, onCourt: [p1, p2] };
+    live = resumeOrStart(live, 0);
+    live = doGoal(live, p1, null, 454_000);
+    live = endPeriod(live, SUB15, 25 * 60_000);
+
+    // "Corrigir registo" → "Adicionar evento esquecido": substituição criada direto, sem passar pelo doSub
+    // do jogo ao vivo (que não teria como retroceder no tempo) — é exatamente isto que o editor insere.
+    const subEsquecida = createEvent("substituicao", p3, 381_000, 1, Date.now(), { outId: p2 });
+    const correctedEvents = [...live.events, subEsquecida];
+
+    const replayed = replayEvents(convocados, correctedEvents, SUB15);
+    // p2 só devia ter ficado em quadra até os 6:21 (381s), não a parte toda (1500s).
+    expect(playerCurrentSeconds(replayed, p2, 999_999)).toBeCloseTo(381, 0);
+    // p3 entrou aos 6:21 e ficou até o fim da parte (1500s) — deveria ter 1500-381=1119s.
+    expect(playerCurrentSeconds(replayed, p3, 999_999)).toBeCloseTo(1500 - 381, 0);
+    // p1 ficou em quadra a parte toda, sem ser afetado por essa substituição.
+    expect(playerCurrentSeconds(replayed, p1, 999_999)).toBeCloseTo(1500, 0);
   });
 });
