@@ -29,6 +29,7 @@ interface Draft {
   tipo: string | null;
   zona: number | null;
   transicaoNumeros: string | null;
+  transicaoBalizaDeserta: boolean;
 }
 
 type DetailPicker = { rowId: string; kind: "player" | "scorer" | "assist" | "in" | "out" | "tipo" | "zona" | "transicao" } | null;
@@ -78,12 +79,14 @@ function draftFromRow(r: EventRow): Draft {
     tipo: p.tipo ?? null,
     zona: p.zona ?? null,
     transicaoNumeros: p.transicaoNumeros ?? null,
+    transicaoBalizaDeserta: p.transicaoBalizaDeserta ?? false,
   };
 }
 
 function draftsEqual(a: Draft, b: Draft): boolean {
   return a.period === b.period && a.time === b.time && a.playerId === b.playerId && a.assistId === b.assistId &&
-    a.outId === b.outId && a.tipo === b.tipo && a.zona === b.zona && a.transicaoNumeros === b.transicaoNumeros;
+    a.outId === b.outId && a.tipo === b.tipo && a.zona === b.zona && a.transicaoNumeros === b.transicaoNumeros &&
+    a.transicaoBalizaDeserta === b.transicaoBalizaDeserta;
 }
 
 /**
@@ -133,6 +136,7 @@ export function MatchEventEditor({ teamId, matchId, opponent, onClose, canDelete
   const [newTipo, setNewTipo] = useState<string | null>(null);
   const [newZona, setNewZona] = useState<number | null>(null);
   const [newTransicaoNumeros, setNewTransicaoNumeros] = useState<string | null>(null);
+  const [newBalizaDeserta, setNewBalizaDeserta] = useState(false);
   const [newLabel, setNewLabel] = useState("");
   const [addStatus, setAddStatus] = useState<"idle" | "saving" | "error">("idle");
   const [addError, setAddError] = useState("");
@@ -145,6 +149,7 @@ export function MatchEventEditor({ teamId, matchId, opponent, onClose, canDelete
     setNewTipo(null);
     setNewZona(null);
     setNewTransicaoNumeros(null);
+    setNewBalizaDeserta(false);
     setNewLabel("");
   }
 
@@ -179,11 +184,13 @@ export function MatchEventEditor({ teamId, matchId, opponent, onClose, canDelete
       extra.tipo = newTipo;
       extra.zona = newZona;
       extra.transicaoNumeros = newTipo === "trs" ? newTransicaoNumeros : null;
+      extra.transicaoBalizaDeserta = newTipo === "trs" && newBalizaDeserta;
     }
     if (newType === "golo_sofrido") {
       extra.tipo = newTipo;
       extra.zona = newZona;
       extra.transicaoNumeros = newTipo === "trs" ? newTransicaoNumeros : null;
+      extra.transicaoBalizaDeserta = newTipo === "trs" && newBalizaDeserta;
     }
     if (newType === "substituicao") extra.outId = newOutId;
     if (newType === "pausa" || newType === "fim_pausa") extra.label = newLabel || undefined;
@@ -225,6 +232,19 @@ export function MatchEventEditor({ teamId, matchId, opponent, onClose, canDelete
       setDraftField(picker.rowId, { [field]: value } as Partial<Draft>);
     }
     setPicker(null);
+  }
+
+  // "Baliza deserta" é um toggle, não uma escolha de lista — fica fora do
+  // fluxo de applyPickerField (que sempre fecha o picker ao aplicar).
+  function currentBalizaDeserta(): boolean {
+    if (!picker) return false;
+    return picker.rowId === NEW_ROW_ID ? newBalizaDeserta : (drafts[picker.rowId]?.transicaoBalizaDeserta ?? false);
+  }
+
+  function toggleBalizaDeserta() {
+    if (!picker) return;
+    if (picker.rowId === NEW_ROW_ID) setNewBalizaDeserta((v) => !v);
+    else setDraftField(picker.rowId, { transicaoBalizaDeserta: !(drafts[picker.rowId]?.transicaoBalizaDeserta ?? false) });
   }
 
   function byId(id: string) {
@@ -282,6 +302,7 @@ export function MatchEventEditor({ teamId, matchId, opponent, onClose, canDelete
       tipo: draft.tipo,
       zona: draft.zona,
       transicaoNumeros: draft.tipo === "trs" ? draft.transicaoNumeros : null,
+      transicaoBalizaDeserta: draft.tipo === "trs" && draft.transicaoBalizaDeserta,
     };
     // .select() confirma que a linha foi mesmo atualizada — sem ele, um
     // UPDATE bloqueado pela RLS devolveria "sucesso" mesmo sem mudar nada
@@ -376,7 +397,7 @@ export function MatchEventEditor({ teamId, matchId, opponent, onClose, canDelete
             {btn(`Marcador: ${playerLabel(draft.playerId)}`, "scorer")}
             {btn(`Assist.: ${playerLabel(draft.assistId)}`, "assist")}
             {btn(`Tipo: ${engine.tipoGoloLabel(draft.tipo) ?? "—"}`, "tipo")}
-            {draft.tipo === "trs" && btn(`Transição: ${draft.transicaoNumeros ?? "—"}`, "transicao")}
+            {draft.tipo === "trs" && btn(`Transição: ${draft.transicaoNumeros ?? "—"}${draft.transicaoBalizaDeserta ? " 🥅" : ""}`, "transicao")}
             {btn(`Zona: ${draft.zona ?? "—"}`, "zona")}
           </>
         );
@@ -384,7 +405,7 @@ export function MatchEventEditor({ teamId, matchId, opponent, onClose, canDelete
         return (
           <>
             {btn(`Tipo: ${engine.tipoGoloLabel(draft.tipo) ?? "—"}`, "tipo")}
-            {draft.tipo === "trs" && btn(`Transição: ${draft.transicaoNumeros ?? "—"}`, "transicao")}
+            {draft.tipo === "trs" && btn(`Transição: ${draft.transicaoNumeros ?? "—"}${draft.transicaoBalizaDeserta ? " 🥅" : ""}`, "transicao")}
             {btn(`Zona: ${draft.zona ?? "—"}`, "zona")}
           </>
         );
@@ -426,7 +447,7 @@ export function MatchEventEditor({ teamId, matchId, opponent, onClose, canDelete
             {btn(`Marcador: ${playerLabel(newPlayerId)}`, "scorer")}
             {btn(`Assist.: ${playerLabel(newAssistId)}`, "assist")}
             {btn(`Tipo: ${engine.tipoGoloLabel(newTipo) ?? "—"}`, "tipo")}
-            {newTipo === "trs" && btn(`Transição: ${newTransicaoNumeros ?? "—"}`, "transicao")}
+            {newTipo === "trs" && btn(`Transição: ${newTransicaoNumeros ?? "—"}${newBalizaDeserta ? " 🥅" : ""}`, "transicao")}
             {btn(`Zona: ${newZona ?? "—"}`, "zona")}
           </>
         );
@@ -434,7 +455,7 @@ export function MatchEventEditor({ teamId, matchId, opponent, onClose, canDelete
         return (
           <>
             {btn(`Tipo: ${engine.tipoGoloLabel(newTipo) ?? "—"}`, "tipo")}
-            {newTipo === "trs" && btn(`Transição: ${newTransicaoNumeros ?? "—"}`, "transicao")}
+            {newTipo === "trs" && btn(`Transição: ${newTransicaoNumeros ?? "—"}${newBalizaDeserta ? " 🥅" : ""}`, "transicao")}
             {btn(`Zona: ${newZona ?? "—"}`, "zona")}
           </>
         );
@@ -470,6 +491,9 @@ export function MatchEventEditor({ teamId, matchId, opponent, onClose, canDelete
 
   const pickerRow = picker ? rows?.find((r) => r.id === picker.rowId) : undefined;
   const pickerIsNew = picker?.rowId === NEW_ROW_ID;
+  // Quem já foi escolhido como marcador (golo) ou como quem entra (substituição) não pode
+  // ser escolhido de novo como assistência/quem sai — a mesma regra que o jogo ao vivo já aplica.
+  const pickerCurrentPlayerId = picker ? (pickerIsNew ? newPlayerId : (drafts[picker.rowId]?.playerId ?? null)) : null;
 
   return (
     <div>
@@ -559,6 +583,7 @@ export function MatchEventEditor({ teamId, matchId, opponent, onClose, canDelete
                   tipo: draft.tipo,
                   zona: draft.zona,
                   transicaoNumeros: draft.transicaoNumeros,
+                  transicaoBalizaDeserta: draft.transicaoBalizaDeserta,
                 };
                 return (
                   <tr key={r.id}>
@@ -641,9 +666,11 @@ export function MatchEventEditor({ teamId, matchId, opponent, onClose, canDelete
       {picker && (pickerRow || pickerIsNew) && picker.kind === "assist" && (
         <Sheet title="Assistência" sub='Toca em "sem assistência" se não houver' onClose={() => setPicker(null)}>
           <div className="pgrid">
-            {roster.map((p: PlayerRow) => (
-              <PlayerChip key={p.id} p={p} onClick={() => applyPickerField("assistId", p.id)} />
-            ))}
+            {roster
+              .filter((p) => p.id !== pickerCurrentPlayerId) // ninguém dá assistência a si mesmo
+              .map((p: PlayerRow) => (
+                <PlayerChip key={p.id} p={p} onClick={() => applyPickerField("assistId", p.id)} />
+              ))}
           </div>
           <button type="button" className="btn primary block" onClick={() => applyPickerField("assistId", null)} style={{ marginTop: 10 }}>
             Sem assistência
@@ -654,9 +681,11 @@ export function MatchEventEditor({ teamId, matchId, opponent, onClose, canDelete
       {picker && (pickerRow || pickerIsNew) && picker.kind === "out" && (
         <Sheet title="Quem saiu?" sub='Toca em "ninguém saiu" se entrou sem substituir ninguém' onClose={() => setPicker(null)}>
           <div className="pgrid">
-            {roster.map((p: PlayerRow) => (
-              <PlayerChip key={p.id} p={p} onClick={() => applyPickerField("outId", p.id)} />
-            ))}
+            {roster
+              .filter((p) => p.id !== pickerCurrentPlayerId) // quem entra não pode ser também quem sai
+              .map((p: PlayerRow) => (
+                <PlayerChip key={p.id} p={p} onClick={() => applyPickerField("outId", p.id)} />
+              ))}
           </div>
           <button type="button" className="btn primary block" onClick={() => applyPickerField("outId", null)} style={{ marginTop: 10 }}>
             Ninguém saiu
@@ -680,14 +709,24 @@ export function MatchEventEditor({ teamId, matchId, opponent, onClose, canDelete
       )}
 
       {picker && (pickerRow || pickerIsNew) && picker.kind === "transicao" && (
-        <Sheet title="Superioridade numérica?" sub="Atacantes x defensores na transição — ex.: 3x1" onClose={() => setPicker(null)}>
+        <Sheet title="Tipo de transição?" onClose={() => setPicker(null)}>
+          <p className="sub" style={{ marginTop: 0 }}>Superioridade numérica</p>
           <div className="actiongrid">
-            {engine.TRANSICAO_NUMEROS_PRESET.map((n) => (
+            {engine.TRANSICAO_NUMEROS_VANTAGEM.map((n) => (
               <button key={n} type="button" className="abtn" onClick={() => applyPickerField("transicaoNumeros", n)}>
                 {n}
               </button>
             ))}
           </div>
+          <p className="sub">Igualdade / outras</p>
+          <div className="actiongrid">
+            {engine.TRANSICAO_NUMEROS_IGUALDADE_OU_DESVANTAGEM.map((n) => (
+              <button key={n} type="button" className="abtn" onClick={() => applyPickerField("transicaoNumeros", n)}>
+                {n}
+              </button>
+            ))}
+          </div>
+          {/* Aqui (correção pós-jogo, sem pressão de tempo) mantém o texto livre — ao vivo isso foi removido de propósito. */}
           <form
             className="inline-fields"
             style={{ marginTop: 10 }}
@@ -702,7 +741,7 @@ export function MatchEventEditor({ teamId, matchId, opponent, onClose, canDelete
             <div className="field" style={{ marginBottom: 0 }}>
               <input
                 type="text"
-                placeholder="Outra (ex.: 5x3)"
+                placeholder="Outra (ex.: 2x3)"
                 value={transicaoCustom}
                 onInput={(e) => setTransicaoCustom((e.target as HTMLInputElement).value)}
                 style={{ width: 120 }}
@@ -712,6 +751,15 @@ export function MatchEventEditor({ teamId, matchId, opponent, onClose, canDelete
           </form>
           <button type="button" className="btn ghost block" onClick={() => applyPickerField("transicaoNumeros", null)} style={{ marginTop: 10 }}>
             Não sei / saltar
+          </button>
+          <p className="sub" style={{ marginBottom: 4 }}>Modificadores rápidos</p>
+          <button
+            type="button"
+            className={`checkbox-chip${currentBalizaDeserta() ? " checked" : ""}`}
+            onClick={toggleBalizaDeserta}
+            style={{ display: "block", width: "100%", textAlign: "left", background: "none", border: "1px solid var(--line)", borderRadius: 10, padding: "8px 8px 8px 26px" }}
+          >
+            🥅 Baliza deserta (goleiro-linha)
           </button>
         </Sheet>
       )}

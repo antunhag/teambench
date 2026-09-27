@@ -24,8 +24,14 @@ export function tipoGoloLabel(id: string | null | undefined): string | null {
  * Superioridade numérica de uma transição (atacantes x defensores) — só faz
  * sentido quando o tipo do golo é "trs" (Transição). Preset com as
  * combinações mais comuns; o picker sempre deixa digitar outra além destas.
+ * Separado em dois grupos porque nem toda transição é em vantagem — dá pra
+ * marcar em igualdade ou até em desvantagem numérica.
  */
-export const TRANSICAO_NUMEROS_PRESET: string[] = ["3x0", "3x1", "3x2", "2x0", "2x1", "4x1", "4x2"];
+export const TRANSICAO_NUMEROS_VANTAGEM: string[] = ["2x0", "2x1", "3x0", "3x1", "3x2", "4x1", "4x2"];
+// Sem campo de texto livre por desenho — digitar durante o jogo quebra o
+// ritmo de quem está a registar. Só botões fixos; qualquer combinação fora
+// desta lista fica pra corrigir depois em "Corrigir registo".
+export const TRANSICAO_NUMEROS_IGUALDADE_OU_DESVANTAGEM: string[] = ["1x1", "2x2", "3x3"];
 
 // Zona do campo onde o golo aconteceu — grelha 3×4 do banco.html original
 // (1-3 mais perto da baliza, 10-12 mais perto do meio-campo).

@@ -548,6 +548,10 @@ a {
   cursor: pointer;
   color: var(--ink);
 }
+.abtn.selected,
+.zbtn.selected {
+  outline: 2px solid var(--accent);
+}
 
 /* ---------- log / lists ---------- */
 .logline {

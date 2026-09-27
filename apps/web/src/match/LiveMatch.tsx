@@ -1,4 +1,12 @@
-import { describeEvent, isLastPeriod, TIPOS_GOLO, timeoutUsedInPeriod, TRANSICAO_NUMEROS_PRESET, ZONAS_GOLO } from "@teambench/engine";
+import {
+  describeEvent,
+  isLastPeriod,
+  TIPOS_GOLO,
+  timeoutUsedInPeriod,
+  TRANSICAO_NUMEROS_IGUALDADE_OU_DESVANTAGEM,
+  TRANSICAO_NUMEROS_VANTAGEM,
+  ZONAS_GOLO,
+} from "@teambench/engine";
 import { useEffect, useState } from "preact/hooks";
 import type { PlayerRow } from "../team/usePlayers";
 import { isGoalkeeper, posAbbr } from "../team/positions";
@@ -29,20 +37,29 @@ function parseMinSec(text: string): number | null {
 }
 
 type Picker =
-  | { kind: "golo-scorer" }
-  | { kind: "golo-assist"; scorerId: string }
-  | { kind: "golo-tipo"; scorerId: string; assistId: string | null } // golo nosso: penúltimo passo antes da zona
-  // Só alcançado quando tipo === "trs" — detalha a superioridade numérica da transição (ex.: "3x1").
-  | { kind: "golo-transicao"; scorerId: string; assistId: string | null; tipo: string }
-  | { kind: "golo-zona"; scorerId: string; assistId: string | null; tipo: string | null; transicaoNumeros: string | null }
-  | { kind: "opp-golo-tipo" } // golo sofrido: mesmo par tipo/zona, sem marcador/assistência
-  | { kind: "opp-golo-transicao"; tipo: string }
-  | { kind: "opp-golo-zona"; tipo: string | null; transicaoNumeros: string | null }
   | { kind: "player"; playerId: string } // toca num jogador EM CAMPO -> ações contextuais (cartão/falta/substituir/atendimento)
   | { kind: "sub-out" } // atalho da barra: escolher primeiro quem sai
   | { kind: "sub-in"; outId: string } // escolher quem entra, já sabendo quem sai
   | { kind: "sub-out-for-entry"; inId: string } // banco cheio: escolher quem sai para este entrar
   | null;
+
+/**
+ * Um golo (nosso ou sofrido) é uma tela única (ver <GoloSheet/> mais abaixo)
+ * em vez da sequência de telas separadas de antes (marcador → assistência →
+ * tipo → zona) — cada toque escolhia uma coisa e trocava de tela, o que
+ * custava tempo/foco de mais num jogo que não para. "Transição" continua
+ * abrindo um passo extra (o detalhe de superioridade numérica não cabe como
+ * mais uma fileira de chips sem poluir a tela principal).
+ */
+interface GoloFormState {
+  side: "nos" | "adv";
+  scorerId: string | null;
+  assistId: string | null;
+  tipo: string | null;
+  zona: number | null;
+  transicaoNumeros: string | null;
+  balizaDeserta: boolean;
+}
 
 export function LiveMatch({ live, roster, opponent, onViewSummary, ourLabel }: Props) {
   const { state, elapsedMs } = live;
@@ -56,7 +73,55 @@ export function LiveMatch({ live, roster, opponent, onViewSummary, ourLabel }: P
 
   const [showPauseReasons, setShowPauseReasons] = useState(false);
   const [picker, setPicker] = useState<Picker>(null);
-  const [transicaoCustom, setTransicaoCustom] = useState("");
+  const [goloForm, setGoloForm] = useState<GoloFormState | null>(null);
+  const [showTransicaoModal, setShowTransicaoModal] = useState(false);
+
+  function updateGoloForm(patch: Partial<GoloFormState>) {
+    setGoloForm((f) => (f ? { ...f, ...patch } : f));
+  }
+
+  function selectTipo(t: string) {
+    if (!goloForm) return;
+    if (goloForm.tipo === t) {
+      // Já selecionado: em Transição reabre o modal pra editar o detalhe; nos demais, desmarca.
+      if (t === "trs") setShowTransicaoModal(true);
+      else updateGoloForm({ tipo: null });
+      return;
+    }
+    updateGoloForm({ tipo: t, transicaoNumeros: null, balizaDeserta: false });
+    if (t === "trs") setShowTransicaoModal(true);
+  }
+
+  function selectScorer(id: string) {
+    if (!goloForm) return;
+    const deselecting = goloForm.scorerId === id;
+    updateGoloForm({
+      scorerId: deselecting ? null : id,
+      // Ninguém dá assistência a si mesmo — trocar o marcador pro mesmo atleta da assistência a limpa.
+      assistId: !deselecting && goloForm.assistId === id ? null : goloForm.assistId,
+    });
+  }
+
+  function selectAssist(id: string | null) {
+    if (!goloForm) return;
+    updateGoloForm({ assistId: goloForm.assistId === id ? null : id });
+  }
+
+  function selectZona(z: number) {
+    if (!goloForm) return;
+    updateGoloForm({ zona: goloForm.zona === z ? null : z });
+  }
+
+  function confirmGolo() {
+    if (!goloForm) return;
+    if (goloForm.side === "nos") {
+      if (!goloForm.scorerId) return;
+      live.doGoal(goloForm.scorerId, goloForm.assistId, goloForm.tipo, goloForm.zona, goloForm.transicaoNumeros, goloForm.balizaDeserta);
+    } else {
+      live.doOppGoal(goloForm.tipo, goloForm.zona, goloForm.transicaoNumeros, goloForm.balizaDeserta);
+    }
+    setGoloForm(null);
+  }
   // Campo de texto do modo manual — separado de live.manualElapsedMs pra
   // deixar digitar livremente ("1", "1:", "1:2"...) sem forçar formato a
   // cada tecla; só aplica (parseMinSec) ao sair do campo ou apertar Enter.
@@ -173,7 +238,13 @@ export function LiveMatch({ live, roster, opponent, onViewSummary, ourLabel }: P
 
       {!awaitingKickoff && !state.finished && (
         <div style={{ textAlign: "right", marginTop: 8 }}>
-          <button type="button" className="btn sm ghost" onClick={() => setPicker({ kind: "opp-golo-tipo" })}>
+          <button
+            type="button"
+            className="btn sm ghost"
+            onClick={() =>
+              setGoloForm({ side: "adv", scorerId: null, assistId: null, tipo: null, zona: null, transicaoNumeros: null, balizaDeserta: false })
+            }
+          >
             🥅 +1 golo advers.
           </button>
         </div>
@@ -268,7 +339,13 @@ export function LiveMatch({ live, roster, opponent, onViewSummary, ourLabel }: P
               <button type="button" className="btn" disabled={!live.canUndo} onClick={live.undo}>
                 ↩️ Desfazer
               </button>
-              <button type="button" className="btn primary" onClick={() => setPicker({ kind: "golo-scorer" })}>
+              <button
+                type="button"
+                className="btn primary"
+                onClick={() =>
+                  setGoloForm({ side: "nos", scorerId: null, assistId: null, tipo: null, zona: null, transicaoNumeros: null, balizaDeserta: false })
+                }
+              >
                 ⚽ Golo
               </button>
               {state.activePause ? (
@@ -358,183 +435,132 @@ export function LiveMatch({ live, roster, opponent, onViewSummary, ourLabel }: P
 
       {/* ---- Sheets de toque ---- */}
 
-      {picker?.kind === "golo-scorer" && (
-        <Sheet title="Quem marcou?" sub="Toca no marcador" onClose={() => setPicker(null)}>
-          <div className="pgrid">
-            {onCourt.map((p) => (
-              <PlayerChip key={p.id} p={p} onClick={() => setPicker({ kind: "golo-assist", scorerId: p.id })} />
-            ))}
-          </div>
-        </Sheet>
-      )}
+      {goloForm && (
+        <Sheet
+          title={goloForm.side === "nos" ? "Registar golo" : `Golo — ${opponent || "adversário"}`}
+          onClose={() => setGoloForm(null)}
+        >
+          {goloForm.side === "nos" && (
+            <>
+              <p className="sub" style={{ marginTop: 0 }}>Quem marcou?</p>
+              <div className="pgrid">
+                {onCourt.map((p) => (
+                  <PlayerChip
+                    key={p.id}
+                    p={p}
+                    dim={goloForm.scorerId !== null && goloForm.scorerId !== p.id}
+                    onClick={() => selectScorer(p.id)}
+                  />
+                ))}
+              </div>
+            </>
+          )}
 
-      {picker?.kind === "golo-assist" && (
-        <Sheet title="Assistência?" sub='Opcional — toca em "sem assistência" se não houver' onClose={() => setPicker(null)}>
-          <div className="pgrid">
-            {onCourt
-              .filter((p) => p.id !== picker.scorerId)
-              .map((p) => (
-                <PlayerChip
-                  key={p.id}
-                  p={p}
-                  onClick={() => setPicker({ kind: "golo-tipo", scorerId: picker.scorerId, assistId: p.id })}
-                />
-              ))}
-          </div>
-          <button
-            type="button"
-            className="btn primary block"
-            onClick={() => setPicker({ kind: "golo-tipo", scorerId: picker.scorerId, assistId: null })}
-            style={{ marginTop: 10 }}
-          >
-            Sem assistência
-          </button>
-        </Sheet>
-      )}
-
-      {(picker?.kind === "golo-tipo" || picker?.kind === "opp-golo-tipo") && (
-        <Sheet title="Tipo de jogada?" sub="Opcional — ajuda depois a cruzar com a folha de estatísticas" onClose={() => setPicker(null)}>
+          <p className="sub">Tipo de jogada?</p>
           <div className="actiongrid">
             {TIPOS_GOLO.map((t) => (
               <button
                 key={t.id}
                 type="button"
-                className="abtn"
-                onClick={() => {
-                  const isNos = picker.kind === "golo-tipo";
-                  // Transição pede um passo a mais (superioridade numérica, ex.: "3x1") antes da zona.
-                  if (t.id === "trs") {
-                    setPicker(
-                      isNos
-                        ? { kind: "golo-transicao", scorerId: picker.scorerId, assistId: picker.assistId, tipo: t.id }
-                        : { kind: "opp-golo-transicao", tipo: t.id }
-                    );
-                  } else {
-                    setPicker(
-                      isNos
-                        ? { kind: "golo-zona", scorerId: picker.scorerId, assistId: picker.assistId, tipo: t.id, transicaoNumeros: null }
-                        : { kind: "opp-golo-zona", tipo: t.id, transicaoNumeros: null }
-                    );
-                  }
-                }}
+                className={`abtn${goloForm.tipo === t.id ? " selected" : ""}`}
+                onClick={() => selectTipo(t.id)}
               >
                 {t.label}
               </button>
             ))}
           </div>
-          <button
-            type="button"
-            className="btn ghost block"
-            onClick={() =>
-              setPicker(
-                picker.kind === "golo-tipo"
-                  ? { kind: "golo-zona", scorerId: picker.scorerId, assistId: picker.assistId, tipo: null, transicaoNumeros: null }
-                  : { kind: "opp-golo-zona", tipo: null, transicaoNumeros: null }
-              )
-            }
-            style={{ marginTop: 10 }}
-          >
-            Não sei / saltar
-          </button>
-        </Sheet>
-      )}
 
-      {(picker?.kind === "golo-transicao" || picker?.kind === "opp-golo-transicao") && (
-        <Sheet title="Superioridade numérica?" sub="Atacantes x defensores na transição — ex.: 3x1" onClose={() => setPicker(null)}>
-          <div className="actiongrid">
-            {TRANSICAO_NUMEROS_PRESET.map((n) => (
+          {goloForm.side === "nos" && (
+            <>
+              <p className="sub">Assistência?</p>
+              <div className="pgrid">
+                {onCourt
+                  .filter((p) => p.id !== goloForm.scorerId)
+                  .map((p) => (
+                    <PlayerChip
+                      key={p.id}
+                      p={p}
+                      dim={goloForm.assistId !== null && goloForm.assistId !== p.id}
+                      onClick={() => selectAssist(p.id)}
+                    />
+                  ))}
+              </div>
               <button
-                key={n}
                 type="button"
-                className="abtn"
-                onClick={() =>
-                  setPicker(
-                    picker.kind === "golo-transicao"
-                      ? { kind: "golo-zona", scorerId: picker.scorerId, assistId: picker.assistId, tipo: picker.tipo, transicaoNumeros: n }
-                      : { kind: "opp-golo-zona", tipo: picker.tipo, transicaoNumeros: n }
-                  )
-                }
+                className={`btn block${goloForm.assistId === null ? " primary" : " ghost"}`}
+                onClick={() => selectAssist(null)}
+                style={{ marginTop: 6 }}
               >
-                {n}
+                Sem assistência
               </button>
-            ))}
-          </div>
-          <form
-            className="inline-fields"
-            style={{ marginTop: 10 }}
-            onSubmit={(e) => {
-              e.preventDefault();
-              const value = transicaoCustom.trim();
-              if (!value) return;
-              setPicker(
-                picker.kind === "golo-transicao"
-                  ? { kind: "golo-zona", scorerId: picker.scorerId, assistId: picker.assistId, tipo: picker.tipo, transicaoNumeros: value }
-                  : { kind: "opp-golo-zona", tipo: picker.tipo, transicaoNumeros: value }
-              );
-              setTransicaoCustom("");
-            }}
-          >
-            <div className="field" style={{ marginBottom: 0 }}>
-              <input
-                type="text"
-                placeholder="Outra (ex.: 5x3)"
-                value={transicaoCustom}
-                onInput={(e) => setTransicaoCustom((e.target as HTMLInputElement).value)}
-                style={{ width: 120 }}
-              />
-            </div>
-            <button type="submit" className="btn primary">Usar</button>
-          </form>
-          <button
-            type="button"
-            className="btn ghost block"
-            onClick={() =>
-              setPicker(
-                picker.kind === "golo-transicao"
-                  ? { kind: "golo-zona", scorerId: picker.scorerId, assistId: picker.assistId, tipo: picker.tipo, transicaoNumeros: null }
-                  : { kind: "opp-golo-zona", tipo: picker.tipo, transicaoNumeros: null }
-              )
-            }
-            style={{ marginTop: 10 }}
-          >
-            Não sei / saltar
-          </button>
-        </Sheet>
-      )}
+            </>
+          )}
 
-      {(picker?.kind === "golo-zona" || picker?.kind === "opp-golo-zona") && (
-        <Sheet
-          title="Zona do golo?"
-          sub="Opcional — grelha 3×4 (1-3 mais perto da baliza, 10-12 mais perto do meio-campo)"
-          onClose={() => setPicker(null)}
-        >
+          <p className="sub">Zona do golo?</p>
           <div className="zonegrid">
             {ZONAS_GOLO.map((z) => (
               <button
                 key={z}
                 type="button"
-                className="zbtn"
-                onClick={() => {
-                  if (picker.kind === "golo-zona") live.doGoal(picker.scorerId, picker.assistId, picker.tipo, z, picker.transicaoNumeros);
-                  else live.doOppGoal(picker.tipo, z, picker.transicaoNumeros);
-                  setPicker(null);
-                }}
+                className={`zbtn${goloForm.zona === z ? " selected" : ""}`}
+                onClick={() => selectZona(z)}
               >
                 {z}
               </button>
             ))}
           </div>
+
           <button
             type="button"
-            className="btn ghost block"
-            onClick={() => {
-              if (picker.kind === "golo-zona") live.doGoal(picker.scorerId, picker.assistId, picker.tipo, null, picker.transicaoNumeros);
-              else live.doOppGoal(picker.tipo, null, picker.transicaoNumeros);
-              setPicker(null);
-            }}
-            style={{ marginTop: 10 }}
+            className="btn primary block"
+            disabled={goloForm.side === "nos" && !goloForm.scorerId}
+            onClick={confirmGolo}
+            style={{ marginTop: 14 }}
           >
-            Não sei / saltar
+            {goloForm.side === "nos" ? "Confirmar golo" : "Confirmar golo sofrido"}
+          </button>
+        </Sheet>
+      )}
+
+      {goloForm && showTransicaoModal && (
+        <Sheet title="Tipo de transição?" onClose={() => setShowTransicaoModal(false)}>
+          <p className="sub" style={{ marginTop: 0 }}>Superioridade numérica</p>
+          <div className="actiongrid">
+            {TRANSICAO_NUMEROS_VANTAGEM.map((n) => (
+              <button
+                key={n}
+                type="button"
+                className={`abtn${goloForm.transicaoNumeros === n ? " selected" : ""}`}
+                onClick={() => updateGoloForm({ transicaoNumeros: n })}
+              >
+                {n}
+              </button>
+            ))}
+          </div>
+          <p className="sub">Igualdade / outras</p>
+          <div className="actiongrid">
+            {TRANSICAO_NUMEROS_IGUALDADE_OU_DESVANTAGEM.map((n) => (
+              <button
+                key={n}
+                type="button"
+                className={`abtn${goloForm.transicaoNumeros === n ? " selected" : ""}`}
+                onClick={() => updateGoloForm({ transicaoNumeros: n })}
+              >
+                {n}
+              </button>
+            ))}
+          </div>
+          <p className="sub">Modificadores rápidos</p>
+          <button
+            type="button"
+            className={`checkbox-chip${goloForm.balizaDeserta ? " checked" : ""}`}
+            onClick={() => updateGoloForm({ balizaDeserta: !goloForm.balizaDeserta })}
+            style={{ display: "block", width: "100%", textAlign: "left", background: "none", border: "1px solid var(--line)", borderRadius: 10, padding: "8px 8px 8px 26px" }}
+          >
+            🥅 Baliza deserta (goleiro-linha)
+          </button>
+          <button type="button" className="btn primary block" onClick={() => setShowTransicaoModal(false)} style={{ marginTop: 12 }}>
+            Confirmar
           </button>
         </Sheet>
       )}

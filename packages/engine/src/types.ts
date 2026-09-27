@@ -53,6 +53,8 @@ export interface MatchEvent {
   zona?: number | null;
   /** Superioridade numérica da transição (ex.: "3x1") — só usado quando tipo === "trs". */
   transicaoNumeros?: string | null;
+  /** Baliza adversária desguarnecida (goleiro-linha) na transição — só usado quando tipo === "trs". */
+  transicaoBalizaDeserta?: boolean;
   lineup?: string[];
   label?: string;
   reasonId?: string;

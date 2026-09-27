@@ -22,6 +22,7 @@ export interface TimelineGoal {
   tipo: string | null;
   zona: number | null;
   transicaoNumeros: string | null;
+  transicaoBalizaDeserta: boolean;
   marcha: [number, number];
 }
 
@@ -113,6 +114,7 @@ export function buildTimelineData(events: MatchEvent[], playersList: Player[], t
           tipo: e.tipo ?? null,
           zona: e.zona ?? null,
           transicaoNumeros: e.transicaoNumeros ?? null,
+          transicaoBalizaDeserta: e.transicaoBalizaDeserta ?? false,
           marcha: [runningNos, runningAdv],
         });
       }
@@ -149,11 +151,13 @@ function esc(s: unknown): string {
   return (s == null ? "" : String(s)).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 }
 
-/** "Transição 3x1" quando dá pra detalhar a superioridade numérica; senão só o rótulo normal do tipo. */
+/** "Transição 3x1 (baliza deserta)" quando dá pra detalhar; senão só o rótulo normal do tipo. */
 function goalTipoLabelComDetalhe(g: TimelineGoal): string | null {
   const lbl = tipoGoloLabel(g.tipo);
-  if (lbl && g.tipo === "trs" && g.transicaoNumeros) return `${lbl} ${g.transicaoNumeros}`;
-  return lbl;
+  if (!lbl || g.tipo !== "trs") return lbl;
+  const numeros = g.transicaoNumeros ? ` ${g.transicaoNumeros}` : "";
+  const deserta = g.transicaoBalizaDeserta ? " (baliza deserta)" : "";
+  return `${lbl}${numeros}${deserta}`;
 }
 
 /** Página HTML autónoma (sem JS de runtime) com a timeline visual de todas as partes de um jogo. */

@@ -27,6 +27,9 @@ describe("describeEvent", () => {
 
     const outroTipo = createEvent("golo", salvador.id, 65_000, 1, 0, { tipo: "cnt", transicaoNumeros: "3x1" });
     expect(describeEvent(outroTipo, byId)).not.toContain("3x1");
+
+    const balizaDeserta = createEvent("golo", salvador.id, 65_000, 1, 0, { tipo: "trs", transicaoNumeros: "3x1", transicaoBalizaDeserta: true });
+    expect(describeEvent(balizaDeserta, byId)).toContain("[Transição 3x1 (baliza deserta)]");
   });
 
   it("marca uma correção adicionada depois", () => {
