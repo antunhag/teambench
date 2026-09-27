@@ -1,5 +1,5 @@
 import {
-  describeEvent,
+  describeEvents,
   isLastPeriod,
   TIPOS_GOLO_BOLA_PARADA,
   TIPOS_GOLO_ESPECIAL,
@@ -418,20 +418,25 @@ export function LiveMatch({ live, roster, opponent, onViewSummary, ourLabel }: P
       <div style={{ marginTop: 16 }}>
         <h3 className="section-title">Registo ({state.events.length})</h3>
         <div style={{ maxHeight: 200, overflowY: "auto" }}>
-          {state.events
-            .slice()
-            .reverse()
-            .map((e) => {
-              const lookup = (id: string) => {
-                const p = byId.get(id);
-                return p ? { id: p.id, num: p.num ?? "", name: p.name, pos: p.position ?? "Universal" } : undefined;
-              };
-              return (
+          {(() => {
+            const lookup = (id: string) => {
+              const p = byId.get(id);
+              return p ? { id: p.id, num: p.num ?? "", name: p.name, pos: p.position ?? "Universal" } : undefined;
+            };
+            // Recalculado do zero a cada render (ver describeEvents) — nunca
+            // confia no "em quadra" gravado no golo, que fica desatualizado
+            // se uma substituição for corrigida/inserida depois com um tempo
+            // anterior ao golo (ver "Corrigir registo").
+            const descriptions = describeEvents(state.events, lookup, live.format);
+            return state.events
+              .slice()
+              .reverse()
+              .map((e) => (
                 <div key={e.id} className="logline">
-                  <span className="d">{describeEvent(e, lookup, live.format)}</span>
+                  <span className="d">{descriptions.get(e.id)}</span>
                 </div>
-              );
-            })}
+              ));
+          })()}
         </div>
       </div>
 

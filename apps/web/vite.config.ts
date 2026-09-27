@@ -17,7 +17,13 @@ export default defineConfig({
     // apps/web/src/sync/outbox.ts) — deixar o service worker também cachear
     // respostas da API só arriscaria servir dados/sessão desatualizados.
     VitePWA({
-      registerType: "autoUpdate",
+      // "prompt", não "autoUpdate": um tablet do clube pode ficar com o jogo
+      // aberto o tempo todo — trocar a versão sozinho no meio de um jogo
+      // (recarregando a página sem avisar) arriscaria perder o que estava a
+      // meio de preencher. Em vez disso, useAppUpdate.ts mostra um aviso e só
+      // troca quando o treinador tocar (ver App.tsx).
+      registerType: "prompt",
+      injectRegister: false,
       manifest: {
         name: "Teambench",
         short_name: "Teambench",

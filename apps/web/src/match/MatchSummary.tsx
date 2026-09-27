@@ -114,11 +114,17 @@ export function MatchSummary({ live, roster, opponent, matchId, onClose, ourLabe
       <div style={{ marginTop: 16 }}>
         <h3 className="section-title">Registo cronológico ({state.events.length})</h3>
         <div style={{ maxHeight: 240, overflowY: "auto" }}>
-          {state.events.map((e) => (
-            <div key={e.id} className="logline">
-              <span className="d">{engine.describeEvent(e, byId)}</span>
-            </div>
-          ))}
+          {(() => {
+            // "Em quadra" recalculado do zero (ver describeEvents) — nunca lido do
+            // valor gravado no golo, que fica velho se uma substituição for
+            // corrigida depois com um tempo anterior ao golo.
+            const descriptions = engine.describeEvents(state.events, byId);
+            return state.events.map((e) => (
+              <div key={e.id} className="logline">
+                <span className="d">{descriptions.get(e.id)}</span>
+              </div>
+            ));
+          })()}
         </div>
       </div>
 

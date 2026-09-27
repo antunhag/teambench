@@ -15,6 +15,7 @@ import { TeamMembers } from "./team/TeamMembers";
 import { useCurrentClub } from "./team/useCurrentClub";
 import { useCurrentTeam, type CurrentTeam } from "./team/useCurrentTeam";
 import { useOutboxSync } from "./sync/useOutboxSync";
+import { useAppUpdate } from "./useAppUpdate";
 
 const ROLE_LABELS: Record<string, string> = {
   team_admin: "Admin da Equipa",
@@ -24,6 +25,11 @@ const ROLE_LABELS: Record<string, string> = {
 
 export function App() {
   const [session, setSession] = useState<Session | null | undefined>(undefined); // undefined = ainda a carregar
+  // Fica fora do "if" de baixo de propósito — o aviso precisa aparecer em
+  // qualquer tela (login, painel, ou a meio de um jogo ao vivo), já que o
+  // cenário que isto resolve é justamente um tablet do clube que fica com o
+  // mesmo jogo aberto a tarde toda.
+  const { needRefresh, applyUpdate } = useAppUpdate();
 
   useEffect(() => {
     if (!isSupabaseConfigured) return;
@@ -34,6 +40,25 @@ export function App() {
     return () => sub.subscription.unsubscribe();
   }, []);
 
+  return (
+    <>
+      {needRefresh && (
+        <div
+          className="banner warn"
+          style={{ position: "sticky", top: 0, zIndex: 60, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}
+        >
+          <span>🔄 Nova versão disponível.</span>
+          <button type="button" className="btn sm primary" onClick={applyUpdate}>
+            Atualizar agora
+          </button>
+        </div>
+      )}
+      <AppBody session={session} />
+    </>
+  );
+}
+
+function AppBody({ session }: { session: Session | null | undefined }) {
   if (!isSupabaseConfigured) {
     return (
       <div className="page">

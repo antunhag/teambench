@@ -108,6 +108,34 @@ export function describeEvent(e: MatchEvent, playerById: PlayerLookup, format?: 
   return t + body;
 }
 
+/**
+ * Descreve TODOS os eventos de um jogo de uma vez, recalculando quem estava
+ * em quadra em cada golo a partir da ordem cronológica ATUAL dos eventos —
+ * nunca confiando no `lineup` gravado dentro do próprio evento no momento em
+ * que foi criado. Esse valor gravado fica desatualizado sempre que uma
+ * substituição é corrigida ou inserida depois (ver MatchEventEditor) com um
+ * tempo anterior a um golo já registado: o golo continuaria mostrando quem
+ * estava em quadra segundo a ordem ANTIGA, não a corrigida. Devolve um mapa
+ * id→descrição, na ordem cronológica interna, pra quem exibe (reversa ou
+ * não) só precisar de events.map(e => mapa.get(e.id)).
+ */
+export function describeEvents(events: MatchEvent[], playerById: PlayerLookup, format?: MatchFormat): Map<string, string> {
+  const sorted = [...events].sort((a, b) => (a.period - b.period) || (eventMs(a) - eventMs(b)) || (a.ts - b.ts));
+  let onCourt: string[] = [];
+  const result = new Map<string, string>();
+  for (const e of sorted) {
+    if (e.type === "kickoff" && e.lineup) onCourt = e.lineup;
+    if (e.type === "substituicao") {
+      if (e.outId) onCourt = onCourt.filter((id) => id !== e.outId);
+      if (e.playerId && !onCourt.includes(e.playerId)) onCourt = [...onCourt, e.playerId];
+    }
+    if (e.type === "cartao_vermelho" && e.playerId) onCourt = onCourt.filter((id) => id !== e.playerId);
+    const forDisplay = e.type === "golo" || e.type === "golo_sofrido" ? { ...e, lineup: onCourt.slice() } : e;
+    result.set(e.id, describeEvent(forDisplay, playerById, format));
+  }
+  return result;
+}
+
 export interface MatchMeta {
   jornada?: string | null;
   date?: string | null;
@@ -126,6 +154,7 @@ export function exportText(rows: MatchRow[], events: MatchEvent[], score: Score,
   lines.push(`Resultado: Nós ${score.nos} - ${score.advers} Adversário`);
   lines.push("");
   lines.push("REGISTO CRONOLÓGICO (golos, cartões, faltas, atendimentos, substituições)");
-  events.forEach((e) => lines.push(describeEvent(e, playerById, format)));
+  const descriptions = describeEvents(events, playerById, format);
+  events.forEach((e) => lines.push(descriptions.get(e.id) ?? describeEvent(e, playerById, format)));
   return lines.join("\n");
 }

@@ -568,23 +568,34 @@ export function MatchEventEditor({ teamId, matchId, opponent, onClose, canDelete
               </tr>
             </thead>
             <tbody>
-              {rows.map((r) => {
+              {(() => {
+                // "Em quadra" de cada golo recalculado do zero a partir da ordem
+                // cronológica de TODAS as linhas (já com as edições ainda não
+                // salvas aplicadas) — nunca do valor gravado em cada evento, que
+                // fica desatualizado assim que uma substituição muda de tempo.
+                function previewEventFor(row: EventRow): engine.MatchEvent {
+                  const d = drafts[row.id] ?? draftFromRow(row);
+                  return {
+                    ...(row.payload as unknown as engine.MatchEvent),
+                    // Sobrescreve o id do evento (interno, do payload) pelo id da
+                    // linha no Supabase — é essa chave que describeEvents devolve
+                    // e que o resto deste componente usa pra tudo (drafts, etc).
+                    id: row.id,
+                    ms: parseMinSec(d.time) ?? row.ms,
+                    period: parseInt(d.period, 10) || row.period,
+                    playerId: d.playerId,
+                    assistId: d.assistId,
+                    outId: d.outId,
+                    tipo: d.tipo,
+                    zona: d.zona,
+                    transicaoNumeros: d.transicaoNumeros,
+                    transicaoBalizaDeserta: d.transicaoBalizaDeserta,
+                  };
+                }
+                const descriptions = engine.describeEvents(rows.map(previewEventFor), byId);
+                return rows.map((r) => {
                 const draft = drafts[r.id] ?? draftFromRow(r);
                 const dirty = !draftsEqual(draft, draftFromRow(r));
-                const previewMs = parseMinSec(draft.time) ?? r.ms;
-                const previewPeriod = parseInt(draft.period, 10) || r.period;
-                const preview: engine.MatchEvent = {
-                  ...(r.payload as unknown as engine.MatchEvent),
-                  ms: previewMs,
-                  period: previewPeriod,
-                  playerId: draft.playerId,
-                  assistId: draft.assistId,
-                  outId: draft.outId,
-                  tipo: draft.tipo,
-                  zona: draft.zona,
-                  transicaoNumeros: draft.transicaoNumeros,
-                  transicaoBalizaDeserta: draft.transicaoBalizaDeserta,
-                };
                 return (
                   <tr key={r.id}>
                     <td>
@@ -606,7 +617,7 @@ export function MatchEventEditor({ teamId, matchId, opponent, onClose, canDelete
                       />
                     </td>
                     <td className="d">
-                      <div>{engine.describeEvent(preview, byId)}</div>
+                      <div>{descriptions.get(r.id)}</div>
                       <div style={{ marginTop: 4 }}>{detailButtons(r, draft)}</div>
                     </td>
                     <td style={{ whiteSpace: "nowrap", verticalAlign: "top" }}>
@@ -646,7 +657,8 @@ export function MatchEventEditor({ teamId, matchId, opponent, onClose, canDelete
                     </td>
                   </tr>
                 );
-              })}
+                });
+              })()}
             </tbody>
           </table>
         </div>

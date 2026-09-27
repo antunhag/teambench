@@ -146,15 +146,22 @@ export function ReadOnlyMatch({ matchId, opponent, roster, format, ourLabel }: P
       <button type="button" className="btn sm ghost" onClick={() => setShowLog((v) => !v)} style={{ marginTop: 16 }}>
         {showLog ? "Ocultar" : "Ver"} registo cronológico ({events.length})
       </button>
-      {showLog && (
-        <div style={{ maxHeight: 320, overflowY: "auto", marginTop: 8 }}>
-          {events.map((e) => (
-            <div key={e.clientEventId ?? e.id} className="logline">
-              <span className="d">{engine.describeEvent(e, byId, format)}</span>
+      {showLog &&
+        (() => {
+          // "Em quadra" recalculado do zero (ver describeEvents) — nunca lido do
+          // valor gravado no golo, que fica velho se uma substituição for
+          // corrigida depois com um tempo anterior ao golo.
+          const descriptions = engine.describeEvents(events, byId, format);
+          return (
+            <div style={{ maxHeight: 320, overflowY: "auto", marginTop: 8 }}>
+              {events.map((e) => (
+                <div key={e.clientEventId ?? e.id} className="logline">
+                  <span className="d">{descriptions.get(e.id)}</span>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
-      )}
+          );
+        })()}
     </div>
   );
 }
