@@ -37,6 +37,12 @@ export interface TimelineFoul {
   playerId: string;
 }
 
+export interface TimelinePause {
+  start: number;
+  end: number;
+  label: string | null;
+}
+
 export interface TimelineHalf {
   label: string;
   durSec: number;
@@ -44,6 +50,7 @@ export interface TimelineHalf {
   goals: TimelineGoal[];
   cards: TimelineCard[];
   fouls: TimelineFoul[];
+  pauses: TimelinePause[];
 }
 
 export function buildTimelineData(events: MatchEvent[], playersList: Player[], titularIds: string[]): TimelineHalf[] {
@@ -83,11 +90,16 @@ export function buildTimelineData(events: MatchEvent[], playersList: Player[], t
     // tirando esse trecho da soma de minutos — sem isto, a timeline mostrava
     // mais minutos do que o Resumo principal (que já descontava via clockAcc).
     let paused = false;
+    let pauseStart = 0;
+    let pauseLabel: string | null = null;
+    const pauses: TimelinePause[] = [];
 
     evs.forEach((e) => {
       const sec = (e.ms || 0) / 1000;
       if (e.type === "pausa") {
         paused = true;
+        pauseStart = sec;
+        pauseLabel = e.label ?? null;
         onCourtSet.forEach((id) => {
           if (openStart.has(id)) {
             const arr = intervals.get(id) || [];
@@ -98,6 +110,7 @@ export function buildTimelineData(events: MatchEvent[], playersList: Player[], t
         });
       } else if (e.type === "fim_pausa") {
         paused = false;
+        pauses.push({ start: pauseStart, end: sec, label: pauseLabel });
         onCourtSet.forEach((id) => {
           if (!openStart.has(id)) openStart.set(id, sec);
         });
@@ -158,7 +171,7 @@ export function buildTimelineData(events: MatchEvent[], playersList: Player[], t
       })
       .sort((a, b) => (parseInt(a.num, 10) || 999) - (parseInt(b.num, 10) || 999));
 
-    halves.push({ label: periodLabel(per), durSec, players: playersOut, goals, cards, fouls });
+    halves.push({ label: periodLabel(per), durSec, players: playersOut, goals, cards, fouls, pauses });
   });
 
   return halves;
@@ -276,12 +289,29 @@ export function buildTimelineHtml(
         })
         .join("");
 
+      // Posicionado com calc() em cima de --label-w (não pct2 puro) porque a faixa
+      // de pausa precisa cobrir só a coluna do "track" (à direita do nome/número do
+      // atleta), igual à régua de tempo acima — nunca a linha toda, senão tapava o
+      // nome dos jogadores.
+      const pauseBands = half.pauses
+        .map((p) => {
+          const leftFrac = Math.min(Math.max(0, p.start), half.durSec) / half.durSec;
+          const widthFrac = Math.max(0, Math.min(p.end, half.durSec) - Math.min(p.start, half.durSec)) / half.durSec;
+          const title = p.label ? `${esc(p.label)} — ` : "Pausa — ";
+          return (
+            `<div class="pause-band" style="left:calc(var(--label-w) + (100% - var(--label-w)) * ${leftFrac});` +
+            `width:calc((100% - var(--label-w)) * ${widthFrac});" ` +
+            `title="${title}${fmtMinSec(p.start * 1000)} a ${fmtMinSec(p.end * 1000)}"></div>`
+          );
+        })
+        .join("");
+
       return (
         `<div class="half-block"><div class="half-title"><h2>${esc(half.label)}</h2>` +
         `<div class="dur">0′ – ${Math.round(half.durSec / 60)}′</div></div>` +
         marcha +
         ruler +
-        `<div class="rows">${rows}</div></div>`
+        `<div class="rows-wrap"><div class="rows">${rows}</div>${pauseBands}</div></div>`
       );
     })
     .join("");
@@ -306,7 +336,7 @@ export function buildTimelineHtml(
     '<meta name="viewport" content="width=device-width, initial-scale=1">' +
     `<title>Timeline — ${esc(matchInfo.adversario || "Jogo")}</title>` +
     "<style>" +
-    ':root{color-scheme:light;--surface-1:#fcfcfb;--page:#f2f1ec;--text-primary:#0b0b0b;--text-secondary:#52514e;--muted:#898781;--grid:#e1e0d9;--border:rgba(11,11,11,.10);--series-1:#2a78d6;--good:#0ca30c;--critical:#d03b3b;--warning:#fab219;--shadow:0 1px 2px rgba(11,11,11,.05),0 6px 20px rgba(11,11,11,.06);}' +
+    ':root{color-scheme:light;--surface-1:#fcfcfb;--page:#f2f1ec;--text-primary:#0b0b0b;--text-secondary:#52514e;--muted:#898781;--grid:#e1e0d9;--border:rgba(11,11,11,.10);--series-1:#2a78d6;--good:#0ca30c;--critical:#d03b3b;--warning:#fab219;--pause:#fab219;--shadow:0 1px 2px rgba(11,11,11,.05),0 6px 20px rgba(11,11,11,.06);--label-w:132px;}' +
     '@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){color-scheme:dark;--surface-1:#1a1a19;--page:#0d0d0d;--text-primary:#fff;--text-secondary:#c3c2b7;--muted:#898781;--grid:#2c2c2a;--border:rgba(255,255,255,.10);--series-1:#3987e5;--good:#0ca30c;--critical:#e66767;--warning:#c98500;--shadow:0 1px 2px rgba(0,0,0,.35),0 8px 26px rgba(0,0,0,.4);}}' +
     ':root[data-theme="dark"]{color-scheme:dark;--surface-1:#1a1a19;--page:#0d0d0d;--text-primary:#fff;--text-secondary:#c3c2b7;--muted:#898781;--grid:#2c2c2a;--border:rgba(255,255,255,.10);--series-1:#3987e5;--good:#0ca30c;--critical:#e66767;--warning:#c98500;--shadow:0 1px 2px rgba(0,0,0,.35),0 8px 26px rgba(0,0,0,.4);}' +
     "*{box-sizing:border-box;}body{margin:0;background:var(--page);color:var(--text-primary);font-family:system-ui,-apple-system,'Segoe UI',sans-serif;padding:20px 16px 40px;}" +
@@ -325,10 +355,10 @@ export function buildTimelineHtml(
     ".marcha-row{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;}" +
     ".marcha-chip{font-size:11px;font-weight:700;font-variant-numeric:tabular-nums;padding:3px 8px;border-radius:20px;border:1px solid var(--border);display:flex;align-items:center;gap:4px;}" +
     ".marcha-chip.nos{color:var(--good);}.marcha-chip.adv{color:var(--critical);}.marcha-chip .t{color:var(--muted);font-weight:500;}" +
-    ".ruler{display:flex;margin:0 0 4px 132px;position:relative;height:16px;}" +
+    ".ruler{display:flex;margin:0 0 4px var(--label-w);position:relative;height:16px;}" +
     ".ruler span{position:absolute;font-size:10px;color:var(--muted);transform:translateX(-50%);font-variant-numeric:tabular-nums;}" +
-    ".row{display:flex;align-items:center;gap:8px;min-height:30px;}" +
-    ".row .label{width:132px;flex:0 0 132px;display:flex;align-items:center;gap:6px;font-size:12px;overflow:hidden;}" +
+    ".row{display:flex;align-items:center;gap:8px;min-height:30px;position:relative;z-index:1;}" +
+    ".row .label{width:var(--label-w);flex:0 0 var(--label-w);display:flex;align-items:center;gap:6px;font-size:12px;overflow:hidden;}" +
     ".row .num{font-weight:800;font-size:10.5px;color:var(--surface-1);background:var(--text-secondary);width:18px;height:18px;border-radius:5px;display:flex;align-items:center;justify-content:center;flex:0 0 auto;}" +
     ".row .nm{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}" +
     ".row .mins{flex:0 0 30px;text-align:right;font-size:11px;font-weight:600;color:var(--text-secondary);font-variant-numeric:tabular-nums;}" +
@@ -340,16 +370,24 @@ export function buildTimelineHtml(
     ".mk.card.yellow{background:var(--warning);}" +
     ".mk.card.red{background:var(--critical);}" +
     ".mk.foul{background:var(--muted);width:6px;height:6px;border:none;}" +
-    ".half-block{margin-top:18px;}.half-block:first-of-type{margin-top:4px;}.rows{display:flex;flex-direction:column;gap:6px;}" +
+    ".half-block{margin-top:18px;}.half-block:first-of-type{margin-top:4px;}" +
+    ".rows-wrap{position:relative;}.rows{display:flex;flex-direction:column;gap:6px;}" +
+    ".pause-band{position:absolute;top:0;bottom:0;background:repeating-linear-gradient(45deg,var(--pause) 0,var(--pause) 4px,transparent 4px,transparent 9px);opacity:.35;border-left:1px dashed var(--pause);border-right:1px dashed var(--pause);pointer-events:auto;}" +
     ".legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:16px;padding-top:14px;border-top:1px solid var(--grid);font-size:11.5px;color:var(--text-secondary);}" +
     ".legend .it{display:flex;align-items:center;gap:6px;}.legend .sw{width:18px;height:8px;border-radius:4px;background:var(--series-1);}" +
+    ".legend .sw.pause{background:repeating-linear-gradient(45deg,var(--pause) 0,var(--pause) 3px,transparent 3px,transparent 6px);border:1px dashed var(--pause);}" +
     ".gtable{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:4px;}" +
     ".gtable th,.gtable td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--grid);}" +
     ".gtable th{color:var(--muted);font-weight:600;text-transform:uppercase;font-size:10px;letter-spacing:.04em;}" +
     ".gtable td.num{font-variant-numeric:tabular-nums;text-align:center;}" +
     ".gtable .side-nos{color:var(--good);font-weight:700;}.gtable .side-adv{color:var(--critical);font-weight:700;}" +
     ".tablewrap{overflow-x:auto;}.note{font-size:11.5px;color:var(--muted);line-height:1.5;margin-top:14px;}" +
-    "@media (max-width:480px){.row .label{width:96px;flex-basis:96px;}.ruler{margin-left:96px;}.team{font-size:13px;}.score{font-size:26px;}}" +
+    "@media (max-width:480px){:root{--label-w:96px;}.team{font-size:13px;}.score{font-size:26px;}}" +
+    // Impressão/PDF: os navegadores por padrão descartam cor de fundo ao imprimir
+    // (o utilizador teria de marcar "gráficos de fundo" no diálogo) — como as
+    // barras azuis e a faixa de pausa só existem como background, sem isto ficam
+    // invisíveis no PDF exportado. print-color-adjust força a impressão exata.
+    "@media print{*{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important;}body{background:#fff;}.card{box-shadow:none;border-color:#ddd;}}" +
     "</style></head><body><div class=\"wrap\">" +
     '<div class="card"><div class="hdr-top"><h1>Timeline de jogo</h1>' +
     `<div class="hdr-meta">${matchInfo.jornada ? `Jornada ${esc(matchInfo.jornada)} · ` : ""}${esc(matchInfo.date || "")}</div></div>` +
@@ -359,7 +397,7 @@ export function buildTimelineHtml(
     (matchInfo.local ? `<div class="subinfo">${esc(matchInfo.local)}</div>` : "") +
     "</div>" +
     `<div class="card">${halvesHtml}` +
-    '<div class="legend"><div class="it"><span class="sw"></span>Em campo</div><div class="it">⚽ Golo marcado</div><div class="it">🟨/🟥 Cartão</div><div class="it">Ponto cinzento — falta</div></div>' +
+    '<div class="legend"><div class="it"><span class="sw"></span>Em campo</div><div class="it">⚽ Golo marcado</div><div class="it">🟨/🟥 Cartão</div><div class="it">Ponto cinzento — falta</div><div class="it"><span class="sw pause"></span>Pedido de tempo</div></div>' +
     "</div>" +
     '<div class="card"><div class="half-title" style="margin-bottom:8px;"><h2>Minutos em campo (total do jogo)</h2></div>' +
     '<div class="tablewrap"><table class="gtable"><thead><tr><th>Atleta</th><th class="num">Min</th></tr></thead>' +

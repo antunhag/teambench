@@ -92,6 +92,16 @@ describe("buildTimelineData", () => {
     expect(suplenteBar.totalSec).toBe(340);
   });
 
+  it("regista o intervalo da pausa em half.pauses, com o motivo, para desenhar a faixa visual", () => {
+    const events: MatchEvent[] = [
+      createEvent("pausa", null, 200_000, 1, 0, { label: "Pedido de Tempo — AAL", reasonId: "tempo_nos" }),
+      createEvent("fim_pausa", null, 260_000, 1, 0, { duracaoSec: 60 }),
+      createEvent("fim_periodo", null, 600_000, 1, 0, { duracaoSec: 600 }),
+    ];
+    const halves = buildTimelineData(events, roster, [salvador.id]);
+    expect(halves[0].pauses).toEqual([{ start: 200, end: 260, label: "Pedido de Tempo — AAL" }]);
+  });
+
   it("mantém quem está em campo entre partes (titular só da 1ª parte continua se ninguém saiu)", () => {
     const events: MatchEvent[] = [
       createEvent("fim_periodo", null, 600_000, 1, 0, { duracaoSec: 600 }),
@@ -114,5 +124,27 @@ describe("buildTimelineHtml", () => {
     expect(html).toContain("<!doctype html>");
     expect(html).toContain("Ordem");
     expect(html).toContain("Salvador Silva Gonçalves");
+  });
+
+  it("força as cores a aparecerem na impressão/PDF (senão as barras somem)", () => {
+    const halves = buildTimelineData(
+      [createEvent("fim_periodo", null, 600_000, 1, 0, { duracaoSec: 600 })],
+      roster,
+      [salvador.id]
+    );
+    const html = buildTimelineHtml({ adversario: "Ordem" }, halves, 0, 0, byId);
+    expect(html).toContain("print-color-adjust:exact");
+  });
+
+  it("desenha uma faixa visual (pause-band) no trecho de um pedido de tempo", () => {
+    const events: MatchEvent[] = [
+      createEvent("pausa", null, 200_000, 1, 0, { label: "Pedido de Tempo — AAL" }),
+      createEvent("fim_pausa", null, 260_000, 1, 0, { duracaoSec: 60 }),
+      createEvent("fim_periodo", null, 600_000, 1, 0, { duracaoSec: 600 }),
+    ];
+    const halves = buildTimelineData(events, roster, [salvador.id]);
+    const html = buildTimelineHtml({ adversario: "Ordem" }, halves, 0, 0, byId);
+    expect(html).toContain("pause-band");
+    expect(html).toContain("Pedido de Tempo — AAL");
   });
 });
