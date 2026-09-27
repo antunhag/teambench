@@ -92,17 +92,32 @@ describe("buildTimelineData", () => {
     expect(suplenteBar.totalSec).toBe(340);
   });
 
-  it("distingue falta cometida de falta sofrida", () => {
+  it("distingue falta cometida de falta sofrida, cada uma com sua contagem incremental própria", () => {
     const events: MatchEvent[] = [
       createEvent("falta", salvador.id, 100_000, 1, 0),
       createEvent("falta_sofrida", joao.id, 150_000, 1, 0),
+      createEvent("falta", joao.id, 200_000, 1, 0),
       createEvent("fim_periodo", null, 600_000, 1, 0, { duracaoSec: 600 }),
     ];
     const halves = buildTimelineData(events, roster, [salvador.id, joao.id]);
     expect(halves[0].fouls).toEqual([
-      { sec: 100, playerId: salvador.id, kind: "cometida" },
-      { sec: 150, playerId: joao.id, kind: "sofrida" },
+      { sec: 100, playerId: salvador.id, kind: "cometida", count: 1 },
+      { sec: 150, playerId: joao.id, kind: "sofrida", count: 1 },
+      { sec: 200, playerId: joao.id, kind: "cometida", count: 2 },
     ]);
+  });
+
+  it("a contagem de faltas cometidas reinicia a cada parte (é o que conta pra dupla-penalidade)", () => {
+    const events: MatchEvent[] = [
+      createEvent("falta", salvador.id, 100_000, 1, 0),
+      createEvent("falta", salvador.id, 200_000, 1, 0),
+      createEvent("fim_periodo", null, 600_000, 1, 0, { duracaoSec: 600 }),
+      createEvent("falta", joao.id, 50_000, 2, 0),
+      createEvent("fim_periodo", null, 500_000, 2, 0, { duracaoSec: 500 }),
+    ];
+    const halves = buildTimelineData(events, roster, [salvador.id, joao.id]);
+    expect(halves[0].fouls.map((f) => f.count)).toEqual([1, 2]);
+    expect(halves[1].fouls.map((f) => f.count)).toEqual([1]);
   });
 
   it("regista o intervalo da pausa em half.pauses, com o motivo, para desenhar a faixa visual", () => {
@@ -174,6 +189,21 @@ describe("buildTimelineHtml", () => {
     expect(html).toContain("<b>F</b>");
   });
 
+  it("a linha de faltas mostra a contagem incremental da parte, junto de cada marca", () => {
+    const events: MatchEvent[] = [
+      createEvent("falta", salvador.id, 100_000, 1, 0),
+      createEvent("falta_sofrida", joao.id, 150_000, 1, 0),
+      createEvent("falta", joao.id, 200_000, 1, 0),
+      createEvent("fim_periodo", null, 600_000, 1, 0, { duracaoSec: 600 }),
+    ];
+    const halves = buildTimelineData(events, roster, [salvador.id, joao.id]);
+    const html = buildTimelineHtml({ adversario: "Ordem" }, halves, 0, 0, byId);
+    expect(html).toContain("lane-row");
+    expect(html).toContain(">Faltas<");
+    expect(html).toContain("<b>1</b>");
+    expect(html).toContain("<b>2</b>");
+  });
+
   it("marca o golo sofrido na linha de golos, mesmo sem atleta associado", () => {
     const events: MatchEvent[] = [
       createEvent("golo_sofrido", null, 200_000, 1, 0),
@@ -181,7 +211,7 @@ describe("buildTimelineHtml", () => {
     ];
     const halves = buildTimelineData(events, roster, [salvador.id]);
     const html = buildTimelineHtml({ adversario: "Ordem" }, halves, 0, 1, byId);
-    expect(html).toContain("goals-row");
+    expect(html).toContain("lane-row");
     expect(html).toContain("mk goal conceded");
     expect(html).toContain("Golo sofrido");
   });

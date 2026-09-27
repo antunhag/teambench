@@ -37,6 +37,9 @@ export interface TimelineFoul {
   playerId: string;
   /** "cometida" = o atleta cometeu a falta; "sofrida" = o atleta sofreu a falta. */
   kind: "cometida" | "sofrida";
+  /** Contagem incremental dentro da PARTE (nunca do jogo todo — a acumulação de
+   *  faltas de equipa, que conta pra dupla-penalidade, reinicia a cada parte). */
+  count: number;
 }
 
 export interface TimelinePause {
@@ -85,6 +88,8 @@ export function buildTimelineData(events: MatchEvent[], playersList: Player[], t
     const goals: TimelineGoal[] = [];
     const cards: TimelineCard[] = [];
     const fouls: TimelineFoul[] = [];
+    let foulsCometidas = 0;
+    let foulsSofridas = 0;
     // Pedido de tempo NUNCA para o relógio de jogo de verdade (ver liveMatch.ts) —
     // é descontado depois do tempo em quadra de quem estava dentro. Aqui, na
     // timeline, o mesmo efeito é um corte no intervalo aberto: fecha tudo na
@@ -142,9 +147,11 @@ export function buildTimelineData(events: MatchEvent[], playersList: Player[], t
       } else if (e.type === "cartao_amarelo") {
         cards.push({ sec, playerId: e.playerId!, kind: "amarelo" });
       } else if (e.type === "falta") {
-        fouls.push({ sec, playerId: e.playerId!, kind: "cometida" });
+        foulsCometidas++;
+        fouls.push({ sec, playerId: e.playerId!, kind: "cometida", count: foulsCometidas });
       } else if (e.type === "falta_sofrida") {
-        fouls.push({ sec, playerId: e.playerId!, kind: "sofrida" });
+        foulsSofridas++;
+        fouls.push({ sec, playerId: e.playerId!, kind: "sofrida", count: foulsSofridas });
       } else if (e.type === "golo" || e.type === "golo_sofrido") {
         if (e.type === "golo") runningNos++;
         else runningAdv++;
@@ -278,6 +285,22 @@ export function buildTimelineHtml(
         })
         .join("");
 
+      // Linha própria com todas as faltas (cometidas e sofridas) juntas, mostrando
+      // a contagem ACUMULADA DENTRO DA PARTE (nunca do jogo todo) — é essa contagem
+      // por parte que conta pra dupla-penalidade no futsal, então faz mais sentido
+      // aqui do que o "F" que já marca cada falta na barra do próprio atleta.
+      const foulsLaneHtml = half.fouls
+        .map((f) => {
+          const isSofrida = f.kind === "sofrida";
+          return `<div class="mk foul ${isSofrida ? "sofrida" : "cometida"}" style="left:${pct2(
+            f.sec,
+            half.durSec
+          )};" title="${isSofrida ? "Falta sofrida" : "Falta cometida"} — ${fmtMinSec(f.sec * 1000)} (${f.count}ª da parte)"><b>${
+            f.count
+          }</b></div>`;
+        })
+        .join("");
+
       // Mesmo pct2() das barras/marcas — nunca um calc() aproximado sobre a
       // linha inteira, que ficava desalinhado da faixa real do .track (esta
       // é mais estreita que a linha, já que reserva espaço pra coluna dos
@@ -331,8 +354,12 @@ export function buildTimelineHtml(
         .join("");
 
       const goalsLaneRow = half.goals.length
-        ? `<div class="row goals-row"><div class="label"><span class="nm">Golos</span></div>` +
-          `<div class="track goals-track">${goalsLaneHtml}</div><div class="mins"></div></div>`
+        ? `<div class="row lane-row"><div class="label"><span class="nm">Golos</span></div>` +
+          `<div class="track lane-track">${goalsLaneHtml}</div><div class="mins"></div></div>`
+        : "";
+      const foulsLaneRow = half.fouls.length
+        ? `<div class="row lane-row"><div class="label"><span class="nm">Faltas</span></div>` +
+          `<div class="track lane-track">${foulsLaneHtml}</div><div class="mins"></div></div>`
         : "";
 
       return (
@@ -341,6 +368,7 @@ export function buildTimelineHtml(
         marcha +
         ruler +
         goalsLaneRow +
+        foulsLaneRow +
         `<div class="rows">${rows}</div></div>`
       );
     })
@@ -405,9 +433,9 @@ export function buildTimelineHtml(
     ".mk.foul.sofrida{background:var(--surface-1);color:var(--series-1);border-color:var(--series-1);}" +
     ".half-block{margin-top:18px;}.half-block:first-of-type{margin-top:4px;}.rows{display:flex;flex-direction:column;gap:6px;}" +
     ".pause-band{position:absolute;top:-6px;bottom:-6px;background:repeating-linear-gradient(45deg,var(--pause) 0,var(--pause) 4px,transparent 4px,transparent 9px);opacity:.4;border-left:1px dashed var(--pause);border-right:1px dashed var(--pause);}" +
-    ".goals-row{margin-bottom:2px;}" +
-    ".goals-row .nm{color:var(--muted);font-size:11px;font-style:italic;}" +
-    ".goals-track{background:transparent;}" +
+    ".lane-row{margin-bottom:2px;}" +
+    ".lane-row .nm{color:var(--muted);font-size:11px;font-style:italic;}" +
+    ".lane-track{background:transparent;}" +
     ".legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:16px;padding-top:14px;border-top:1px solid var(--grid);font-size:11.5px;color:var(--text-secondary);}" +
     ".legend .it{display:flex;align-items:center;gap:6px;}.legend .sw{width:18px;height:8px;border-radius:4px;background:var(--series-1);}" +
     ".legend .sw.pause{background:repeating-linear-gradient(45deg,var(--pause) 0,var(--pause) 3px,transparent 3px,transparent 6px);border:1px dashed var(--pause);}" +
