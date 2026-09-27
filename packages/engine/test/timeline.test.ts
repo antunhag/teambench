@@ -181,7 +181,7 @@ describe("buildTimelineHtml", () => {
     ];
     const halves = buildTimelineData(events, roster, [salvador.id]);
     const html = buildTimelineHtml({ adversario: "Ordem" }, halves, 0, 1, byId);
-    expect(html).toContain("conceded-mark");
+    expect(html).toContain("conceded-ball");
     expect(html).toContain("Golo sofrido");
   });
 
