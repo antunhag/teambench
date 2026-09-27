@@ -92,6 +92,19 @@ describe("buildTimelineData", () => {
     expect(suplenteBar.totalSec).toBe(340);
   });
 
+  it("distingue falta cometida de falta sofrida", () => {
+    const events: MatchEvent[] = [
+      createEvent("falta", salvador.id, 100_000, 1, 0),
+      createEvent("falta_sofrida", joao.id, 150_000, 1, 0),
+      createEvent("fim_periodo", null, 600_000, 1, 0, { duracaoSec: 600 }),
+    ];
+    const halves = buildTimelineData(events, roster, [salvador.id, joao.id]);
+    expect(halves[0].fouls).toEqual([
+      { sec: 100, playerId: salvador.id, kind: "cometida" },
+      { sec: 150, playerId: joao.id, kind: "sofrida" },
+    ]);
+  });
+
   it("regista o intervalo da pausa em half.pauses, com o motivo, para desenhar a faixa visual", () => {
     const events: MatchEvent[] = [
       createEvent("pausa", null, 200_000, 1, 0, { label: "Pedido de Tempo — AAL", reasonId: "tempo_nos" }),
@@ -146,6 +159,30 @@ describe("buildTimelineHtml", () => {
     );
     const html = buildTimelineHtml({ adversario: "Ordem" }, halves, 0, 0, byId);
     expect(html).toContain("print-color-adjust:exact");
+  });
+
+  it("marca falta cometida e sofrida com o F em negrito, cada uma com a sua classe", () => {
+    const events: MatchEvent[] = [
+      createEvent("falta", salvador.id, 100_000, 1, 0),
+      createEvent("falta_sofrida", joao.id, 150_000, 1, 0),
+      createEvent("fim_periodo", null, 600_000, 1, 0, { duracaoSec: 600 }),
+    ];
+    const halves = buildTimelineData(events, roster, [salvador.id, joao.id]);
+    const html = buildTimelineHtml({ adversario: "Ordem" }, halves, 0, 0, byId);
+    expect(html).toContain('mk foul cometida');
+    expect(html).toContain('mk foul sofrida');
+    expect(html).toContain("<b>F</b>");
+  });
+
+  it("marca o golo sofrido no instante exato, mesmo sem atleta associado", () => {
+    const events: MatchEvent[] = [
+      createEvent("golo_sofrido", null, 200_000, 1, 0),
+      createEvent("fim_periodo", null, 600_000, 1, 0, { duracaoSec: 600 }),
+    ];
+    const halves = buildTimelineData(events, roster, [salvador.id]);
+    const html = buildTimelineHtml({ adversario: "Ordem" }, halves, 0, 1, byId);
+    expect(html).toContain("conceded-mark");
+    expect(html).toContain("Golo sofrido");
   });
 
   it("desenha uma faixa visual (pause-band) no trecho de um pedido de tempo", () => {

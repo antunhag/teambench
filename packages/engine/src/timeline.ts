@@ -35,6 +35,8 @@ export interface TimelineCard {
 export interface TimelineFoul {
   sec: number;
   playerId: string;
+  /** "cometida" = o atleta cometeu a falta; "sofrida" = o atleta sofreu a falta. */
+  kind: "cometida" | "sofrida";
 }
 
 export interface TimelinePause {
@@ -140,7 +142,9 @@ export function buildTimelineData(events: MatchEvent[], playersList: Player[], t
       } else if (e.type === "cartao_amarelo") {
         cards.push({ sec, playerId: e.playerId!, kind: "amarelo" });
       } else if (e.type === "falta") {
-        fouls.push({ sec, playerId: e.playerId! });
+        fouls.push({ sec, playerId: e.playerId!, kind: "cometida" });
+      } else if (e.type === "falta_sofrida") {
+        fouls.push({ sec, playerId: e.playerId!, kind: "sofrida" });
       } else if (e.type === "golo" || e.type === "golo_sofrido") {
         if (e.type === "golo") runningNos++;
         else runningAdv++;
@@ -273,6 +277,21 @@ export function buildTimelineHtml(
         })
         .join("");
 
+      // Golo sofrido não tem atleta associado (é um evento da equipa toda), então
+      // não dá pra marcar na barra de ninguém — em vez disso desenha uma linha
+      // vertical fina no instante exato, repetida em todas as linhas (mesmo truque
+      // da faixa de pausa acima), pra dar pra ver quando aconteceu em relação ao
+      // que cada atleta estava a fazer.
+      const concededMarksHtml = half.goals
+        .filter((g) => g.side === "adv")
+        .map(
+          (g) =>
+            `<div class="conceded-mark" style="left:${pct2(g.sec, half.durSec)};" title="Golo sofrido — ${fmtMinSec(
+              g.sec * 1000
+            )}"></div>`
+        )
+        .join("");
+
       const rows = half.players
         .map((p) => {
           const bars = p.intervals
@@ -297,11 +316,15 @@ export function buildTimelineHtml(
             } — ${fmtMinSec(c.sec * 1000)}"></div>`;
           });
           (foulsByPid.get(p.id) || []).forEach((f) => {
-            marks += `<div class="mk foul" style="left:${pct2(f.sec, half.durSec)};" title="Falta — ${fmtMinSec(f.sec * 1000)}"></div>`;
+            const isSofrida = f.kind === "sofrida";
+            marks += `<div class="mk foul ${isSofrida ? "sofrida" : "cometida"}" style="left:${pct2(
+              f.sec,
+              half.durSec
+            )};" title="${isSofrida ? "Falta sofrida" : "Falta cometida"} — ${fmtMinSec(f.sec * 1000)}"><b>F</b></div>`;
           });
           return (
             `<div class="row"><div class="label"><span class="num">${esc(p.num)}</span><span class="nm">${esc(p.name)}</span></div>` +
-            `<div class="track">${pauseBandsHtml}${bars}${marks}</div>` +
+            `<div class="track">${pauseBandsHtml}${concededMarksHtml}${bars}${marks}</div>` +
             `<div class="mins" title="Minutos em campo nesta parte">${Math.round((p.totalSec || 0) / 60)}'</div></div>`
           );
         })
@@ -370,12 +393,19 @@ export function buildTimelineHtml(
     ".mk.card{width:5px;height:7px;border-radius:1px;border:none;}" +
     ".mk.card.yellow{background:var(--warning);}" +
     ".mk.card.red{background:var(--critical);}" +
-    ".mk.foul{background:var(--muted);width:6px;height:6px;border:none;}" +
+    ".mk.foul{font-size:8px;font-weight:800;}" +
+    ".mk.foul.cometida{background:var(--muted);color:#fff;}" +
+    ".mk.foul.sofrida{background:var(--surface-1);color:var(--series-1);border-color:var(--series-1);}" +
     ".half-block{margin-top:18px;}.half-block:first-of-type{margin-top:4px;}.rows{display:flex;flex-direction:column;gap:6px;}" +
     ".pause-band{position:absolute;top:-6px;bottom:-6px;background:repeating-linear-gradient(45deg,var(--pause) 0,var(--pause) 4px,transparent 4px,transparent 9px);opacity:.4;border-left:1px dashed var(--pause);border-right:1px dashed var(--pause);}" +
+    ".conceded-mark{position:absolute;top:-6px;bottom:-6px;width:2px;background:var(--critical);opacity:.55;}" +
     ".legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:16px;padding-top:14px;border-top:1px solid var(--grid);font-size:11.5px;color:var(--text-secondary);}" +
     ".legend .it{display:flex;align-items:center;gap:6px;}.legend .sw{width:18px;height:8px;border-radius:4px;background:var(--series-1);}" +
     ".legend .sw.pause{background:repeating-linear-gradient(45deg,var(--pause) 0,var(--pause) 3px,transparent 3px,transparent 6px);border:1px dashed var(--pause);}" +
+    ".legend .sw.conceded{width:2px;height:14px;border-radius:0;background:var(--critical);opacity:.7;}" +
+    ".legend .mk-sample{width:14px;height:14px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:800;flex:0 0 auto;border:1.5px solid var(--surface-1);}" +
+    ".legend .mk-sample.foul.cometida{background:var(--muted);color:#fff;}" +
+    ".legend .mk-sample.foul.sofrida{background:var(--surface-1);color:var(--series-1);border-color:var(--series-1);}" +
     ".gtable{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:4px;}" +
     ".gtable th,.gtable td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--grid);}" +
     ".gtable th{color:var(--muted);font-weight:600;text-transform:uppercase;font-size:10px;letter-spacing:.04em;}" +
@@ -397,7 +427,9 @@ export function buildTimelineHtml(
     (matchInfo.local ? `<div class="subinfo">${esc(matchInfo.local)}</div>` : "") +
     "</div>" +
     `<div class="card">${halvesHtml}` +
-    '<div class="legend"><div class="it"><span class="sw"></span>Em campo</div><div class="it">⚽ Golo marcado</div><div class="it">🟨/🟥 Cartão</div><div class="it">Ponto cinzento — falta</div><div class="it"><span class="sw pause"></span>Pedido de tempo</div></div>' +
+    '<div class="legend"><div class="it"><span class="sw"></span>Em campo</div><div class="it">⚽ Golo marcado</div><div class="it">🟨/🟥 Cartão</div>' +
+    '<div class="it"><span class="mk-sample foul cometida">F</span>Falta cometida</div><div class="it"><span class="mk-sample foul sofrida">F</span>Falta sofrida</div>' +
+    '<div class="it"><span class="sw pause"></span>Pedido de tempo</div><div class="it"><span class="sw conceded"></span>Golo sofrido</div></div>' +
     "</div>" +
     '<div class="card"><div class="half-title" style="margin-bottom:8px;"><h2>Minutos em campo (total do jogo)</h2></div>' +
     '<div class="tablewrap"><table class="gtable"><thead><tr><th>Atleta</th><th class="num">Min</th></tr></thead>' +
