@@ -152,6 +152,7 @@ function TeamApp({
           matchId={correctionMatch.id}
           opponent={correctionMatch.opponent}
           onClose={() => setCorrectionMatch(null)}
+          canDelete={team.role === "team_admin"}
         />
       ) : (
         <>

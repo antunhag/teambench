@@ -9,6 +9,8 @@ interface Props {
   matchId: string;
   opponent: string | null;
   onClose: () => void;
+  /** Remover é a ação mais irreversível daqui — só Admin da Equipa, nunca Lançador de dados (ver 0011_match_events_delete.sql). */
+  canDelete: boolean;
 }
 
 interface EventRow {
@@ -96,12 +98,14 @@ function draftsEqual(a: Draft, b: Draft): boolean {
  * Também deixa ADICIONAR um evento esquecido (ex.: uma substituição que
  * passou em branco ao vivo — afeta quem estava em campo dali pra frente,
  * então o tempo em quadra e o "em quadra" registado nos golos seguintes
- * também mudam). Eventos são só-acrescenta por desenho (ver 0001_init.sql)
- * — não existe política de DELETE, só de INSERT/UPDATE — por isso não dá
- * pra apagar um evento errado aqui, só corrigir seus dados ou acrescentar
- * o que faltou.
+ * também mudam) e REMOVER um duplicado/errado (ex.: os lances presos em
+ * ms=0 pelo bug do botão "Iniciar Parte N" sumido, depois de já
+ * recriados com o tempo certo). Remover é a única ação daqui que sai do
+ * "só-acrescenta" original (ver 0011_match_events_delete.sql) — por isso
+ * fica restrita ao Admin da Equipa (`canDelete`), nunca ao Lançador de
+ * dados.
  */
-export function MatchEventEditor({ teamId, matchId, opponent, onClose }: Props) {
+export function MatchEventEditor({ teamId, matchId, opponent, onClose, canDelete }: Props) {
   const { players: roster } = usePlayers(teamId);
   const [rows, setRows] = useState<EventRow[] | null>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
@@ -109,6 +113,13 @@ export function MatchEventEditor({ teamId, matchId, opponent, onClose }: Props) 
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
   const [savingId, setSavingId] = useState<string | null>(null);
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  // Confirmação de remover é feita aqui dentro (toca 2x), em vez de
+  // window.confirm() — diálogos nativos podem ficar mudos em alguns
+  // contextos de PWA instalado no telemóvel/tablet, fazendo o botão
+  // parecer "sem ação" (o confirm() falha silenciosamente).
+  const [confirmingId, setConfirmingId] = useState<string | null>(null);
+  const [rowErrors, setRowErrors] = useState<Record<string, string>>({});
   const [picker, setPicker] = useState<DetailPicker>(null);
 
   const [newType, setNewType] = useState<engine.EventType>("substituicao");
@@ -263,13 +274,21 @@ export function MatchEventEditor({ teamId, matchId, opponent, onClose }: Props) 
       tipo: draft.tipo,
       zona: draft.zona,
     };
-    const { error } = await supabase
+    // .select() confirma que a linha foi mesmo atualizada — sem ele, um
+    // UPDATE bloqueado pela RLS devolveria "sucesso" mesmo sem mudar nada
+    // (ver deleteRow, mesmo problema).
+    const { data, error } = await supabase
       .from("match_events")
       .update({ ms, min, sec, period, player_id: draft.playerId, payload })
-      .eq("id", row.id);
+      .eq("id", row.id)
+      .select("id");
     setSavingId(null);
     if (error) {
       setErrorMessage(error.message);
+      return;
+    }
+    if (!data || data.length === 0) {
+      setErrorMessage("Não foi salvo — a conta usada não tem permissão para corrigir este jogo.");
       return;
     }
     setErrorMessage("");
@@ -279,6 +298,49 @@ export function MatchEventEditor({ teamId, matchId, opponent, onClose }: Props) 
         .map((r) => (r.id === row.id ? { ...r, ms, period, payload } : r))
         .sort((a, b) => (a.period - b.period) || (a.ms - b.ms))
     );
+  }
+
+  function requestDelete(row: EventRow) {
+    if (confirmingId !== row.id) {
+      setConfirmingId(row.id);
+      // Confirmação expira sozinha — evita um "Confirmar" antigo ficar
+      // pendurado na tela e ser tocado sem querer bem mais tarde.
+      setTimeout(() => setConfirmingId((c) => (c === row.id ? null : c)), 4000);
+      return;
+    }
+    setConfirmingId(null);
+    void deleteRow(row);
+  }
+
+  async function deleteRow(row: EventRow) {
+    setDeletingId(row.id);
+    // .select() é essencial aqui: sem ele, um DELETE bloqueado pela RLS
+    // (ex.: migração 0011 ainda não aplicada, ou conta sem papel de Admin)
+    // devolve sucesso (error=null) mesmo tendo apagado ZERO linhas — o
+    // Postgres não trata "0 linhas casaram o WHERE" como erro. Só o array
+    // devolvido por .select() confirma que a linha saiu de verdade.
+    const { data, error } = await supabase.from("match_events").delete().eq("id", row.id).select("id");
+    setDeletingId(null);
+    if (error) {
+      setRowErrors((e) => ({ ...e, [row.id]: error.message }));
+      return;
+    }
+    if (!data || data.length === 0) {
+      setRowErrors((e) => ({
+        ...e,
+        [row.id]: "Não foi removido — confirme se a migração 0011_match_events_delete.sql já rodou e se esta conta é Admin da Equipa.",
+      }));
+      return;
+    }
+    setRowErrors((e) => {
+      const { [row.id]: _removed, ...rest } = e;
+      return rest;
+    });
+    setRows((prev) => (prev ?? []).filter((r) => r.id !== row.id));
+    setDrafts((d) => {
+      const { [row.id]: _removed, ...rest } = d;
+      return rest;
+    });
   }
 
   function setDraftField(rowId: string, patch: Partial<Draft>) {
@@ -404,8 +466,9 @@ export function MatchEventEditor({ teamId, matchId, opponent, onClose }: Props) 
       <h2 style={{ fontSize: 18 }}>Corrigir registo — vs {opponent}</h2>
       <p className="hint">
         Ajusta parte, tempo e quem fez o quê em cada evento e toca em "Salvar" — grava direto no Supabase, sem
-        depender do aparelho que registou o jogo. Não dá para apagar eventos aqui (o registo é só-acrescenta por
-        desenho); só corrigir os dados de eventos que já existem, ou acrescentar um que passou em branco.
+        depender do aparelho que registou o jogo. Também dá para acrescentar um evento que passou em branco{canDelete
+          ? " ou remover um duplicado/errado (restrito ao Admin da Equipa)."
+          : "."}
       </p>
 
       <div className="card" style={{ marginBottom: 16 }}>
@@ -516,6 +579,31 @@ export function MatchEventEditor({ teamId, matchId, opponent, onClose }: Props) 
                       >
                         {savingId === r.id ? "..." : savedIds.has(r.id) && !dirty ? "✅" : "Salvar"}
                       </button>
+                      {canDelete && (
+                        <div style={{ marginTop: 4 }}>
+                          <button
+                            type="button"
+                            className="btn sm danger"
+                            disabled={deletingId === r.id}
+                            onClick={() => requestDelete(r)}
+                          >
+                            {deletingId === r.id ? "..." : confirmingId === r.id ? "Confirmar remoção?" : "Remover"}
+                          </button>
+                          {confirmingId === r.id && (
+                            <button
+                              type="button"
+                              className="btn sm ghost"
+                              onClick={() => setConfirmingId(null)}
+                              style={{ marginTop: 4 }}
+                            >
+                              Cancelar
+                            </button>
+                          )}
+                          {rowErrors[r.id] && (
+                            <p className="banner error" style={{ marginTop: 4, fontSize: 12 }}>{rowErrors[r.id]}</p>
+                          )}
+                        </div>
+                      )}
                     </td>
                   </tr>
                 );
