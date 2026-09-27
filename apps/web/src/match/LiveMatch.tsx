@@ -85,6 +85,13 @@ export function LiveMatch({ live, roster, opponent, onViewSummary, ourLabel }: P
   // substituição/ação de jogo. Isto é o que permite adiar a decisão do
   // cinco inicial até o apito real, sem travar o treinador na tela anterior.
   const preKickoff = !state.started;
+  // O relógio fica parado (clock.running=false) tanto antes do 1º apito
+  // quanto no intervalo entre partes (ver endPeriod) — em ambos os casos
+  // precisa reaparecer o botão "Iniciar Parte N". `preKickoff` continua
+  // separado porque só antes da parte 1 é que toques nos jogadores devem
+  // ajustar livremente o cinco inicial (toggleTitular) em vez de contar
+  // como substituição de verdade.
+  const awaitingKickoff = !state.clock.running && !state.finished;
 
   // Pedido de tempo: 1 por equipa por parte (regra do futsal) — reconstruído
   // dos eventos, reseta sozinho a cada parte nova. "Outro motivo" (lesão,
@@ -126,7 +133,7 @@ export function LiveMatch({ live, roster, opponent, onViewSummary, ourLabel }: P
           <div className="clock-mid">
             <div className="lbl" style={{ fontSize: 10.5, opacity: 0.85 }}>Parte {state.period}</div>
             <div className="time">{fmtMinSec(elapsedMs)}</div>
-            {preKickoff && !state.finished && (
+            {awaitingKickoff && (
               <button type="button" className="clock-btn" onClick={() => live.resumeOrStart()}>
                 Iniciar Parte {state.period}
               </button>
@@ -159,7 +166,7 @@ export function LiveMatch({ live, roster, opponent, onViewSummary, ourLabel }: P
         </div>
       </div>
 
-      {!preKickoff && !state.finished && (
+      {!awaitingKickoff && !state.finished && (
         <div style={{ textAlign: "right", marginTop: 8 }}>
           <button type="button" className="btn sm ghost" onClick={() => setPicker({ kind: "opp-golo-tipo" })}>
             🥅 +1 golo advers.
@@ -220,10 +227,11 @@ export function LiveMatch({ live, roster, opponent, onViewSummary, ourLabel }: P
         </div>
       )}
 
-      {preKickoff ? (
+      {awaitingKickoff ? (
         <p className="hint">
-          Ainda ajustando o cinco inicial ({state.onCourt.length}/5) — toca nos jogadores pra adicionar/remover. Toca
-          em "Iniciar Parte {state.period}" quando o jogo começar de verdade.
+          {preKickoff
+            ? `Ainda ajustando o cinco inicial (${state.onCourt.length}/5) — toca nos jogadores pra adicionar/remover. Toca em "Iniciar Parte ${state.period}" quando o jogo começar de verdade.`
+            : `Ajuste as substituições se precisar e toca em "Iniciar Parte ${state.period}" para recomeçar o relógio.`}
         </p>
       ) : (
         !state.finished && (
@@ -292,7 +300,7 @@ export function LiveMatch({ live, roster, opponent, onViewSummary, ourLabel }: P
         ))}
       </div>
 
-      {!state.finished && !preKickoff && (
+      {!state.finished && !awaitingKickoff && (
         <div style={{ marginTop: 16 }}>
           <button type="button" className={`btn block${isFinalPeriod ? " primary" : ""}`} onClick={live.endPeriod}>
             {isFinalPeriod ? "Terminar Jogo" : `Terminar Parte ${state.period}`}
