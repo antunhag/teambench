@@ -1,6 +1,6 @@
 import { describeEvent, isLastPeriod, TIPOS_GOLO, timeoutUsedInPeriod, ZONAS_GOLO } from "@teambench/engine";
 import type { ComponentChildren } from "preact";
-import { useState } from "preact/hooks";
+import { useEffect, useState } from "preact/hooks";
 import type { PlayerRow } from "../team/usePlayers";
 import { isGoalkeeper, posAbbr } from "../team/positions";
 import type { useLiveMatch } from "./useLiveMatch";
@@ -19,6 +19,13 @@ function fmtMinSec(ms: number): string {
   const m = Math.floor(totalSec / 60);
   const s = totalSec % 60;
   return `${m < 10 ? "0" : ""}${m}:${s < 10 ? "0" : ""}${s}`;
+}
+
+/** Aceita "mm:ss" (segundos 0-59) — usado só pelo campo de tempo do modo manual. */
+function parseMinSec(text: string): number | null {
+  const m = text.trim().match(/^(\d{1,3}):([0-5]?\d)$/);
+  if (!m) return null;
+  return (parseInt(m[1], 10) * 60 + parseInt(m[2], 10)) * 1000;
 }
 
 type Picker =
@@ -72,6 +79,18 @@ export function LiveMatch({ live, roster, opponent, onViewSummary, ourLabel }: P
 
   const [showPauseReasons, setShowPauseReasons] = useState(false);
   const [picker, setPicker] = useState<Picker>(null);
+  // Campo de texto do modo manual — separado de live.manualElapsedMs pra
+  // deixar digitar livremente ("1", "1:", "1:2"...) sem forçar formato a
+  // cada tecla; só aplica (parseMinSec) ao sair do campo ou apertar Enter.
+  const [manualInput, setManualInput] = useState(() => fmtMinSec(live.manualElapsedMs));
+  useEffect(() => {
+    setManualInput(fmtMinSec(live.manualElapsedMs));
+  }, [live.manualElapsedMs]);
+  function applyManualInput() {
+    const ms = parseMinSec(manualInput);
+    if (ms != null) live.setManualElapsedMs(ms);
+    else setManualInput(fmtMinSec(live.manualElapsedMs));
+  }
 
   const PAUSE_REASONS = [
     { id: "tempo_nos", label: `Pedido de Tempo — ${ourLabel}` },
@@ -131,12 +150,20 @@ export function LiveMatch({ live, roster, opponent, onViewSummary, ourLabel }: P
             <div className="val">{state.score.nos}</div>
           </div>
           <div className="clock-mid">
-            <div className="lbl" style={{ fontSize: 10.5, opacity: 0.85 }}>Parte {state.period}</div>
+            <div className="lbl" style={{ fontSize: 10.5, opacity: 0.85 }}>
+              Parte {state.period}
+              {live.manual && state.started ? " 🎬" : ""}
+            </div>
             <div className="time">{fmtMinSec(elapsedMs)}</div>
             {awaitingKickoff && (
-              <button type="button" className="clock-btn" onClick={() => live.resumeOrStart()}>
-                Iniciar Parte {state.period}
-              </button>
+              <div style={{ display: "flex", flexDirection: "column", gap: 4, alignItems: "center" }}>
+                <button type="button" className="clock-btn" onClick={() => live.resumeOrStart()}>
+                  Iniciar Parte {state.period}
+                </button>
+                <button type="button" className="btn sm ghost" onClick={() => live.manualResumeOrStart()}>
+                  🎬 Registar com vídeo
+                </button>
+              </div>
             )}
           </div>
           <div className="score-side">
@@ -170,6 +197,27 @@ export function LiveMatch({ live, roster, opponent, onViewSummary, ourLabel }: P
         <div style={{ textAlign: "right", marginTop: 8 }}>
           <button type="button" className="btn sm ghost" onClick={() => setPicker({ kind: "opp-golo-tipo" })}>
             🥅 +1 golo advers.
+          </button>
+        </div>
+      )}
+
+      {live.manual && !awaitingKickoff && !state.finished && (
+        <div className="card" style={{ marginTop: 8, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+          <span className="hint" style={{ margin: 0 }}>🎬 Tempo de jogo:</span>
+          <button type="button" className="btn sm ghost" onClick={() => live.setManualElapsedMs(live.manualElapsedMs - 10000)}>
+            -10s
+          </button>
+          <input
+            type="text"
+            inputMode="numeric"
+            value={manualInput}
+            onChange={(e) => setManualInput((e.target as HTMLInputElement).value)}
+            onBlur={applyManualInput}
+            onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
+            style={{ width: 64, textAlign: "center" }}
+          />
+          <button type="button" className="btn sm ghost" onClick={() => live.setManualElapsedMs(live.manualElapsedMs + 10000)}>
+            +10s
           </button>
         </div>
       )}
@@ -231,7 +279,9 @@ export function LiveMatch({ live, roster, opponent, onViewSummary, ourLabel }: P
         <p className="hint">
           {preKickoff
             ? `Ainda ajustando o cinco inicial (${state.onCourt.length}/5) — toca nos jogadores pra adicionar/remover. Toca em "Iniciar Parte ${state.period}" quando o jogo começar de verdade.`
-            : `Ajuste as substituições se precisar e toca em "Iniciar Parte ${state.period}" para recomeçar o relógio.`}
+            : `Ajuste as substituições se precisar e toca em "Iniciar Parte ${state.period}" para recomeçar o relógio.`}{" "}
+          Se for reconstruir esta parte depois (vendo o vídeo, ou por não ter conseguido registar ao vivo), usa
+          "🎬 Registar com vídeo" — dá pra controlar o tempo à mão em vez do relógio real.
         </p>
       ) : (
         !state.finished && (

@@ -3,6 +3,7 @@ import { useEffect, useState } from "preact/hooks";
 import { AcceptInvite } from "./team/AcceptInvite";
 import { Login } from "./auth/Login";
 import { isSupabaseConfigured, supabase } from "./supabaseClient";
+import { MatchEventEditor } from "./match/MatchEventEditor";
 import { MatchFlow } from "./match/MatchFlow";
 import { Calendar } from "./team/Calendar";
 import { ClubSettings } from "./team/ClubSettings";
@@ -131,10 +132,11 @@ function TeamApp({
   sync: ReturnType<typeof useOutboxSync>;
 }) {
   const [activeMatch, setActiveMatch] = useState<{ id: string; opponent: string | null; formatId: string | null } | null>(null);
+  const [correctionMatch, setCorrectionMatch] = useState<{ id: string; opponent: string | null } | null>(null);
   const canTrackLive = team.role === "team_admin" || team.role === "data_entry";
 
   return (
-    <div className={activeMatch ? "page wide" : "page"}>
+    <div className={activeMatch || correctionMatch ? "page wide" : "page"}>
       {activeMatch ? (
         <MatchFlow
           teamId={team.teamId}
@@ -143,6 +145,13 @@ function TeamApp({
           formatId={activeMatch.formatId}
           onExit={() => setActiveMatch(null)}
           sync={sync}
+        />
+      ) : correctionMatch ? (
+        <MatchEventEditor
+          teamId={team.teamId}
+          matchId={correctionMatch.id}
+          opponent={correctionMatch.opponent}
+          onClose={() => setCorrectionMatch(null)}
         />
       ) : (
         <>
@@ -180,6 +189,7 @@ function TeamApp({
             canManage={team.role === "team_admin"}
             canTrackLive={canTrackLive}
             onStartMatch={(id, opponent, formatId) => setActiveMatch({ id, opponent, formatId })}
+            onCorrectMatch={(id, opponent) => setCorrectionMatch({ id, opponent })}
           />
           {team.role === "team_admin" && <TeamMembers teamId={team.teamId} />}
         </>

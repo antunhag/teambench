@@ -8,6 +8,7 @@ interface Props {
   canManage: boolean;
   canTrackLive: boolean;
   onStartMatch: (matchId: string, opponent: string | null, formatId: string | null) => void;
+  onCorrectMatch: (matchId: string, opponent: string | null) => void;
 }
 
 const emptyForm: MatchFields = { matchDate: "", opponent: "", competition: null, location: null, kickoffTime: null, formatId: null };
@@ -76,7 +77,7 @@ function MatchForm({
   );
 }
 
-export function Calendar({ teamId, canManage, canTrackLive, onStartMatch }: Props) {
+export function Calendar({ teamId, canManage, canTrackLive, onStartMatch, onCorrectMatch }: Props) {
   const { matches, status, errorMessage, createMatch, updateMatch, deleteMatch, bulkImport } = useMatches(teamId);
   const { formats } = useMatchFormats(teamId);
   const defaultFormat = formats.find((f) => f.isDefault) ?? null;
@@ -155,6 +156,11 @@ export function Calendar({ teamId, canManage, canTrackLive, onStartMatch }: Prop
                       {canTrackLive && (
                         <button type="button" className="btn sm primary" onClick={() => onStartMatch(m.id, m.opponent, m.formatId)}>
                           Iniciar jogo
+                        </button>
+                      )}{" "}
+                      {canTrackLive && (
+                        <button type="button" className="btn sm ghost" onClick={() => onCorrectMatch(m.id, m.opponent)}>
+                          Corrigir registo
                         </button>
                       )}{" "}
                       {canManage && (

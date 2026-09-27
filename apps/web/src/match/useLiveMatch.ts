@@ -26,6 +26,16 @@ export function useLiveMatch(matchId: string, teamId: string, format: engine.Mat
   const historyRef = useRef<engine.LiveMatchState[]>([]);
   const [canUndo, setCanUndo] = useState(false);
 
+  // Modo manual: para reconstruir/corrigir uma parte depois do jogo (ex.:
+  // revendo o vídeo, ou por ter perdido o registo ao vivo por algum erro) —
+  // aqui o "agora" deixa de ser Date.now() e passa a ser um tempo decorrido
+  // controlado à mão (ver setManualElapsedMs). Cada parte decide o próprio
+  // modo no instante do apito: resumeOrStart() sempre usa tempo real,
+  // manualResumeOrStart() sempre começa em 0 e liga o modo manual — dá pra
+  // misturar (ex.: parte 1 ao vivo, parte 2 reconstruída depois).
+  const [manual, setManual] = useState(false);
+  const [manualElapsedMs, setManualElapsedMsState] = useState(0);
+
   useEffect(() => {
     localStorage.setItem(STORAGE_PREFIX + matchId, JSON.stringify(state));
   }, [matchId, state]);
@@ -84,12 +94,12 @@ export function useLiveMatch(matchId: string, teamId: string, format: engine.Mat
   stateRef.current = state;
   useEffect(() => {
     const id = setInterval(() => {
-      if (stateRef.current.clock.running) setTick((t) => t + 1);
+      if (!manual && stateRef.current.clock.running) setTick((t) => t + 1);
     }, 1000);
     return () => clearInterval(id);
-  }, []);
+  }, [manual]);
 
-  const now = () => Date.now();
+  const now = () => (manual ? manualElapsedMs : Date.now());
   const elapsedMs = engine.matchElapsedMs(state, now());
   void tick; // usado só para disparar o re-render acima
 
@@ -99,6 +109,9 @@ export function useLiveMatch(matchId: string, teamId: string, format: engine.Mat
     format,
     canUndo,
     undo,
+    manual,
+    manualElapsedMs,
+    setManualElapsedMs: (ms: number) => setManualElapsedMsState(Math.max(0, ms)),
     // toggleConvocado/toggleTitular ficam fora da pilha de undo — são ajustes
     // de pré-jogo, não ações "ao vivo" que o treinador precise desfazer.
     toggleConvocado: (id: string) => setState((s) => engine.toggleConvocado(s, id)),
@@ -110,8 +123,21 @@ export function useLiveMatch(matchId: string, teamId: string, format: engine.Mat
     // ajustando o cinco inicial até apitar o início.
     resumeOrStart: () =>
       apply((s) => {
+        setManual(false);
         const withTitulars = s.started ? s : engine.goLive(s);
-        return engine.resumeOrStart(withTitulars, now());
+        return engine.resumeOrStart(withTitulars, Date.now());
+      }),
+    // Começa (ou recomeça) esta parte em modo manual: o relógio interno liga
+    // (clock.running=true) mas ancorado em 0 em vez do relógio de parede —
+    // dali em diante `matchElapsedMs` passa a devolver exatamente o valor de
+    // manualElapsedMs, então cada ação fica carimbada no tempo que o
+    // treinador escolher (ver setManualElapsedMs), nunca no tempo real.
+    manualResumeOrStart: () =>
+      apply((s) => {
+        setManual(true);
+        setManualElapsedMsState(0);
+        const withTitulars = s.started ? s : engine.goLive(s);
+        return engine.resumeOrStart(withTitulars, 0);
       }),
     pause: (label: string, reasonId?: string) => apply((s) => engine.pause(s, now(), label, reasonId)),
     endPause: () => apply((s) => engine.endPause(s, now())),
