@@ -51,6 +51,8 @@ export interface MatchEvent {
   outId?: string | null;
   tipo?: string | null;
   zona?: number | null;
+  /** Superioridade numérica da transição (ex.: "3x1") — só usado quando tipo === "trs". */
+  transicaoNumeros?: string | null;
   lineup?: string[];
   label?: string;
   reasonId?: string;

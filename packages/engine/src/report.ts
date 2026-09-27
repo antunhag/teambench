@@ -15,6 +15,13 @@ function eventStamp(e: MatchEvent, format?: MatchFormat): string {
   return `${periodLabel(e.period, format)} · ${fmtMinSec(eventMs(e))}`;
 }
 
+/** "Transição 3x1" quando dá pra detalhar a superioridade numérica; senão só o rótulo normal do tipo. */
+function goloTipoLabelComDetalhe(e: MatchEvent): string | null {
+  const lbl = tipoGoloLabel(e.tipo);
+  if (lbl && e.tipo === "trs" && e.transicaoNumeros) return `${lbl} ${e.transicaoNumeros}`;
+  return lbl;
+}
+
 export function describeEvent(e: MatchEvent, playerById: PlayerLookup, format?: MatchFormat): string {
   const p = e.playerId ? playerById(e.playerId) : undefined;
   const pname = p ? `#${p.num} ${p.name}` : "";
@@ -47,7 +54,7 @@ export function describeEvent(e: MatchEvent, playerById: PlayerLookup, format?: 
     case "golo": {
       const assistP = e.assistId ? playerById(e.assistId) : undefined;
       const lineupNames = (e.lineup || []).map((id) => playerById(id)?.num ?? "?").join(",");
-      const tipoLbl = tipoGoloLabel(e.tipo);
+      const tipoLbl = goloTipoLabelComDetalhe(e);
       const zonaLbl = e.zona ? `Zona ${e.zona}` : null;
       body =
         `GOLO — ${pname}` +
@@ -59,7 +66,7 @@ export function describeEvent(e: MatchEvent, playerById: PlayerLookup, format?: 
     }
     case "golo_sofrido": {
       const lineupNames = (e.lineup || []).map((id) => playerById(id)?.num ?? "?").join(",");
-      const tipoLbl = tipoGoloLabel(e.tipo);
+      const tipoLbl = goloTipoLabelComDetalhe(e);
       const zonaLbl = e.zona ? `Zona ${e.zona}` : null;
       body =
         "Golo sofrido (adversário)" +

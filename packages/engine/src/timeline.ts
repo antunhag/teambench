@@ -21,6 +21,7 @@ export interface TimelineGoal {
   scorerId: string | null;
   tipo: string | null;
   zona: number | null;
+  transicaoNumeros: string | null;
   marcha: [number, number];
 }
 
@@ -111,6 +112,7 @@ export function buildTimelineData(events: MatchEvent[], playersList: Player[], t
           scorerId: e.type === "golo" ? e.playerId : null,
           tipo: e.tipo ?? null,
           zona: e.zona ?? null,
+          transicaoNumeros: e.transicaoNumeros ?? null,
           marcha: [runningNos, runningAdv],
         });
       }
@@ -145,6 +147,13 @@ export interface TimelineMatchInfo {
 
 function esc(s: unknown): string {
   return (s == null ? "" : String(s)).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
+}
+
+/** "Transição 3x1" quando dá pra detalhar a superioridade numérica; senão só o rótulo normal do tipo. */
+function goalTipoLabelComDetalhe(g: TimelineGoal): string | null {
+  const lbl = tipoGoloLabel(g.tipo);
+  if (lbl && g.tipo === "trs" && g.transicaoNumeros) return `${lbl} ${g.transicaoNumeros}`;
+  return lbl;
 }
 
 /** Página HTML autónoma (sem JS de runtime) com a timeline visual de todas as partes de um jogo. */
@@ -217,8 +226,9 @@ export function buildTimelineHtml(
             .join("");
           let marks = "";
           (goalsByScorerPid.get(p.id) || []).forEach((g) => {
+            const tipoLbl = goalTipoLabelComDetalhe(g);
             marks += `<div class="mk goal" style="left:${pct2(g.sec, half.durSec)};" title="Golo — ${fmtMinSec(g.sec * 1000)}${
-              g.tipo ? ` · ${esc(tipoGoloLabel(g.tipo) || g.tipo)}` : ""
+              tipoLbl ? ` · ${esc(tipoLbl)}` : ""
             }${g.zona ? ` · zona ${g.zona}` : ""}">⚽</div>`;
           });
           (cardsByPid.get(p.id) || []).forEach((c) => {
@@ -257,7 +267,7 @@ export function buildTimelineHtml(
         `<tr><td>${esc(half.label)}</td><td class="num">${fmtMinSec(g.sec * 1000)}</td>` +
         `<td class="${isNos ? "side-nos" : "side-adv"}">${isNos ? "Nós" : esc(matchInfo.adversario || "Adversário")}</td>` +
         `<td>${scorer ? `#${esc(scorer.num)} ${esc(scorer.name)}` : "—"}</td>` +
-        `<td>${esc(g.tipo ? tipoGoloLabel(g.tipo) || g.tipo : "—")}</td>` +
+        `<td>${esc(goalTipoLabelComDetalhe(g) ?? "—")}</td>` +
         `<td class="num">${g.zona || "—"}</td>` +
         `<td>${g.marcha[0]}–${g.marcha[1]}</td></tr>`;
     });

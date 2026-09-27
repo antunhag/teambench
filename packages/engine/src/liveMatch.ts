@@ -168,7 +168,8 @@ export function doGoal(
   assistId: string | null,
   nowMs: number,
   tipo?: string | null,
-  zona?: number | null
+  zona?: number | null,
+  transicaoNumeros?: string | null
 ): LiveMatchState {
   const atMs = matchElapsedMs(state, nowMs);
   const ev = createEvent("golo", scorerId, atMs, state.period, nowMs, {
@@ -176,17 +177,25 @@ export function doGoal(
     lineup: state.onCourt.slice(),
     tipo: tipo ?? null,
     zona: zona ?? null,
+    transicaoNumeros: transicaoNumeros ?? null,
   });
   const events = [...state.events, ev];
   return { ...state, events, score: recomputeScoreFor(events) };
 }
 
-export function doOppGoal(state: LiveMatchState, nowMs: number, tipo?: string | null, zona?: number | null): LiveMatchState {
+export function doOppGoal(
+  state: LiveMatchState,
+  nowMs: number,
+  tipo?: string | null,
+  zona?: number | null,
+  transicaoNumeros?: string | null
+): LiveMatchState {
   const atMs = matchElapsedMs(state, nowMs);
   const ev = createEvent("golo_sofrido", null, atMs, state.period, nowMs, {
     lineup: state.onCourt.slice(),
     tipo: tipo ?? null,
     zona: zona ?? null,
+    transicaoNumeros: transicaoNumeros ?? null,
   });
   const events = [...state.events, ev];
   return { ...state, events, score: recomputeScoreFor(events) };

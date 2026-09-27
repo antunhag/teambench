@@ -1,4 +1,4 @@
-import { describeEvent, isLastPeriod, TIPOS_GOLO, timeoutUsedInPeriod, ZONAS_GOLO } from "@teambench/engine";
+import { describeEvent, isLastPeriod, TIPOS_GOLO, timeoutUsedInPeriod, TRANSICAO_NUMEROS_PRESET, ZONAS_GOLO } from "@teambench/engine";
 import { useEffect, useState } from "preact/hooks";
 import type { PlayerRow } from "../team/usePlayers";
 import { isGoalkeeper, posAbbr } from "../team/positions";
@@ -31,10 +31,13 @@ function parseMinSec(text: string): number | null {
 type Picker =
   | { kind: "golo-scorer" }
   | { kind: "golo-assist"; scorerId: string }
-  | { kind: "golo-tipo"; scorerId: string; assistId: string | null } // golo nosso: último passo antes da zona
-  | { kind: "golo-zona"; scorerId: string; assistId: string | null; tipo: string | null }
+  | { kind: "golo-tipo"; scorerId: string; assistId: string | null } // golo nosso: penúltimo passo antes da zona
+  // Só alcançado quando tipo === "trs" — detalha a superioridade numérica da transição (ex.: "3x1").
+  | { kind: "golo-transicao"; scorerId: string; assistId: string | null; tipo: string }
+  | { kind: "golo-zona"; scorerId: string; assistId: string | null; tipo: string | null; transicaoNumeros: string | null }
   | { kind: "opp-golo-tipo" } // golo sofrido: mesmo par tipo/zona, sem marcador/assistência
-  | { kind: "opp-golo-zona"; tipo: string | null }
+  | { kind: "opp-golo-transicao"; tipo: string }
+  | { kind: "opp-golo-zona"; tipo: string | null; transicaoNumeros: string | null }
   | { kind: "player"; playerId: string } // toca num jogador EM CAMPO -> ações contextuais (cartão/falta/substituir/atendimento)
   | { kind: "sub-out" } // atalho da barra: escolher primeiro quem sai
   | { kind: "sub-in"; outId: string } // escolher quem entra, já sabendo quem sai
@@ -53,6 +56,7 @@ export function LiveMatch({ live, roster, opponent, onViewSummary, ourLabel }: P
 
   const [showPauseReasons, setShowPauseReasons] = useState(false);
   const [picker, setPicker] = useState<Picker>(null);
+  const [transicaoCustom, setTransicaoCustom] = useState("");
   // Campo de texto do modo manual — separado de live.manualElapsedMs pra
   // deixar digitar livremente ("1", "1:", "1:2"...) sem forçar formato a
   // cada tecla; só aplica (parseMinSec) ao sair do campo ou apertar Enter.
@@ -396,13 +400,23 @@ export function LiveMatch({ live, roster, opponent, onViewSummary, ourLabel }: P
                 key={t.id}
                 type="button"
                 className="abtn"
-                onClick={() =>
-                  setPicker(
-                    picker.kind === "golo-tipo"
-                      ? { kind: "golo-zona", scorerId: picker.scorerId, assistId: picker.assistId, tipo: t.id }
-                      : { kind: "opp-golo-zona", tipo: t.id }
-                  )
-                }
+                onClick={() => {
+                  const isNos = picker.kind === "golo-tipo";
+                  // Transição pede um passo a mais (superioridade numérica, ex.: "3x1") antes da zona.
+                  if (t.id === "trs") {
+                    setPicker(
+                      isNos
+                        ? { kind: "golo-transicao", scorerId: picker.scorerId, assistId: picker.assistId, tipo: t.id }
+                        : { kind: "opp-golo-transicao", tipo: t.id }
+                    );
+                  } else {
+                    setPicker(
+                      isNos
+                        ? { kind: "golo-zona", scorerId: picker.scorerId, assistId: picker.assistId, tipo: t.id, transicaoNumeros: null }
+                        : { kind: "opp-golo-zona", tipo: t.id, transicaoNumeros: null }
+                    );
+                  }
+                }}
               >
                 {t.label}
               </button>
@@ -414,8 +428,71 @@ export function LiveMatch({ live, roster, opponent, onViewSummary, ourLabel }: P
             onClick={() =>
               setPicker(
                 picker.kind === "golo-tipo"
-                  ? { kind: "golo-zona", scorerId: picker.scorerId, assistId: picker.assistId, tipo: null }
-                  : { kind: "opp-golo-zona", tipo: null }
+                  ? { kind: "golo-zona", scorerId: picker.scorerId, assistId: picker.assistId, tipo: null, transicaoNumeros: null }
+                  : { kind: "opp-golo-zona", tipo: null, transicaoNumeros: null }
+              )
+            }
+            style={{ marginTop: 10 }}
+          >
+            Não sei / saltar
+          </button>
+        </Sheet>
+      )}
+
+      {(picker?.kind === "golo-transicao" || picker?.kind === "opp-golo-transicao") && (
+        <Sheet title="Superioridade numérica?" sub="Atacantes x defensores na transição — ex.: 3x1" onClose={() => setPicker(null)}>
+          <div className="actiongrid">
+            {TRANSICAO_NUMEROS_PRESET.map((n) => (
+              <button
+                key={n}
+                type="button"
+                className="abtn"
+                onClick={() =>
+                  setPicker(
+                    picker.kind === "golo-transicao"
+                      ? { kind: "golo-zona", scorerId: picker.scorerId, assistId: picker.assistId, tipo: picker.tipo, transicaoNumeros: n }
+                      : { kind: "opp-golo-zona", tipo: picker.tipo, transicaoNumeros: n }
+                  )
+                }
+              >
+                {n}
+              </button>
+            ))}
+          </div>
+          <form
+            className="inline-fields"
+            style={{ marginTop: 10 }}
+            onSubmit={(e) => {
+              e.preventDefault();
+              const value = transicaoCustom.trim();
+              if (!value) return;
+              setPicker(
+                picker.kind === "golo-transicao"
+                  ? { kind: "golo-zona", scorerId: picker.scorerId, assistId: picker.assistId, tipo: picker.tipo, transicaoNumeros: value }
+                  : { kind: "opp-golo-zona", tipo: picker.tipo, transicaoNumeros: value }
+              );
+              setTransicaoCustom("");
+            }}
+          >
+            <div className="field" style={{ marginBottom: 0 }}>
+              <input
+                type="text"
+                placeholder="Outra (ex.: 5x3)"
+                value={transicaoCustom}
+                onInput={(e) => setTransicaoCustom((e.target as HTMLInputElement).value)}
+                style={{ width: 120 }}
+              />
+            </div>
+            <button type="submit" className="btn primary">Usar</button>
+          </form>
+          <button
+            type="button"
+            className="btn ghost block"
+            onClick={() =>
+              setPicker(
+                picker.kind === "golo-transicao"
+                  ? { kind: "golo-zona", scorerId: picker.scorerId, assistId: picker.assistId, tipo: picker.tipo, transicaoNumeros: null }
+                  : { kind: "opp-golo-zona", tipo: picker.tipo, transicaoNumeros: null }
               )
             }
             style={{ marginTop: 10 }}
@@ -438,8 +515,8 @@ export function LiveMatch({ live, roster, opponent, onViewSummary, ourLabel }: P
                 type="button"
                 className="zbtn"
                 onClick={() => {
-                  if (picker.kind === "golo-zona") live.doGoal(picker.scorerId, picker.assistId, picker.tipo, z);
-                  else live.doOppGoal(picker.tipo, z);
+                  if (picker.kind === "golo-zona") live.doGoal(picker.scorerId, picker.assistId, picker.tipo, z, picker.transicaoNumeros);
+                  else live.doOppGoal(picker.tipo, z, picker.transicaoNumeros);
                   setPicker(null);
                 }}
               >
@@ -451,8 +528,8 @@ export function LiveMatch({ live, roster, opponent, onViewSummary, ourLabel }: P
             type="button"
             className="btn ghost block"
             onClick={() => {
-              if (picker.kind === "golo-zona") live.doGoal(picker.scorerId, picker.assistId, picker.tipo, null);
-              else live.doOppGoal(picker.tipo, null);
+              if (picker.kind === "golo-zona") live.doGoal(picker.scorerId, picker.assistId, picker.tipo, null, picker.transicaoNumeros);
+              else live.doOppGoal(picker.tipo, null, picker.transicaoNumeros);
               setPicker(null);
             }}
             style={{ marginTop: 10 }}

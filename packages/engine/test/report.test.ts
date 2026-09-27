@@ -17,6 +17,18 @@ describe("describeEvent", () => {
     expect(text).toMatch(/^\[1ª Parte · 01:05\]/);
   });
 
+  it("detalha a transição com a superioridade numérica quando informada", () => {
+    const comDetalhe = createEvent("golo", salvador.id, 65_000, 1, 0, { tipo: "trs", transicaoNumeros: "3x1" });
+    expect(describeEvent(comDetalhe, byId)).toContain("[Transição 3x1]");
+
+    const semDetalhe = createEvent("golo", salvador.id, 65_000, 1, 0, { tipo: "trs" });
+    expect(describeEvent(semDetalhe, byId)).toContain("[Transição]");
+    expect(describeEvent(semDetalhe, byId)).not.toContain("[Transição ");
+
+    const outroTipo = createEvent("golo", salvador.id, 65_000, 1, 0, { tipo: "cnt", transicaoNumeros: "3x1" });
+    expect(describeEvent(outroTipo, byId)).not.toContain("3x1");
+  });
+
   it("marca uma correção adicionada depois", () => {
     const ev = createEvent("cartao_amarelo", salvador.id, 0, 1, 0, { correcao: true, aproximado: true });
     expect(describeEvent(ev, byId)).toContain("[correção — momento aproximado]");
