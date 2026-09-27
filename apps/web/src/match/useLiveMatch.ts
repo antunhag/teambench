@@ -1,6 +1,7 @@
 import * as engine from "@teambench/engine";
 import { useEffect, useRef, useState } from "preact/hooks";
 import { enqueue, removeByClientEventIds } from "../sync/outbox";
+import { supabase } from "../supabaseClient";
 
 const STORAGE_PREFIX = "teambench.liveMatch.";
 
@@ -39,6 +40,50 @@ export function useLiveMatch(matchId: string, teamId: string, format: engine.Mat
   useEffect(() => {
     localStorage.setItem(STORAGE_PREFIX + matchId, JSON.stringify(state));
   }, [matchId, state]);
+
+  // Se este aparelho nunca teve progresso local deste jogo (localStorage
+  // vazio — ex.: reabrindo num aparelho diferente do que registou o jogo ao
+  // vivo, ou depois de o navegador limpar os dados) mas o jogo já tem
+  // eventos sincronizados no Supabase, reconstrói o estado a partir deles
+  // (ver replay.ts) em vez de começar do zero — sem isto, um jogo já
+  // começado voltaria a mostrar a tela de escolher o cinco inicial, o que
+  // não faz sentido para um jogo que já aconteceu.
+  //
+  // `convocadoIds` nunca chega a ser sincronizado à parte (só o motor local
+  // sabe quem foi convocado) — aqui é reconstruído como todo mundo que
+  // aparece em algum evento (jogador, quem saiu, ou o cinco inicial do
+  // apito). Quem foi convocado mas nunca chegou a entrar em campo não
+  // aparece nessa lista; é uma limitação conhecida deste caminho.
+  const [checkingRemote, setCheckingRemote] = useState(true);
+  useEffect(() => {
+    let cancelled = false;
+    async function checkRemote() {
+      if (state.events.length > 0) {
+        setCheckingRemote(false);
+        return;
+      }
+      const { data, error } = await supabase
+        .from("match_events")
+        .select("payload")
+        .eq("match_id", matchId)
+        .order("period", { ascending: true })
+        .order("ms", { ascending: true });
+      if (cancelled) return;
+      if (!error && data && data.length > 0) {
+        const events = data.map((row) => row.payload as engine.MatchEvent);
+        const convocadoIds = Array.from(
+          new Set(events.flatMap((e) => [e.playerId, e.outId, ...(e.lineup ?? [])].filter((x): x is string => !!x)))
+        );
+        setState(engine.replayEvents(convocadoIds, events, format));
+      }
+      setCheckingRemote(false);
+    }
+    checkRemote();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [matchId]);
 
   // Cada ação empilha o estado ANTERIOR antes de aplicar a mudança — desfazer
   // é simplesmente voltar ao topo da pilha. Suficiente para correções em
@@ -109,6 +154,7 @@ export function useLiveMatch(matchId: string, teamId: string, format: engine.Mat
     format,
     canUndo,
     undo,
+    checkingRemote,
     manual,
     manualElapsedMs,
     setManualElapsedMs: (ms: number) => setManualElapsedMsState(Math.max(0, ms)),

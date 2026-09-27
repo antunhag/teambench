@@ -94,6 +94,14 @@ function MatchFlowEditor({
   const [confirmed, setConfirmed] = useState(false);
   const showPreMatch = !live.state.started && !confirmed;
 
+  // Evita mostrar a tela de escolher o cinco inicial por um instante para um
+  // jogo que já começou (ver checkingRemote em useLiveMatch) — só sabe se
+  // deve mesmo pedir o cinco inicial depois de checar se este aparelho tem
+  // ou não progresso já sincronizado desse jogo.
+  if (live.checkingRemote) {
+    return <p className="empty">A carregar jogo...</p>;
+  }
+
   return (
     <>
       {live.state.started && !showSummary && (
