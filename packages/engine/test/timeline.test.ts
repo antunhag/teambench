@@ -174,15 +174,29 @@ describe("buildTimelineHtml", () => {
     expect(html).toContain("<b>F</b>");
   });
 
-  it("marca o golo sofrido no instante exato, mesmo sem atleta associado", () => {
+  it("marca o golo sofrido na linha de golos, mesmo sem atleta associado", () => {
     const events: MatchEvent[] = [
       createEvent("golo_sofrido", null, 200_000, 1, 0),
       createEvent("fim_periodo", null, 600_000, 1, 0, { duracaoSec: 600 }),
     ];
     const halves = buildTimelineData(events, roster, [salvador.id]);
     const html = buildTimelineHtml({ adversario: "Ordem" }, halves, 0, 1, byId);
-    expect(html).toContain("conceded-ball");
+    expect(html).toContain("goals-row");
+    expect(html).toContain("mk goal conceded");
     expect(html).toContain("Golo sofrido");
+  });
+
+  it("a linha de golos traz feitos e sofridos juntos, e o golo feito continua marcado na barra do marcador", () => {
+    const events: MatchEvent[] = [
+      createEvent("golo", salvador.id, 100_000, 1, 0),
+      createEvent("golo_sofrido", null, 200_000, 1, 0),
+      createEvent("fim_periodo", null, 600_000, 1, 0, { duracaoSec: 600 }),
+    ];
+    const halves = buildTimelineData(events, roster, [salvador.id]);
+    expect(halves[0].goals).toHaveLength(2);
+    const html = buildTimelineHtml({ adversario: "Ordem" }, halves, 1, 1, byId);
+    // duas bolas na linha de golos (uma feita, uma sofrida) + a marca de golo feito na barra do próprio marcador.
+    expect(html.match(/class="mk goal/g)?.length).toBe(3);
   });
 
   it("desenha uma faixa visual (pause-band) no trecho de um pedido de tempo", () => {

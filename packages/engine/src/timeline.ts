@@ -259,21 +259,24 @@ export function buildTimelineHtml(
       const ticks: number[] = [];
       for (let t = 0; t <= half.durSec; t += step) ticks.push(t);
       if (ticks[ticks.length - 1] !== half.durSec) ticks.push(half.durSec);
-      // Golo sofrido não tem atleta associado (é um evento da equipa toda), então
-      // não dá pra marcar na barra de ninguém — em vez disso uma bola vermelha
-      // junto da régua de minutos, no instante exato.
-      const concededBalls = half.goals
-        .filter((g) => g.side === "adv")
-        .map(
-          (g) =>
-            `<span class="conceded-ball" style="left:${pct2(g.sec, half.durSec)}" title="Golo sofrido — ${fmtMinSec(
-              g.sec * 1000
-            )}">⚽</span>`
-        )
-        .join("");
       const ruler = `<div class="ruler">${ticks
         .map((t) => `<span style="left:${pct2(t, half.durSec)}">${Math.round(t / 60)}′</span>`)
-        .join("")}${concededBalls}</div>`;
+        .join("")}</div>`;
+
+      // Linha própria com TODOS os golos (feitos e sofridos) juntos, entre a régua
+      // e as linhas dos atletas — a bola no golo sofrido não tem atleta pra marcar,
+      // e uma bola solta em cima da régua sobrepunha os números dos minutos. Usa o
+      // mesmo pct2() do .track (não da régua), pra ficar alinhada com as marcas de
+      // golo feito que continuam também na barra do marcador, mais abaixo.
+      const goalsLaneHtml = half.goals
+        .map((g) => {
+          const isNos = g.side === "nos";
+          const tipoLbl = isNos ? goalTipoLabelComDetalhe(g) : null;
+          return `<div class="mk goal${isNos ? "" : " conceded"}" style="left:${pct2(g.sec, half.durSec)};" title="${
+            isNos ? "Golo marcado" : "Golo sofrido"
+          } — ${fmtMinSec(g.sec * 1000)}${tipoLbl ? ` · ${esc(tipoLbl)}` : ""}">⚽</div>`;
+        })
+        .join("");
 
       // Mesmo pct2() das barras/marcas — nunca um calc() aproximado sobre a
       // linha inteira, que ficava desalinhado da faixa real do .track (esta
@@ -327,11 +330,17 @@ export function buildTimelineHtml(
         })
         .join("");
 
+      const goalsLaneRow = half.goals.length
+        ? `<div class="row goals-row"><div class="label"><span class="nm">Golos</span></div>` +
+          `<div class="track goals-track">${goalsLaneHtml}</div><div class="mins"></div></div>`
+        : "";
+
       return (
         `<div class="half-block"><div class="half-title"><h2>${esc(half.label)}</h2>` +
         `<div class="dur">0′ – ${Math.round(half.durSec / 60)}′</div></div>` +
         marcha +
         ruler +
+        goalsLaneRow +
         `<div class="rows">${rows}</div></div>`
       );
     })
@@ -387,6 +396,7 @@ export function buildTimelineHtml(
     ".bar{position:absolute;top:0;height:14px;border-radius:7px;background:var(--series-1);}" +
     ".mk{position:absolute;top:50%;transform:translate(-50%,-50%);width:14px;height:14px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:8.5px;border:1.5px solid var(--surface-1);}" +
     ".mk.goal{background:var(--good);color:#fff;}" +
+    ".mk.goal.conceded{background:var(--critical);}" +
     ".mk.card{width:5px;height:7px;border-radius:1px;border:none;}" +
     ".mk.card.yellow{background:var(--warning);}" +
     ".mk.card.red{background:var(--critical);}" +
@@ -395,7 +405,9 @@ export function buildTimelineHtml(
     ".mk.foul.sofrida{background:var(--surface-1);color:var(--series-1);border-color:var(--series-1);}" +
     ".half-block{margin-top:18px;}.half-block:first-of-type{margin-top:4px;}.rows{display:flex;flex-direction:column;gap:6px;}" +
     ".pause-band{position:absolute;top:-6px;bottom:-6px;background:repeating-linear-gradient(45deg,var(--pause) 0,var(--pause) 4px,transparent 4px,transparent 9px);opacity:.4;border-left:1px dashed var(--pause);border-right:1px dashed var(--pause);}" +
-    ".ruler .conceded-ball{position:absolute;top:50%;width:14px;height:14px;border-radius:50%;background:var(--critical);color:#fff;display:flex;align-items:center;justify-content:center;font-size:8.5px;line-height:1;transform:translate(-50%,-50%);border:1.5px solid var(--surface-1);}" +
+    ".goals-row{margin-bottom:2px;}" +
+    ".goals-row .nm{color:var(--muted);font-size:11px;font-style:italic;}" +
+    ".goals-track{background:transparent;}" +
     ".legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:16px;padding-top:14px;border-top:1px solid var(--grid);font-size:11.5px;color:var(--text-secondary);}" +
     ".legend .it{display:flex;align-items:center;gap:6px;}.legend .sw{width:18px;height:8px;border-radius:4px;background:var(--series-1);}" +
     ".legend .sw.pause{background:repeating-linear-gradient(45deg,var(--pause) 0,var(--pause) 3px,transparent 3px,transparent 6px);border:1px dashed var(--pause);}" +
