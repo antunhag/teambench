@@ -30,9 +30,19 @@ interface Draft {
   zona: number | null;
   transicaoNumeros: string | null;
   transicaoBalizaDeserta: boolean;
+  /** Quem estava em quadra no apito — só existe (e só importa) em eventos "kickoff". */
+  lineup: string[] | null;
 }
 
-type DetailPicker = { rowId: string; kind: "player" | "scorer" | "assist" | "in" | "out" | "tipo" | "zona" | "transicao" } | null;
+type DetailPicker =
+  | { rowId: string; kind: "player" | "scorer" | "assist" | "in" | "out" | "tipo" | "zona" | "transicao" | "lineup" }
+  | null;
+
+function sameIds(a: string[], b: string[]): boolean {
+  if (a.length !== b.length) return false;
+  const bs = new Set(b);
+  return a.every((id) => bs.has(id));
+}
 
 // Sentinela do formulário "+ Adicionar evento" — os mesmos overlays de
 // escolher jogador/tipo/zona servem tanto para corrigir uma linha existente
@@ -80,13 +90,15 @@ function draftFromRow(r: EventRow): Draft {
     zona: p.zona ?? null,
     transicaoNumeros: p.transicaoNumeros ?? null,
     transicaoBalizaDeserta: p.transicaoBalizaDeserta ?? false,
+    lineup: p.lineup ?? null,
   };
 }
 
 function draftsEqual(a: Draft, b: Draft): boolean {
   return a.period === b.period && a.time === b.time && a.playerId === b.playerId && a.assistId === b.assistId &&
     a.outId === b.outId && a.tipo === b.tipo && a.zona === b.zona && a.transicaoNumeros === b.transicaoNumeros &&
-    a.transicaoBalizaDeserta === b.transicaoBalizaDeserta;
+    a.transicaoBalizaDeserta === b.transicaoBalizaDeserta &&
+    (a.lineup == null && b.lineup == null ? true : a.lineup != null && b.lineup != null && sameIds(a.lineup, b.lineup));
 }
 
 /**
@@ -138,6 +150,7 @@ export function MatchEventEditor({ teamId, matchId, opponent, onClose, canDelete
   const [newTransicaoNumeros, setNewTransicaoNumeros] = useState<string | null>(null);
   const [newBalizaDeserta, setNewBalizaDeserta] = useState(false);
   const [newLabel, setNewLabel] = useState("");
+  const [newLineup, setNewLineup] = useState<string[] | null>(null);
   const [addStatus, setAddStatus] = useState<"idle" | "saving" | "error">("idle");
   const [addError, setAddError] = useState("");
   const [transicaoCustom, setTransicaoCustom] = useState("");
@@ -151,6 +164,7 @@ export function MatchEventEditor({ teamId, matchId, opponent, onClose, canDelete
     setNewTransicaoNumeros(null);
     setNewBalizaDeserta(false);
     setNewLabel("");
+    setNewLineup(null);
   }
 
   function newEventValid(): boolean {
@@ -194,6 +208,7 @@ export function MatchEventEditor({ teamId, matchId, opponent, onClose, canDelete
     }
     if (newType === "substituicao") extra.outId = newOutId;
     if (newType === "pausa" || newType === "fim_pausa") extra.label = newLabel || undefined;
+    if (newType === "kickoff" && newLineup) extra.lineup = newLineup;
     const ev = engine.createEvent(newType, newPlayerId, ms, period, Date.now(), extra);
     setAddStatus("saving");
     const { error } = await supabase.from("match_events").insert({
@@ -258,6 +273,27 @@ export function MatchEventEditor({ teamId, matchId, opponent, onClose, canDelete
     return p ? `#${p.num} ${p.name}` : "?";
   }
 
+  function lineupLabel(ids: string[] | null): string {
+    if (!ids || ids.length === 0) return "— (toca pra escolher)";
+    return ids.map((id) => `#${roster.find((p) => p.id === id)?.num ?? "?"}`).join(", ");
+  }
+
+  // "Em quadra" é seleção múltipla (até 5 jogadores), diferente de todos os
+  // outros pickers (que escolhem um só e fecham na hora) — por isso fica de
+  // fora do fluxo de applyPickerField, igual à "baliza deserta".
+  function currentLineup(): string[] {
+    if (!picker) return [];
+    return (picker.rowId === NEW_ROW_ID ? newLineup : drafts[picker.rowId]?.lineup) ?? [];
+  }
+
+  function toggleLineupPlayer(id: string) {
+    if (!picker) return;
+    const current = currentLineup();
+    const next = current.includes(id) ? current.filter((x) => x !== id) : [...current, id];
+    if (picker.rowId === NEW_ROW_ID) setNewLineup(next);
+    else setDraftField(picker.rowId, { lineup: next });
+  }
+
   async function load() {
     setStatus("loading");
     const { data, error } = await supabase
@@ -303,6 +339,7 @@ export function MatchEventEditor({ teamId, matchId, opponent, onClose, canDelete
       zona: draft.zona,
       transicaoNumeros: draft.tipo === "trs" ? draft.transicaoNumeros : null,
       transicaoBalizaDeserta: draft.tipo === "trs" && draft.transicaoBalizaDeserta,
+      lineup: draft.lineup,
     };
     // .select() confirma que a linha foi mesmo atualizada — sem ele, um
     // UPDATE bloqueado pela RLS devolveria "sucesso" mesmo sem mudar nada
@@ -423,6 +460,8 @@ export function MatchEventEditor({ teamId, matchId, opponent, onClose, canDelete
             {btn(`Sai: ${playerLabel(draft.outId)}`, "out")}
           </>
         );
+      case "kickoff":
+        return btn(`Em quadra: ${lineupLabel(draft.lineup)}`, "lineup");
       default:
         return null;
     }
@@ -484,6 +523,8 @@ export function MatchEventEditor({ teamId, matchId, opponent, onClose, canDelete
             style={{ width: 240 }}
           />
         );
+      case "kickoff":
+        return btn(`Em quadra: ${lineupLabel(newLineup)}`, "lineup");
       default:
         return null;
     }
@@ -590,6 +631,7 @@ export function MatchEventEditor({ teamId, matchId, opponent, onClose, canDelete
                     zona: d.zona,
                     transicaoNumeros: d.transicaoNumeros,
                     transicaoBalizaDeserta: d.transicaoBalizaDeserta,
+                    lineup: d.lineup ?? undefined,
                   };
                 }
                 const descriptions = engine.describeEvents(rows.map(previewEventFor), byId);
@@ -804,6 +846,26 @@ export function MatchEventEditor({ teamId, matchId, opponent, onClose, canDelete
           </div>
           <button type="button" className="btn ghost block" onClick={() => applyPickerField("zona", null)} style={{ marginTop: 10 }}>
             Não sei / saltar
+          </button>
+        </Sheet>
+      )}
+
+      {picker && (pickerRow || pickerIsNew) && picker.kind === "lineup" && (
+        <Sheet
+          title="Quem estava em quadra no apito?"
+          sub="Toca pra marcar/desmarcar — normalmente são 5. Fecha quando terminar."
+          onClose={() => setPicker(null)}
+        >
+          <div className="pgrid">
+            {roster.map((p: PlayerRow) => {
+              const selected = currentLineup().includes(p.id);
+              return (
+                <PlayerChip key={p.id} p={p} dim={!selected} onClick={() => toggleLineupPlayer(p.id)} />
+              );
+            })}
+          </div>
+          <button type="button" className="btn primary block" onClick={() => setPicker(null)} style={{ marginTop: 10 }}>
+            Concluído ({currentLineup().length})
           </button>
         </Sheet>
       )}
