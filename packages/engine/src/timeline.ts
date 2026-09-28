@@ -19,6 +19,7 @@ export interface TimelineGoal {
   sec: number;
   side: "nos" | "adv";
   scorerId: string | null;
+  assistId: string | null;
   tipo: string | null;
   zona: number | null;
   transicaoNumeros: string | null;
@@ -171,6 +172,7 @@ export function buildTimelineData(events: MatchEvent[], playersList: Player[], t
           sec,
           side: e.type === "golo" ? "nos" : "adv",
           scorerId: e.type === "golo" ? e.playerId : null,
+          assistId: e.type === "golo" ? e.assistId ?? null : null,
           tipo: e.tipo ?? null,
           zona: e.zona ?? null,
           transicaoNumeros: e.transicaoNumeros ?? null,
@@ -259,8 +261,12 @@ export function buildTimelineHtml(
     .map(
       (t) =>
         `<tr><td>#${esc(t.num)} ${esc(t.name)}</td>` +
-        t.perHalf.map((sec) => `<td class="num">${Math.round(sec / 60)}'</td>`).join("") +
-        `<td class="num">${Math.round(t.totalSec / 60)}'</td></tr>`
+        // mm:ss, não minutos arredondados — arredondando parte a parte, a soma das
+        // partes às vezes dava um minuto a mais ou a menos que o total (cada
+        // arredondamento é independente). Em mm:ss a soma bate sempre, porque é a
+        // mesma contagem de segundos, só formatada.
+        t.perHalf.map((sec) => `<td class="num">${fmtMinSec(sec * 1000)}</td>`).join("") +
+        `<td class="num">${fmtMinSec(t.totalSec * 1000)}</td></tr>`
     )
     .join("");
 
@@ -406,10 +412,12 @@ export function buildTimelineHtml(
     half.goals.forEach((g) => {
       const isNos = g.side === "nos";
       const scorer = isNos && g.scorerId ? playerById(g.scorerId) : undefined;
+      const assistente = isNos && g.assistId ? playerById(g.assistId) : undefined;
       goalsRows +=
         `<tr><td>${esc(half.label)}</td><td class="num">${fmtMinSec(g.sec * 1000)}</td>` +
         `<td class="${isNos ? "side-nos" : "side-adv"}">${isNos ? esc(ourLabel) : esc(matchInfo.adversario || "Adversário")}</td>` +
         `<td>${scorer ? `#${esc(scorer.num)} ${esc(scorer.name)}` : "—"}</td>` +
+        `<td>${assistente ? `#${esc(assistente.num)} ${esc(assistente.name)}` : "—"}</td>` +
         `<td>${esc(goalTipoLabelComDetalhe(g) ?? "—")}</td>` +
         `<td class="num">${g.zona || "—"}</td>` +
         `<td>${g.marcha[0]}–${g.marcha[1]}</td></tr>`;
@@ -496,10 +504,10 @@ export function buildTimelineHtml(
     '<div class="it"><span class="sw pause"></span>Pedido de tempo</div><div class="it"><span class="ball-sample">⚽</span>Golo sofrido</div></div>' +
     "</div>" +
     '<div class="card"><div class="half-title" style="margin-bottom:8px;"><h2>Minutos em quadra (total do jogo)</h2></div>' +
-    `<div class="tablewrap"><table class="gtable"><thead><tr><th>Atleta</th>${totalsHeadHtml}<th class="num">Min</th></tr></thead>` +
+    `<div class="tablewrap"><table class="gtable"><thead><tr><th>Atleta</th>${totalsHeadHtml}<th class="num">Total</th></tr></thead>` +
     `<tbody>${totalsHtml}</tbody></table></div></div>` +
     '<div class="card"><div class="half-title" style="margin-bottom:8px;"><h2>Registo de golos</h2></div>' +
-    '<div class="tablewrap"><table class="gtable"><thead><tr><th>Parte</th><th class="num">Tempo</th><th>Equipa</th><th>Marcador</th><th>Tipo</th><th class="num">Zona</th><th>Marcha</th></tr></thead>' +
+    '<div class="tablewrap"><table class="gtable"><thead><tr><th>Parte</th><th class="num">Tempo</th><th>Equipa</th><th>Marcador</th><th>Assist.</th><th>Tipo</th><th class="num">Zona</th><th>Marcha</th></tr></thead>' +
     `<tbody>${goalsRows}</tbody></table></div></div>` +
     '<div class="card"><div class="note" style="margin-top:0;">Gerado automaticamente pelo Teambench a partir do registo cronológico do jogo.</div></div>' +
     "</div></body></html>"

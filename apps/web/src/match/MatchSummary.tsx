@@ -76,15 +76,18 @@ export function MatchSummary({ live, roster, opponent, matchId, onClose, ourLabe
 
   // Mesmos dados da timeline (já corrigidos pra usar o kickoff de cada parte,
   // não só quem sobrou da parte anterior) — reaproveitados aqui pra abrir o
-  // "Min" total em minutos por parte, sem duplicar a lógica de quem esteve em
-  // quadra quando.
+  // total em minutos por parte, sem duplicar a lógica de quem esteve em
+  // quadra quando. Guarda segundos exatos, não minutos já arredondados: exibir
+  // em mm:ss (ver render abaixo) é o que garante que a soma das partes bate
+  // com o total — arredondar cada parte pra minuto inteiro por separado podia
+  // dar, por exemplo, 20'+20'=40' com o total mostrando 39'.
   const halves = engine.buildTimelineData(state.events, players, state.titularIds);
-  const minsByPlayerHalf = new Map<string, number[]>();
+  const secsByPlayerHalf = new Map<string, number[]>();
   halves.forEach((half, i) => {
     half.players.forEach((p) => {
-      const arr = minsByPlayerHalf.get(p.id) || halves.map(() => 0);
-      arr[i] = Math.round((p.totalSec || 0) / 60);
-      minsByPlayerHalf.set(p.id, arr);
+      const arr = secsByPlayerHalf.get(p.id) || halves.map(() => 0);
+      arr[i] = p.totalSec || 0;
+      secsByPlayerHalf.set(p.id, arr);
     });
   });
   function halfShortLabel(label: string): string {
@@ -144,7 +147,7 @@ export function MatchSummary({ live, roster, opponent, matchId, onClose, ourLabe
               {halves.map((h, i) => (
                 <th key={i} className="num" title={h.label}>{halfShortLabel(h.label)}</th>
               ))}
-              <th className="num">Min</th>
+              <th className="num">Total</th>
               <th className="num">G</th>
               <th className="num">A</th>
               <th className="num">CA</th>
@@ -157,10 +160,12 @@ export function MatchSummary({ live, roster, opponent, matchId, onClose, ourLabe
                 <td>#{r.num} {r.nome}</td>
                 <td className="num">{r.convocado}</td>
                 <td className="num">{r.titular}</td>
-                {(minsByPlayerHalf.get(r.playerId) || halves.map(() => 0)).map((m, i) => (
-                  <td key={i} className="num">{m}</td>
+                {(secsByPlayerHalf.get(r.playerId) || halves.map(() => 0)).map((sec, i) => (
+                  <td key={i} className="num">{engine.fmtMinSec(sec * 1000)}</td>
                 ))}
-                <td className="num">{r.min}</td>
+                <td className="num">
+                  {engine.fmtMinSec((secsByPlayerHalf.get(r.playerId) || []).reduce((a, b) => a + b, 0) * 1000)}
+                </td>
                 <td className="num">{r.golos}</td>
                 <td className="num">{r.assist}</td>
                 <td className="num">{r.ca}</td>

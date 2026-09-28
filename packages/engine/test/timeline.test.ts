@@ -199,6 +199,34 @@ describe("buildTimelineHtml", () => {
     const doc = html.match(/<h2>Minutos em quadra \(total do jogo\)<\/h2>[\s\S]*?<\/table>/)?.[0] ?? "";
     expect(doc).toContain("1ª");
     expect(doc).toContain("2ª");
+    // Coluna do total rotulada "Total", nunca "Min" (que já nomeia as colunas de cada parte).
+    expect(doc).toContain(">Total<");
+    expect(doc).not.toContain(">Min<");
+  });
+
+  it("mostra os minutos em mm:ss, pra soma das partes bater sempre com o total (não arredonda parte a parte)", () => {
+    const events: MatchEvent[] = [
+      createEvent("substituicao", joao.id, 100_000, 1, 0, { outId: salvador.id }),
+      createEvent("fim_periodo", null, 700_000, 1, 0, { duracaoSec: 700 }),
+    ];
+    const halves = buildTimelineData(events, roster, [salvador.id]);
+    const html = buildTimelineHtml({ adversario: "Ordem" }, halves, 0, 0, byId);
+    // Salvador jogou 100s = 01:40, não "2'" (arredondado) nem "1'" (truncado).
+    const doc = html.match(/<h2>Minutos em quadra \(total do jogo\)<\/h2>[\s\S]*?<\/table>/)?.[0] ?? "";
+    expect(doc).toContain("01:40");
+    expect(doc).not.toContain("2'");
+  });
+
+  it("a tabela de golos traz quem fez a assistência, não só o marcador", () => {
+    const events: MatchEvent[] = [
+      createEvent("golo", salvador.id, 100_000, 1, 0, { assistId: joao.id }),
+      createEvent("fim_periodo", null, 600_000, 1, 0, { duracaoSec: 600 }),
+    ];
+    const halves = buildTimelineData(events, roster, [salvador.id, joao.id]);
+    const html = buildTimelineHtml({ adversario: "Ordem" }, halves, 1, 0, byId);
+    expect(html).toContain(">Assist.<");
+    const goalsDoc = html.match(/<h2>Registo de golos<\/h2>[\s\S]*?<\/table>/)?.[0] ?? "";
+    expect(goalsDoc).toContain("#30 João Magalhães");
   });
 
   it("usa o nome do clube em vez de 'Nós' fixo — é um relatório que pode ser partilhado fora do app", () => {
