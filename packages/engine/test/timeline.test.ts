@@ -130,6 +130,28 @@ describe("buildTimelineData", () => {
     expect(halves[0].pauses).toEqual([{ start: 200, end: 260, label: "Pedido de Tempo — AAL" }]);
   });
 
+  it("REGRESSÃO — usa o kickoff da parte pra saber quem começa em quadra, mesmo quando difere de quem terminou a parte anterior", () => {
+    // Cenário real (jogo do Paços): #6 termina a parte 1 no banco, mas o treinador
+    // troca a equipa no intervalo e #6 é titular da parte 2 (kickoff com #6 em
+    // quadra). Sem ler o kickoff, a parte 2 herdava só quem estava em quadra no
+    // fim da parte 1 (sem #6) e #6 só passava a contar tempo na primeira
+    // substituição que o "tocasse" — perdendo os minutos do início da parte.
+    const events: MatchEvent[] = [
+      createEvent("kickoff", null, 0, 1, 0, { lineup: [salvador.id, joao.id] }),
+      createEvent("substituicao", guarda.id, 300_000, 1, 0, { outId: salvador.id }), // fim da parte 1: joao + guarda em quadra
+      createEvent("fim_periodo", null, 600_000, 1, 0, { duracaoSec: 600 }),
+      createEvent("kickoff", null, 0, 2, 0, { lineup: [salvador.id, joao.id] }), // parte 2 volta a começar com salvador
+      createEvent("substituicao", suplente.id, 400_000, 2, 0, { outId: joao.id }),
+      createEvent("fim_periodo", null, 500_000, 2, 0, { duracaoSec: 500 }),
+    ];
+    const halves = buildTimelineData(events, roster, [salvador.id, joao.id]);
+    const salvadorP2 = halves[1].players.find((p) => p.id === salvador.id)!;
+    // Salvador é titular da parte 2 (kickoff) e ninguém o substitui — tem que
+    // contar a parte inteira, desde o 0 (não só a partir de alguma substituição).
+    expect(salvadorP2.intervals).toEqual([[0, 500]]);
+    expect(salvadorP2.totalSec).toBe(500);
+  });
+
   it("mantém quem está em campo entre partes (titular só da 1ª parte continua se ninguém saiu)", () => {
     const events: MatchEvent[] = [
       createEvent("fim_periodo", null, 600_000, 1, 0, { duracaoSec: 600 }),

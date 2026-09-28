@@ -82,6 +82,18 @@ export function buildTimelineData(events: MatchEvent[], playersList: Player[], t
     const maxMs = evs.reduce((m, e) => Math.max(m, e.ms || 0), 0);
     const durSec = periodDur.get(per) || Math.ceil(maxMs / 1000) || 60;
 
+    // O kickoff da parte pode trazer um cinco inicial diferente de quem terminou a
+    // parte anterior em quadra (o treinador troca a equipa no intervalo, ou corrige
+    // "Em quadra" do kickoff no corretor) — sem isto, onCourtSet ficava só herdado
+    // da parte anterior e ignorava a troca, fazendo quem entrou de início na nova
+    // parte perder o tempo todo até a primeira substituição que o "tocasse" (ver
+    // replayEvents/describeEvents, que já tratavam o kickoff corretamente).
+    const kickoff = evs.find((e) => e.type === "kickoff");
+    if (kickoff?.lineup) {
+      onCourtSet.clear();
+      kickoff.lineup.forEach((id) => onCourtSet.add(id));
+    }
+
     const openStart = new Map<string, number>();
     onCourtSet.forEach((id) => openStart.set(id, 0));
     const intervals = new Map<string, [number, number][]>();
