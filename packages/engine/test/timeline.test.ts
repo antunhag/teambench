@@ -176,6 +176,31 @@ describe("buildTimelineHtml", () => {
     expect(html).toContain("Salvador Silva Gonçalves");
   });
 
+  it("diz 'quadra', nunca 'campo' — é futsal, não futebol de campo", () => {
+    const events: MatchEvent[] = [createEvent("fim_periodo", null, 600_000, 1, 0, { duracaoSec: 600 })];
+    const halves = buildTimelineData(events, roster, [salvador.id]);
+    const html = buildTimelineHtml({ adversario: "Ordem" }, halves, 0, 0, byId);
+    expect(html).not.toContain("campo");
+    expect(html).toContain("Em quadra");
+    expect(html).toContain("Minutos em quadra");
+  });
+
+  it("a tabela de 'Minutos em quadra' abre uma coluna por parte, igual ao Resumo do app", () => {
+    const events: MatchEvent[] = [
+      createEvent("substituicao", joao.id, 300_000, 1, 0, { outId: salvador.id }),
+      createEvent("fim_periodo", null, 600_000, 1, 0, { duracaoSec: 600 }),
+      createEvent("fim_periodo", null, 500_000, 2, 0, { duracaoSec: 500 }),
+    ];
+    const halves = buildTimelineData(events, roster, [salvador.id]);
+    const html = buildTimelineHtml({ adversario: "Ordem" }, halves, 0, 0, byId);
+    // Salvador: 5' na 1ª parte (saiu aos 300s), 0' na 2ª (nem chegou a titular dela) — mas
+    // continua em quadra desde então por falta de outro evento, então na verdade ele NÃO
+    // está na parte 2 (não é titular e não há substituição trazendo-o de volta).
+    const doc = html.match(/<h2>Minutos em quadra \(total do jogo\)<\/h2>[\s\S]*?<\/table>/)?.[0] ?? "";
+    expect(doc).toContain("1ª");
+    expect(doc).toContain("2ª");
+  });
+
   it("usa o nome do clube em vez de 'Nós' fixo — é um relatório que pode ser partilhado fora do app", () => {
     const events: MatchEvent[] = [
       createEvent("golo", salvador.id, 100_000, 1, 0),

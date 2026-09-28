@@ -1,6 +1,6 @@
 // Linha do tempo visual do jogo — porta de buildTimelineData/buildTimelineHtml
 // do banco.html. Reconstrói, a partir só do registo cronológico (nunca de uma
-// grelha manual de minutos), quem esteve em campo minuto a minuto em cada
+// grelha manual de minutos), quem esteve em quadra minuto a minuto em cada
 // parte, com golos/cartões/faltas marcados no segundo exato.
 import { tipoGoloLabel } from "./goalTypes";
 import { periodLabel } from "./matchFormat";
@@ -234,19 +234,34 @@ export function buildTimelineHtml(
   function pct2(sec: number, dur: number): string {
     return `${((Math.min(sec, dur) / dur) * 100).toFixed(2)}%`;
   }
+  /** "1ª Parte" -> "1ª", "Prolongamento 1" -> "Prol.1" — cabe no cabeçalho da tabela. */
+  function halfShortLabel(label: string): string {
+    if (label.endsWith(" Parte")) return label.replace(" Parte", "");
+    return label.replace("Prolongamento ", "Prol.");
+  }
   const ourLabel = matchInfo.ourLabel || "Nós";
 
-  const totalsByPid = new Map<string, { id: string; num: string; name: string; totalSec: number }>();
-  halves.forEach((half) => {
+  // Por parte, não só o total — dá pra ver de relance se o atleta jogou mais na
+  // 1ª ou na 2ª, sem abrir a barra de cada parte lá em cima (mesma quebra já
+  // usada no Resumo dentro do app).
+  const totalsByPid = new Map<string, { id: string; num: string; name: string; perHalf: number[]; totalSec: number }>();
+  halves.forEach((half, i) => {
     half.players.forEach((p) => {
-      const t = totalsByPid.get(p.id) || { id: p.id, num: p.num, name: p.name, totalSec: 0 };
+      const t = totalsByPid.get(p.id) || { id: p.id, num: p.num, name: p.name, perHalf: halves.map(() => 0), totalSec: 0 };
+      t.perHalf[i] = p.totalSec || 0;
       t.totalSec += p.totalSec || 0;
       totalsByPid.set(p.id, t);
     });
   });
   const totalsRows = [...totalsByPid.values()].sort((a, b) => b.totalSec - a.totalSec);
+  const totalsHeadHtml = halves.map((h, i) => `<th class="num" title="${esc(h.label)}">${esc(halfShortLabel(h.label))}</th>`).join("");
   const totalsHtml = totalsRows
-    .map((t) => `<tr><td>#${esc(t.num)} ${esc(t.name)}</td><td class="num">${Math.round(t.totalSec / 60)}'</td></tr>`)
+    .map(
+      (t) =>
+        `<tr><td>#${esc(t.num)} ${esc(t.name)}</td>` +
+        t.perHalf.map((sec) => `<td class="num">${Math.round(sec / 60)}'</td>`).join("") +
+        `<td class="num">${Math.round(t.totalSec / 60)}'</td></tr>`
+    )
     .join("");
 
   const halvesHtml = halves
@@ -360,7 +375,7 @@ export function buildTimelineHtml(
           return (
             `<div class="row"><div class="label"><span class="num">${esc(p.num)}</span><span class="nm">${esc(p.name)}</span></div>` +
             `<div class="track">${pauseBandsHtml}${bars}${marks}</div>` +
-            `<div class="mins" title="Minutos em campo nesta parte">${Math.round((p.totalSec || 0) / 60)}'</div></div>`
+            `<div class="mins" title="Minutos em quadra nesta parte">${Math.round((p.totalSec || 0) / 60)}'</div></div>`
           );
         })
         .join("");
@@ -476,12 +491,12 @@ export function buildTimelineHtml(
     (matchInfo.local ? `<div class="subinfo">${esc(matchInfo.local)}</div>` : "") +
     "</div>" +
     `<div class="card">${halvesHtml}` +
-    '<div class="legend"><div class="it"><span class="sw"></span>Em campo</div><div class="it">⚽ Golo marcado</div><div class="it">🟨/🟥 Cartão</div>' +
+    '<div class="legend"><div class="it"><span class="sw"></span>Em quadra</div><div class="it">⚽ Golo marcado</div><div class="it">🟨/🟥 Cartão</div>' +
     '<div class="it"><span class="mk-sample foul cometida">F</span>Falta cometida</div><div class="it"><span class="mk-sample foul sofrida">F</span>Falta sofrida</div>' +
     '<div class="it"><span class="sw pause"></span>Pedido de tempo</div><div class="it"><span class="ball-sample">⚽</span>Golo sofrido</div></div>' +
     "</div>" +
-    '<div class="card"><div class="half-title" style="margin-bottom:8px;"><h2>Minutos em campo (total do jogo)</h2></div>' +
-    '<div class="tablewrap"><table class="gtable"><thead><tr><th>Atleta</th><th class="num">Min</th></tr></thead>' +
+    '<div class="card"><div class="half-title" style="margin-bottom:8px;"><h2>Minutos em quadra (total do jogo)</h2></div>' +
+    `<div class="tablewrap"><table class="gtable"><thead><tr><th>Atleta</th>${totalsHeadHtml}<th class="num">Min</th></tr></thead>` +
     `<tbody>${totalsHtml}</tbody></table></div></div>` +
     '<div class="card"><div class="half-title" style="margin-bottom:8px;"><h2>Registo de golos</h2></div>' +
     '<div class="tablewrap"><table class="gtable"><thead><tr><th>Parte</th><th class="num">Tempo</th><th>Equipa</th><th>Marcador</th><th>Tipo</th><th class="num">Zona</th><th>Marcha</th></tr></thead>' +

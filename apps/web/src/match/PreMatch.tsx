@@ -63,7 +63,7 @@ export function PreMatch({ live, roster, opponent, onConfirm }: Props) {
 
       {state.onCourt.length < 5 && convocados.length > 0 && (
         <p className="hint">
-          Pode continuar sem os 5 completos — dá pra ajustar quem fica em campo até apitar o início, já na próxima tela.
+          Pode continuar sem os 5 completos — dá pra ajustar quem fica em quadra até apitar o início, já na próxima tela.
         </p>
       )}
       <button type="button" className="btn primary block" disabled={convocados.length === 0} onClick={onConfirm} style={{ marginTop: 8 }}>

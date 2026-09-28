@@ -371,7 +371,7 @@ export function LiveMatch({ live, roster, opponent, onViewSummary, ourLabel }: P
         )
       )}
 
-      <h3 className="section-title" style={{ marginTop: 16 }}>Em campo ({onCourt.length})</h3>
+      <h3 className="section-title" style={{ marginTop: 16 }}>Em quadra ({onCourt.length})</h3>
       <div className="pgrid">
         {onCourt.map((p) => (
           <button
@@ -390,7 +390,7 @@ export function LiveMatch({ live, roster, opponent, onViewSummary, ourLabel }: P
       </div>
 
       <h3 className="section-title" style={{ marginTop: 16 }}>Banco ({bench.length})</h3>
-      <p className="hint" style={{ marginTop: 0 }}>Toca para entrar em campo.</p>
+      <p className="hint" style={{ marginTop: 0 }}>Toca para entrar em quadra.</p>
       <div className="pgrid">
         {bench.map((p) => (
           <button
@@ -605,7 +605,7 @@ export function LiveMatch({ live, roster, opponent, onViewSummary, ourLabel }: P
           if (!p) return null;
           const inTreatment = state.treatment?.playerId === p.id;
           return (
-            <Sheet title={`#${p.num} ${p.name}`} sub="Em campo" onClose={() => setPicker(null)}>
+            <Sheet title={`#${p.num} ${p.name}`} sub="Em quadra" onClose={() => setPicker(null)}>
               <div className="actiongrid">
                 <button
                   type="button"
