@@ -106,4 +106,29 @@ describe("replayEvents", () => {
     // p1 ficou em quadra a parte toda, sem ser afetado por essa substituição.
     expect(playerCurrentSeconds(replayed, p1, 999_999)).toBeCloseTo(1500, 0);
   });
+
+  it("REGRESSÃO — duas substituições simultâneas (dobradinha num pedido de tempo) não perdem quem entrou", () => {
+    // Cenário real (jogo do Paços): com o quadro cheio (5), duas substituições no mesmo instante.
+    // O código verificava "onCourt.length < 5" ANTES de tirar quem saiu da primeira — como o
+    // quadro ainda estava "cheio" nesse instante, quem entrou na primeira substituição nunca era
+    // adicionado ao array onCourt (o clockAcc dele continuava certo, só o array é que "esquecia"
+    // dele). Se esse atleta nunca mais fosse substituído, ficava em quadra pro resto da parte sem
+    // nunca ser assentado no apito final — o tempo dele a partir dali sumia da contagem oficial.
+    const q1 = "athlete-q1", q2 = "athlete-q2", q3 = "athlete-q3", q4 = "athlete-q4", q5 = "athlete-q5";
+    const q6 = "athlete-q6", q7 = "athlete-q7";
+    const convocadosQ = [q1, q2, q3, q4, q5, q6, q7];
+    let live = createLiveMatchState(convocadosQ);
+    live = { ...live, onCourt: [q1, q2, q3, q4, q5] };
+    live = resumeOrStart(live, 0);
+
+    const subA = createEvent("substituicao", q6, 100_000, 1, Date.now(), { outId: q1 });
+    const subB = createEvent("substituicao", q7, 100_000, 1, Date.now() + 1, { outId: q2 });
+    live = { ...live, events: [...live.events, subA, subB] };
+    live = endPeriod(live, SUB15, 25 * 60_000);
+
+    const replayed = replayEvents(convocadosQ, live.events, SUB15);
+    // Ambos entraram aos 100s e ficaram até o fim da parte (1500s) — 1400s cada.
+    expect(playerCurrentSeconds(replayed, q6, 999_999)).toBeCloseTo(1500 - 100, 0);
+    expect(playerCurrentSeconds(replayed, q7, 999_999)).toBeCloseTo(1500 - 100, 0);
+  });
 });

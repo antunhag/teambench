@@ -70,8 +70,14 @@ export function replayEvents(convocadoIds: string[], events: MatchEvent[], forma
       case "substituicao": {
         if (ev.outId) clockAcc = settlePlayer(clockAcc, ev.outId, atMs);
         if (ev.playerId) clockAcc = markOnSince(clockAcc, ev.playerId, atMs);
-        if (ev.playerId && !onCourt.includes(ev.playerId) && onCourt.length < 5) onCourt = [...onCourt, ev.playerId];
+        // Sai ANTES de entrar: numa substituição normal (5 em quadra) o "onCourt.length < 5"
+        // só é verdade depois de abrir a vaga de quem saiu. Testar antes disso barrava
+        // silenciosamente quem entrava sempre que o quadro já estivesse cheio — o efeito
+        // no clockAcc (linhas acima) já tinha acontecido certo, mas esse atleta nunca mais
+        // aparecia no array `onCourt`, então nem era assentado pelo settleAll no fim da
+        // parte: o tempo dele desde essa substituição até o apito final sumia da contagem.
         if (ev.outId) onCourt = onCourt.filter((id) => id !== ev.outId);
+        if (ev.playerId && !onCourt.includes(ev.playerId) && onCourt.length < 5) onCourt = [...onCourt, ev.playerId];
         break;
       }
       case "pausa": {
