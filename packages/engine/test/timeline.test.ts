@@ -251,6 +251,19 @@ describe("buildTimelineHtml", () => {
     expect(html).toContain("print-color-adjust:exact");
   });
 
+  it("REGRESSÃO — cabeçalho das colunas numéricas centralizado igual à célula, não só à esquerda", () => {
+    // .gtable td.num já era text-align:center; th.num tinha ficado de fora da regra,
+    // então numa coluna larga (poucos dígitos, muito espaço sobrando) o título ficava
+    // bem deslocado do número embaixo dele.
+    const halves = buildTimelineData(
+      [createEvent("fim_periodo", null, 600_000, 1, 0, { duracaoSec: 600 })],
+      roster,
+      [salvador.id]
+    );
+    const html = buildTimelineHtml({ adversario: "Ordem" }, halves, 0, 0, byId);
+    expect(html).toContain(".gtable td.num,.gtable th.num{");
+  });
+
   it("marca falta cometida e sofrida com o F em negrito, cada uma com a sua classe", () => {
     const events: MatchEvent[] = [
       createEvent("falta", salvador.id, 100_000, 1, 0),

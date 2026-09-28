@@ -481,7 +481,7 @@ export function buildTimelineHtml(
     ".gtable{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:4px;}" +
     ".gtable th,.gtable td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--grid);}" +
     ".gtable th{color:var(--muted);font-weight:600;text-transform:uppercase;font-size:10px;letter-spacing:.04em;}" +
-    ".gtable td.num{font-variant-numeric:tabular-nums;text-align:center;}" +
+    ".gtable td.num,.gtable th.num{font-variant-numeric:tabular-nums;text-align:center;}" +
     ".gtable .side-nos{color:var(--good);font-weight:700;}.gtable .side-adv{color:var(--critical);font-weight:700;}" +
     ".tablewrap{overflow-x:auto;}.note{font-size:11.5px;color:var(--muted);line-height:1.5;margin-top:14px;}" +
     "@media (max-width:480px){:root{--label-w:96px;}.team{font-size:13px;}.score{font-size:26px;}}" +
