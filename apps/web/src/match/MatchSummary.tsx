@@ -74,6 +74,24 @@ export function MatchSummary({ live, roster, opponent, matchId, onClose, ourLabe
   const convocados = players.filter((p) => state.convocadoIds.includes(p.id));
   const rows = engine.buildRows({ convocados, titularIds: state.titularIds, events: state.events, clock: state.clockAcc, nowMs });
 
+  // Mesmos dados da timeline (já corrigidos pra usar o kickoff de cada parte,
+  // não só quem sobrou da parte anterior) — reaproveitados aqui pra abrir o
+  // "Min" total em minutos por parte, sem duplicar a lógica de quem esteve em
+  // quadra quando.
+  const halves = engine.buildTimelineData(state.events, players, state.titularIds);
+  const minsByPlayerHalf = new Map<string, number[]>();
+  halves.forEach((half, i) => {
+    half.players.forEach((p) => {
+      const arr = minsByPlayerHalf.get(p.id) || halves.map(() => 0);
+      arr[i] = Math.round((p.totalSec || 0) / 60);
+      minsByPlayerHalf.set(p.id, arr);
+    });
+  });
+  function halfShortLabel(label: string): string {
+    if (label.endsWith(" Parte")) return label.replace(" Parte", "");
+    return label.replace("Prolongamento ", "Prol.");
+  }
+
   const [copyMsg, setCopyMsg] = useState("");
   const [finishStatus, setFinishStatus] = useState<"idle" | "saving" | "done" | "error">("idle");
 
@@ -88,7 +106,6 @@ export function MatchSummary({ live, roster, opponent, matchId, onClose, ourLabe
   }
 
   function handleDownloadTimeline() {
-    const halves = engine.buildTimelineData(state.events, players, state.titularIds);
     const html = engine.buildTimelineHtml({ adversario: opponent, ourLabel }, halves, state.score.nos, state.score.advers, byId);
     const blob = new Blob([html], { type: "text/html;charset=utf-8" });
     const url = URL.createObjectURL(blob);
@@ -124,6 +141,9 @@ export function MatchSummary({ live, roster, opponent, matchId, onClose, ourLabe
               <th>Atleta</th>
               <th className="num">Conv.</th>
               <th className="num">Tit.</th>
+              {halves.map((h, i) => (
+                <th key={i} className="num" title={h.label}>{halfShortLabel(h.label)}</th>
+              ))}
               <th className="num">Min</th>
               <th className="num">G</th>
               <th className="num">A</th>
@@ -137,6 +157,9 @@ export function MatchSummary({ live, roster, opponent, matchId, onClose, ourLabe
                 <td>#{r.num} {r.nome}</td>
                 <td className="num">{r.convocado}</td>
                 <td className="num">{r.titular}</td>
+                {(minsByPlayerHalf.get(r.playerId) || halves.map(() => 0)).map((m, i) => (
+                  <td key={i} className="num">{m}</td>
+                ))}
                 <td className="num">{r.min}</td>
                 <td className="num">{r.golos}</td>
                 <td className="num">{r.assist}</td>
