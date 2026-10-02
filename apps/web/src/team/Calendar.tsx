@@ -9,6 +9,7 @@ interface Props {
   canTrackLive: boolean;
   onStartMatch: (matchId: string, opponent: string | null, formatId: string | null) => void;
   onCorrectMatch: (matchId: string, opponent: string | null) => void;
+  onPlanMatch: (matchId: string, opponent: string | null, formatId: string | null) => void;
 }
 
 const emptyForm: MatchFields = { matchDate: "", opponent: "", competition: null, location: null, kickoffTime: null, formatId: null };
@@ -77,7 +78,7 @@ function MatchForm({
   );
 }
 
-export function Calendar({ teamId, canManage, canTrackLive, onStartMatch, onCorrectMatch }: Props) {
+export function Calendar({ teamId, canManage, canTrackLive, onStartMatch, onCorrectMatch, onPlanMatch }: Props) {
   const { matches, status, errorMessage, createMatch, updateMatch, deleteMatch, bulkImport } = useMatches(teamId);
   const { formats } = useMatchFormats(teamId);
   const defaultFormat = formats.find((f) => f.isDefault) ?? null;
@@ -165,6 +166,9 @@ export function Calendar({ teamId, canManage, canTrackLive, onStartMatch, onCorr
                       )}{" "}
                       {canManage && (
                         <>
+                          <button type="button" className="btn sm ghost" onClick={() => onPlanMatch(m.id, m.opponent, m.formatId)}>
+                            Planear rotações
+                          </button>{" "}
                           <button type="button" className="btn sm ghost" onClick={() => setEditingMatch(m)}>Editar</button>{" "}
                           <button type="button" className="btn sm danger" onClick={() => confirm(`Apagar o jogo vs ${m.opponent}?`) && deleteMatch(m.id)}>
                             Apagar

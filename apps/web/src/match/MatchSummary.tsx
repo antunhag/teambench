@@ -4,12 +4,14 @@ import { supabase } from "../supabaseClient";
 import { posAbbr } from "../team/positions";
 import type { PlayerRow } from "../team/usePlayers";
 import type { useLiveMatch } from "./useLiveMatch";
+import { useRotationPlan } from "./useRotationPlan";
 
 interface Props {
   live: ReturnType<typeof useLiveMatch>;
   roster: PlayerRow[];
   opponent: string | null;
   matchId: string;
+  teamId: string;
   onClose: () => void;
   ourLabel: string;
 }
@@ -31,7 +33,7 @@ function mergeEvents(local: engine.MatchEvent[], remote: engine.MatchEvent[]): e
   return [...remote, ...localOnly];
 }
 
-export function MatchSummary({ live, roster, opponent, matchId, onClose, ourLabel }: Props) {
+export function MatchSummary({ live, roster, opponent, matchId, teamId, onClose, ourLabel }: Props) {
   const players = roster.map(toEnginePlayer);
   const byId = (id: string) => players.find((p) => p.id === id);
 
@@ -94,6 +96,13 @@ export function MatchSummary({ live, roster, opponent, matchId, onClose, ourLabe
     if (label.endsWith(" Parte")) return label.replace(" Parte", "");
     return label.replace("Prolongamento ", "Prol.");
   }
+
+  // Plano de rotação (se houver) — nunca escreve nada aqui, só compara o
+  // previsto (planeado antes do jogo) contra o real (já calculado acima a
+  // partir dos eventos). "Sem plano" é normal, não mostra nada extra.
+  const rotationPlan = useRotationPlan(teamId, matchId);
+  const plannedTotalByPlayer = engine.plannedSecondsByPlayer(rotationPlan.stints);
+  const hasRotationPlan = rotationPlan.stints.length > 0;
 
   const [copyMsg, setCopyMsg] = useState("");
   const [finishStatus, setFinishStatus] = useState<"idle" | "saving" | "done" | "error">("idle");
@@ -185,6 +194,43 @@ export function MatchSummary({ live, roster, opponent, matchId, onClose, ourLabe
       </div>
       {copyMsg && <p className="hint">{copyMsg}</p>}
       {finishStatus === "error" && <p className="banner error">Não consegui marcar como terminado — tente de novo.</p>}
+
+      {hasRotationPlan && (
+        <div style={{ marginTop: 16 }}>
+          <h3 className="section-title">Planeado vs. Real</h3>
+          <div className="tablewrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Atleta</th>
+                  <th className="num">Planeado</th>
+                  <th className="num">Real</th>
+                  <th className="num">Diferença</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r) => {
+                  const plannedSec = plannedTotalByPlayer[r.playerId] ?? 0;
+                  const realSec = (secsByPlayerHalf.get(r.playerId) || []).reduce((a, b) => a + b, 0);
+                  const diffSec = realSec - plannedSec;
+                  if (plannedSec === 0 && realSec === 0) return null;
+                  return (
+                    <tr key={r.playerId}>
+                      <td>#{r.num} {r.nome}</td>
+                      <td className="num">{engine.fmtMinSec(plannedSec * 1000)}</td>
+                      <td className="num">{engine.fmtMinSec(realSec * 1000)}</td>
+                      <td className="num">
+                        {diffSec > 0 ? "+" : diffSec < 0 ? "−" : ""}
+                        {engine.fmtMinSec(Math.abs(diffSec) * 1000)}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       <div style={{ marginTop: 16 }}>
         <h3 className="section-title">Registo cronológico ({state.events.length})</h3>

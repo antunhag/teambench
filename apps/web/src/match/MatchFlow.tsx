@@ -110,7 +110,15 @@ function MatchFlowEditor({
         </div>
       )}
       {showSummary ? (
-        <MatchSummary live={live} roster={activeRoster} opponent={opponent} matchId={matchId} onClose={() => setShowSummary(false)} ourLabel={ourLabel} />
+        <MatchSummary
+          live={live}
+          roster={activeRoster}
+          opponent={opponent}
+          matchId={matchId}
+          teamId={teamId}
+          onClose={() => setShowSummary(false)}
+          ourLabel={ourLabel}
+        />
       ) : showPreMatch ? (
         <PreMatch live={live} roster={activeRoster} opponent={opponent} onConfirm={() => setConfirmed(true)} />
       ) : (

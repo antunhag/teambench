@@ -2,6 +2,15 @@ import * as engine from "@teambench/engine";
 import { useEffect, useRef, useState } from "preact/hooks";
 import { enqueue, removeByClientEventIds } from "../sync/outbox";
 import { supabase } from "../supabaseClient";
+import { useRotationPlan } from "./useRotationPlan";
+
+const SUB_ALERT_LEAD_SEC = 60;
+
+export interface UpcomingSubAlert {
+  outId: string;
+  inId: string | null;
+  secondsLeft: number;
+}
 
 const STORAGE_PREFIX = "teambench.liveMatch.";
 
@@ -165,7 +174,27 @@ export function useLiveMatch(matchId: string, teamId: string, format: engine.Mat
   const elapsedMs = engine.matchElapsedMs(state, now());
   void tick; // usado só para disparar o re-render acima
 
+  // Plano de rotação é só leitura aqui — nunca grava nada, e some de vez
+  // (sem aviso nenhum) se o jogo não tiver plano. Nunca em modo manual
+  // (reconstrução/correção por vídeo): quem está ali não vai fazer uma
+  // substituição de verdade a partir de um aviso de "tempo acabando".
+  const rotationPlan = useRotationPlan(teamId, matchId);
+  let upcomingSubAlert: UpcomingSubAlert | null = null;
+  if (!manual && state.started && !state.finished && rotationPlan.stints.length > 0) {
+    const elapsedSec = elapsedMs / 1000;
+    for (const playerId of state.onCourt) {
+      const stint = engine.currentStintFor(rotationPlan.stints, playerId, state.period, elapsedSec);
+      if (!stint) continue;
+      const secondsLeft = stint.endSec - elapsedSec;
+      if (secondsLeft > 0 && secondsLeft <= SUB_ALERT_LEAD_SEC && (!upcomingSubAlert || secondsLeft < upcomingSubAlert.secondsLeft)) {
+        const next = engine.nextStintInSlot(rotationPlan.stints, stint.slotIndex, stint.period, stint.endSec);
+        upcomingSubAlert = { outId: playerId, inId: next?.playerId ?? null, secondsLeft };
+      }
+    }
+  }
+
   return {
+    upcomingSubAlert,
     state,
     elapsedMs,
     format,

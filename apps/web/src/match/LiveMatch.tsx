@@ -308,6 +308,33 @@ export function LiveMatch({ live, roster, opponent, onViewSummary, ourLabel }: P
         </div>
       )}
 
+      {live.upcomingSubAlert && (
+        <button
+          type="button"
+          className="banner warn"
+          style={{
+            marginTop: 12,
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            width: "100%",
+            textAlign: "left",
+            font: "inherit",
+            color: "inherit",
+            cursor: "pointer",
+          }}
+          onClick={() => setPicker({ kind: "sub-in", outId: live.upcomingSubAlert!.outId })}
+        >
+          <span>
+            ⏱️ <strong>{byId.get(live.upcomingSubAlert.outId)?.name}</strong> sai em breve
+            {live.upcomingSubAlert.inId && (
+              <> — entra <strong>{byId.get(live.upcomingSubAlert.inId)?.name}</strong></>
+            )}
+          </span>
+          <span className="num">{fmtMinSec(live.upcomingSubAlert.secondsLeft * 1000)}</span>
+        </button>
+      )}
+
       {state.finished && (
         <div className="banner success" style={{ textAlign: "center", marginTop: 12 }}>
           <strong>Jogo terminado</strong> — {ourLabel} {state.score.nos} – {state.score.advers} {opponent}

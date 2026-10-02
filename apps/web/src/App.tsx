@@ -5,6 +5,7 @@ import { Login } from "./auth/Login";
 import { isSupabaseConfigured, supabase } from "./supabaseClient";
 import { MatchEventEditor } from "./match/MatchEventEditor";
 import { MatchFlow } from "./match/MatchFlow";
+import { RotationPlanner } from "./match/RotationPlanner";
 import { Calendar } from "./team/Calendar";
 import { ClubSettings } from "./team/ClubSettings";
 import { CreateClub } from "./team/CreateClub";
@@ -159,11 +160,12 @@ function TeamApp({
 }) {
   const [activeMatch, setActiveMatch] = useState<{ id: string; opponent: string | null; formatId: string | null } | null>(null);
   const [correctionMatch, setCorrectionMatch] = useState<{ id: string; opponent: string | null } | null>(null);
+  const [planningMatch, setPlanningMatch] = useState<{ id: string; opponent: string | null; formatId: string | null } | null>(null);
   const canTrackLive = team.role === "team_admin" || team.role === "data_entry";
   const ourLabel = useClubLabel(team.teamId);
 
   return (
-    <div className={activeMatch || correctionMatch ? "page wide" : "page"}>
+    <div className={activeMatch || correctionMatch || planningMatch ? "page wide" : "page"}>
       {activeMatch ? (
         <MatchFlow
           teamId={team.teamId}
@@ -181,6 +183,14 @@ function TeamApp({
           onClose={() => setCorrectionMatch(null)}
           canDelete={team.role === "team_admin"}
           ourLabel={ourLabel}
+        />
+      ) : planningMatch ? (
+        <RotationPlanner
+          teamId={team.teamId}
+          matchId={planningMatch.id}
+          opponent={planningMatch.opponent}
+          formatId={planningMatch.formatId}
+          onClose={() => setPlanningMatch(null)}
         />
       ) : (
         <>
@@ -219,6 +229,7 @@ function TeamApp({
             canTrackLive={canTrackLive}
             onStartMatch={(id, opponent, formatId) => setActiveMatch({ id, opponent, formatId })}
             onCorrectMatch={(id, opponent) => setCorrectionMatch({ id, opponent })}
+            onPlanMatch={(id, opponent, formatId) => setPlanningMatch({ id, opponent, formatId })}
           />
           {team.role === "team_admin" && <TeamMembers teamId={team.teamId} />}
         </>
