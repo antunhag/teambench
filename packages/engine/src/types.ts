@@ -1,7 +1,7 @@
 // Tipos do motor de jogo — espelham o formato de dados do banco.html original
 // (AAL-NEW), para que a porta seja verificável 1:1 por testes de regressão.
 
-export type Position = "Guarda-Redes" | "Fixo" | "Ala" | "Pivô" | "Universal";
+export type Position = "Guarda-Redes" | "Fixo" | "Ala Esquerda" | "Ala Direita" | "Pivô" | "Universal";
 
 export interface Player {
   id: string;

@@ -3,14 +3,14 @@ import { createEvent } from "../src/events";
 import { describeEvent, describeEvents, exportText } from "../src/report";
 import type { MatchEvent, MatchRow, Player } from "../src/types";
 
-const salvador: Player = { id: "athlete-salvador", num: "30", name: "Salvador Silva Gonçalves", pos: "Ala" };
+const salvador: Player = { id: "athlete-salvador", num: "30", name: "Salvador Silva Gonçalves", pos: "Ala Esquerda" };
 const joao: Player = { id: "athlete-joao", num: "30", name: "João Magalhães", pos: "Pivô" };
 const roster = [salvador, joao];
 const byId = (id: string) => roster.find((p) => p.id === id);
 
-const p1: Player = { id: "p1", num: "1", name: "Um", pos: "Ala" };
-const p2: Player = { id: "p2", num: "2", name: "Dois", pos: "Ala" };
-const p3: Player = { id: "p3", num: "3", name: "Três", pos: "Ala" };
+const p1: Player = { id: "p1", num: "1", name: "Um", pos: "Ala Esquerda" };
+const p2: Player = { id: "p2", num: "2", name: "Dois", pos: "Ala Esquerda" };
+const p3: Player = { id: "p3", num: "3", name: "Três", pos: "Ala Esquerda" };
 const roster3 = [p1, p2, p3];
 const byId3 = (id: string) => roster3.find((p) => p.id === id);
 

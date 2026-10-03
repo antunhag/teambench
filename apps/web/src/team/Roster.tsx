@@ -1,7 +1,7 @@
 import * as engine from "@teambench/engine";
 import { useState } from "preact/hooks";
 import { toErrorMessage } from "../errorMessage";
-import { POSITIONS, posAbbr, type Position } from "./positions";
+import { isLegacyAla, LEGACY_ALA, POSITIONS, posAbbr, type Position } from "./positions";
 import { usePlayerAptitudes } from "./usePlayerAptitudes";
 import { usePlayers, type PlayerRow } from "./usePlayers";
 
@@ -54,6 +54,9 @@ function EditRow({
         </td>
         <td>
           <select value={position} onChange={(e) => setPosition((e.target as HTMLSelectElement).value as Position)}>
+            {isLegacyAla(p.position) && (
+              <option value={LEGACY_ALA} disabled>Ala (defina Esquerda ou Direita)</option>
+            )}
             {POSITIONS.map((pos) => (
               <option key={pos} value={pos}>{pos}</option>
             ))}
@@ -187,7 +190,12 @@ export function Roster({ teamId, canManage }: Props) {
                   <tr key={p.id}>
                     <td className="num">{p.num}</td>
                     <td>{p.name}</td>
-                    <td>{posAbbr(p.position)}</td>
+                    <td
+                      title={isLegacyAla(p.position) ? "Posição antiga \"Ala\" — defina Esquerda ou Direita." : undefined}
+                      style={isLegacyAla(p.position) ? { color: "#c0392b", fontWeight: 700 } : undefined}
+                    >
+                      {posAbbr(p.position)}
+                    </td>
                     <td className="hint">{(aptitudes.byPlayer[p.id] ?? []).join(" › ") || "—"}</td>
                     {canManage && (
                       <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>

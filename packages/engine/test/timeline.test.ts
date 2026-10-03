@@ -3,7 +3,7 @@ import { createEvent } from "../src/events";
 import { buildTimelineData, buildTimelineHtml } from "../src/timeline";
 import type { MatchEvent, Player } from "../src/types";
 
-const salvador: Player = { id: "athlete-salvador", num: "30", name: "Salvador Silva Gonçalves", pos: "Ala" };
+const salvador: Player = { id: "athlete-salvador", num: "30", name: "Salvador Silva Gonçalves", pos: "Ala Esquerda" };
 const joao: Player = { id: "athlete-joao", num: "30", name: "João Magalhães", pos: "Pivô" };
 const guarda: Player = { id: "athlete-gr", num: "1", name: "Rui Guarda", pos: "Guarda-Redes" };
 const suplente: Player = { id: "athlete-suplente", num: "8", name: "Suplente Um", pos: "Fixo" };

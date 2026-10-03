@@ -10,7 +10,7 @@ import type { MatchEvent, MatchRow, Player } from "../src/types";
 // forçava "adivinhar" a identidade por número ao reabrir um jogo antigo —
 // e quebrava exatamente neste cenário. Estes testes existem para nunca deixar
 // essa classe de bug voltar.
-const salvador: Player = { id: "athlete-salvador", num: "30", name: "Salvador Silva Gonçalves", pos: "Ala" };
+const salvador: Player = { id: "athlete-salvador", num: "30", name: "Salvador Silva Gonçalves", pos: "Ala Esquerda" };
 const joao: Player = { id: "athlete-joao", num: "30", name: "João Magalhães", pos: "Pivô" };
 const guarda: Player = { id: "athlete-gr", num: "1", name: "Rui Guarda", pos: "Guarda-Redes" };
 
