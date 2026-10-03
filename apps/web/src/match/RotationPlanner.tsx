@@ -289,9 +289,11 @@ export function RotationPlanner({ teamId, matchId, opponent, formatId, onClose }
               onClick={() => toggleIncluded(p.id)}
               title={gr ? "Guarda-redes fica fora da rotação — joga a parte inteira" : undefined}
             >
-              <span className="n">#{p.num}</span>
               <span className="nm">{p.name}</span>
-              <span className="pos">{posAbbr(p.pos)}</span>
+              <span className="corner-bl">
+                <span className="n">#{p.num}</span>
+                <span className="pos">{posAbbr(p.pos)}</span>
+              </span>
             </button>
           );
         })}

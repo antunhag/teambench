@@ -38,11 +38,17 @@ function parseMinSec(text: string): number | null {
   return (parseInt(m[1], 10) * 60 + parseInt(m[2], 10)) * 1000;
 }
 
+// `openedAtMs` nas 3 variantes de substituição: o tempo gravado no evento é
+// o do 1º toque que começou a troca (abrir "Quem sai?"/"Quem entra?", ou
+// tocar "Substituir" num atleta), nunca o do 2º toque que só termina de
+// escolher o outro lado — mesma lógica do golo (ver GoloFormState). Ao
+// encadear sub-out -> sub-in (linha ~775), o valor PASSA ADIANTE, não é
+// recapturado, pra manter o tempo do toque mais antigo da sequência.
 type Picker =
   | { kind: "player"; playerId: string } // toca num jogador EM CAMPO -> ações contextuais (cartão/falta/substituir/atendimento)
-  | { kind: "sub-out" } // atalho da barra: escolher primeiro quem sai
-  | { kind: "sub-in"; outId: string } // escolher quem entra, já sabendo quem sai
-  | { kind: "sub-out-for-entry"; inId: string } // banco cheio: escolher quem sai para este entrar
+  | { kind: "sub-out"; openedAtMs: number } // atalho da barra: escolher primeiro quem sai
+  | { kind: "sub-in"; outId: string; openedAtMs: number } // escolher quem entra, já sabendo quem sai
+  | { kind: "sub-out-for-entry"; inId: string; openedAtMs: number } // banco cheio: escolher quem sai para este entrar
   | null;
 
 /**
@@ -61,6 +67,8 @@ interface GoloFormState {
   zona: number | null;
   transicaoNumeros: string | null;
   balizaDeserta: boolean;
+  /** Capturado no 1º toque (ao abrir esta tela) — é o instante do golo de verdade, não o de quando o treinador termina de preencher marcador/tipo/zona/assistência alguns toques depois. Cancelar (fechar sem confirmar) descarta junto com o resto do form. */
+  openedAtMs: number;
 }
 
 export function LiveMatch({ live, roster, opponent, onViewSummary, ourLabel }: Props) {
@@ -77,6 +85,11 @@ export function LiveMatch({ live, roster, opponent, onViewSummary, ourLabel }: P
   const [picker, setPicker] = useState<Picker>(null);
   const [goloForm, setGoloForm] = useState<GoloFormState | null>(null);
   const [showTransicaoModal, setShowTransicaoModal] = useState(false);
+
+  /** Mesma lógica do `now()` interno de useLiveMatch.ts — precisa bater exatamente, pra `openedAtMs` significar a mesma coisa que doGoal/doOppGoal usariam se não recebessem o override. */
+  function nowMsForEvent(): number {
+    return live.manual ? live.manualElapsedMs : Date.now();
+  }
 
   function updateGoloForm(patch: Partial<GoloFormState>) {
     setGoloForm((f) => (f ? { ...f, ...patch } : f));
@@ -118,9 +131,17 @@ export function LiveMatch({ live, roster, opponent, onViewSummary, ourLabel }: P
     if (!goloForm) return;
     if (goloForm.side === "nos") {
       if (!goloForm.scorerId) return;
-      live.doGoal(goloForm.scorerId, goloForm.assistId, goloForm.tipo, goloForm.zona, goloForm.transicaoNumeros, goloForm.balizaDeserta);
+      live.doGoal(
+        goloForm.scorerId,
+        goloForm.assistId,
+        goloForm.tipo,
+        goloForm.zona,
+        goloForm.transicaoNumeros,
+        goloForm.balizaDeserta,
+        goloForm.openedAtMs
+      );
     } else {
-      live.doOppGoal(goloForm.tipo, goloForm.zona, goloForm.transicaoNumeros, goloForm.balizaDeserta);
+      live.doOppGoal(goloForm.tipo, goloForm.zona, goloForm.transicaoNumeros, goloForm.balizaDeserta, goloForm.openedAtMs);
     }
     setGoloForm(null);
   }
@@ -171,13 +192,35 @@ export function LiveMatch({ live, roster, opponent, onViewSummary, ourLabel }: P
   // é só a diferença — sem precisar de nenhum timer à parte.
   const pauseElapsedMs = state.activePause ? elapsedMs - state.activePause.startedAtMs : 0;
 
+  /**
+   * Intervalo entre partes (ex.: fim da 1ª pra início da 2ª — 10 min no
+   * futsal): tempo real decorrido desde o evento "fim_periodo" mais recente.
+   * Só faz sentido em jogo ao vivo de verdade — no modo manual/vídeo, `ts`
+   * do evento não é Date.now() de verdade (ver useLiveMatch.ts `now()`), e o
+   * treinador está controlando o tempo à mão mesmo, não vivendo o intervalo.
+   */
+  const lastPeriodEndEvent = [...state.events].reverse().find((e) => e.type === "fim_periodo") ?? null;
+  const inBreak = awaitingKickoff && !preKickoff && !live.manual && lastPeriodEndEvent != null;
+  const [, setBreakTick] = useState(0);
+  useEffect(() => {
+    if (!inBreak) return;
+    const id = setInterval(() => setBreakTick((t) => t + 1), 1000);
+    return () => clearInterval(id);
+  }, [inBreak, lastPeriodEndEvent?.id]);
+  const breakElapsedMs = inBreak && lastPeriodEndEvent ? Date.now() - lastPeriodEndEvent.ts : 0;
+
+  /** Golos do atleta na partida inteira — mesma contagem de MatchSummary/buildRows, só que direto dos eventos (sem montar Player[]/clock só pra isso). */
+  function goalsFor(playerId: string): number {
+    return state.events.filter((e) => e.type === "golo" && e.playerId === playerId).length;
+  }
+
   function handleBenchTap(p: PlayerRow) {
     if (preKickoff) {
       live.toggleTitular(p.id);
     } else if (state.onCourt.length < 5) {
       live.doEnter(p.id);
     } else {
-      setPicker({ kind: "sub-out-for-entry", inId: p.id });
+      setPicker({ kind: "sub-out-for-entry", inId: p.id, openedAtMs: nowMsForEvent() });
     }
   }
 
@@ -195,11 +238,20 @@ export function LiveMatch({ live, roster, opponent, onViewSummary, ourLabel }: P
             <div className="val">{state.score.nos}</div>
           </div>
           <div className="clock-mid">
-            <div className="lbl" style={{ fontSize: 10.5, opacity: 0.85 }}>
-              Parte {state.period}
-              {live.manual && state.started ? " 🎬" : ""}
-            </div>
-            <div className="time">{fmtMinSec(elapsedMs)}</div>
+            {inBreak ? (
+              <>
+                <div className="lbl" style={{ fontSize: 10.5, opacity: 0.85 }}>Intervalo (previsto 10 min)</div>
+                <div className="time">{fmtMinSec(breakElapsedMs)}</div>
+              </>
+            ) : (
+              <>
+                <div className="lbl" style={{ fontSize: 10.5, opacity: 0.85 }}>
+                  Parte {state.period}
+                  {live.manual && state.started ? " 🎬" : ""}
+                </div>
+                <div className="time">{fmtMinSec(elapsedMs)}</div>
+              </>
+            )}
             {awaitingKickoff && (
               <div style={{ display: "flex", flexDirection: "column", gap: 4, alignItems: "center" }}>
                 <button type="button" className="clock-btn" onClick={() => live.resumeOrStart()}>
@@ -244,7 +296,7 @@ export function LiveMatch({ live, roster, opponent, onViewSummary, ourLabel }: P
             type="button"
             className="btn sm ghost"
             onClick={() =>
-              setGoloForm({ side: "adv", scorerId: null, assistId: null, tipo: null, zona: null, transicaoNumeros: null, balizaDeserta: false })
+              setGoloForm({ side: "adv", scorerId: null, assistId: null, tipo: null, zona: null, transicaoNumeros: null, balizaDeserta: false, openedAtMs: nowMsForEvent() })
             }
           >
             🥅 +1 golo advers.
@@ -323,7 +375,7 @@ export function LiveMatch({ live, roster, opponent, onViewSummary, ourLabel }: P
             color: "inherit",
             cursor: "pointer",
           }}
-          onClick={() => setPicker({ kind: "sub-in", outId: live.upcomingSubAlert!.outId })}
+          onClick={() => setPicker({ kind: "sub-in", outId: live.upcomingSubAlert!.outId, openedAtMs: nowMsForEvent() })}
         >
           <span>
             ⏱️ <strong>{byId.get(live.upcomingSubAlert.outId)?.name}</strong> sai em breve
@@ -372,7 +424,7 @@ export function LiveMatch({ live, roster, opponent, onViewSummary, ourLabel }: P
                 type="button"
                 className="btn primary"
                 onClick={() =>
-                  setGoloForm({ side: "nos", scorerId: null, assistId: null, tipo: null, zona: null, transicaoNumeros: null, balizaDeserta: false })
+                  setGoloForm({ side: "nos", scorerId: null, assistId: null, tipo: null, zona: null, transicaoNumeros: null, balizaDeserta: false, openedAtMs: nowMsForEvent() })
                 }
               >
                 ⚽ Golo
@@ -386,7 +438,7 @@ export function LiveMatch({ live, roster, opponent, onViewSummary, ourLabel }: P
                   ⏱️ Pausa
                 </button>
               )}
-              <button type="button" className="btn" onClick={() => setPicker({ kind: "sub-out" })} disabled={bench.length === 0}>
+              <button type="button" className="btn" onClick={() => setPicker({ kind: "sub-out", openedAtMs: nowMsForEvent() })} disabled={bench.length === 0}>
                 🔁 Substituição
               </button>
             </div>
@@ -409,9 +461,12 @@ export function LiveMatch({ live, roster, opponent, onViewSummary, ourLabel }: P
             onClick={() => handleOnCourtTap(p)}
           >
             <span className="min">{Math.floor(live.playerSeconds(p.id) / 60)}'</span>
-            <span className="n">#{p.num}</span>
             <span className="nm">{p.name}</span>
-            <span className="pos">{posAbbr(p.position)}</span>
+            <span className="g" title="Golos">{goalsFor(p.id)}</span>
+            <span className="corner-bl">
+              <span className="n">#{p.num}</span>
+              <span className="pos">{posAbbr(p.position)}</span>
+            </span>
           </button>
         ))}
       </div>
@@ -428,8 +483,12 @@ export function LiveMatch({ live, roster, opponent, onViewSummary, ourLabel }: P
             onClick={() => handleBenchTap(p)}
           >
             <span className="min">{Math.floor(live.playerSeconds(p.id) / 60)}'</span>
-            <span className="n">#{p.num}</span>
             <span className="nm">{p.name}</span>
+            <span className="g" title="Golos">{goalsFor(p.id)}</span>
+            <span className="corner-bl">
+              <span className="n">#{p.num}</span>
+              <span className="pos">{posAbbr(p.position)}</span>
+            </span>
           </button>
         ))}
       </div>
@@ -674,7 +733,7 @@ export function LiveMatch({ live, roster, opponent, onViewSummary, ourLabel }: P
                 >
                   <span className="ic">🙌</span>Falta sofrida
                 </button>
-                <button type="button" className="abtn" onClick={() => setPicker({ kind: "sub-in", outId: p.id })}>
+                <button type="button" className="abtn" onClick={() => setPicker({ kind: "sub-in", outId: p.id, openedAtMs: nowMsForEvent() })}>
                   <span className="ic">🔁</span>Substituir (sai)
                 </button>
                 {!inTreatment ? (
@@ -711,7 +770,7 @@ export function LiveMatch({ live, roster, opponent, onViewSummary, ourLabel }: P
         <Sheet title="Quem sai?" sub="Atalho rápido — toca em quem vai sair" onClose={() => setPicker(null)}>
           <div className="pgrid">
             {onCourt.map((p) => (
-              <PlayerChip key={p.id} p={p} onClick={() => setPicker({ kind: "sub-in", outId: p.id })} />
+              <PlayerChip key={p.id} p={p} onClick={() => setPicker({ kind: "sub-in", outId: p.id, openedAtMs: picker.openedAtMs })} />
             ))}
           </div>
         </Sheet>
@@ -725,7 +784,7 @@ export function LiveMatch({ live, roster, opponent, onViewSummary, ourLabel }: P
                 key={p.id}
                 p={p}
                 onClick={() => {
-                  live.doSub(picker.outId, p.id);
+                  live.doSub(picker.outId, p.id, picker.openedAtMs);
                   setPicker(null);
                 }}
               />
@@ -742,7 +801,7 @@ export function LiveMatch({ live, roster, opponent, onViewSummary, ourLabel }: P
                 key={p.id}
                 p={p}
                 onClick={() => {
-                  live.doSub(p.id, picker.inId);
+                  live.doSub(p.id, picker.inId, picker.openedAtMs);
                   setPicker(null);
                 }}
               />

@@ -13,9 +13,11 @@ export function PlayerChip({ p, onClick, dim }: { p: PlayerRow; onClick: () => v
   const gk = isGoalkeeper(p.position);
   return (
     <button type="button" className={`pchip${gk ? " gr" : ""}${dim ? " dim" : ""}`} onClick={onClick}>
-      <span className="n">#{p.num}</span>
       <span className="nm">{p.name}</span>
-      <span className="pos">{posAbbr(p.position)}</span>
+      <span className="corner-bl">
+        <span className="n">#{p.num}</span>
+        <span className="pos">{posAbbr(p.position)}</span>
+      </span>
     </button>
   );
 }

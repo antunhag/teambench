@@ -217,6 +217,26 @@ describe("buildTimelineHtml", () => {
     expect(doc).not.toContain("2'");
   });
 
+  it("a tabela de 'Minutos em quadra' soma o total de golos por atleta, de todas as partes", () => {
+    const events: MatchEvent[] = [
+      createEvent("golo", salvador.id, 100_000, 1, 0, {}),
+      createEvent("golo", salvador.id, 200_000, 1, 0, {}),
+      createEvent("fim_periodo", null, 600_000, 1, 0, { duracaoSec: 600 }),
+      createEvent("golo", salvador.id, 50_000, 2, 0, {}),
+      createEvent("golo", joao.id, 100_000, 2, 0, {}),
+      createEvent("fim_periodo", null, 500_000, 2, 0, { duracaoSec: 500 }),
+    ];
+    const halves = buildTimelineData(events, roster, [salvador.id, joao.id]);
+    const html = buildTimelineHtml({ adversario: "Ordem" }, halves, 3, 0, byId);
+    const doc = html.match(/<h2>Minutos em quadra \(total do jogo\)<\/h2>[\s\S]*?<\/table>/)?.[0] ?? "";
+    expect(doc).toContain(">Golos<");
+    // Salvador: 2 golos na 1ª + 1 na 2ª = 3; João: 1 golo na 2ª.
+    const salvadorRow = doc.match(/<tr><td>#30 Salvador[^<]*<\/td>.*?<\/tr>/)?.[0] ?? "";
+    expect(salvadorRow).toMatch(/<td class="num">3<\/td><\/tr>$/);
+    const joaoRow = doc.match(/<tr><td>#30 João[^<]*<\/td>.*?<\/tr>/)?.[0] ?? "";
+    expect(joaoRow).toMatch(/<td class="num">1<\/td><\/tr>$/);
+  });
+
   it("a tabela de golos traz quem fez a assistência, não só o marcador", () => {
     const events: MatchEvent[] = [
       createEvent("golo", salvador.id, 100_000, 1, 0, { assistId: joao.id }),

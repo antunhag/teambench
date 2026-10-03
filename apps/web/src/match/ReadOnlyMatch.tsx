@@ -134,9 +134,11 @@ export function ReadOnlyMatch({ matchId, opponent, roster, format, ourLabel }: P
             {minutesRows.map(({ player, sec }) => (
               <div key={player.id} className={`pchip${isGoalkeeper(player.pos) ? " gr" : ""}`} style={{ cursor: "default" }}>
                 <span className="min">{Math.floor(sec / 60)}'</span>
-                <span className="n">#{player.num}</span>
                 <span className="nm">{player.name}</span>
-                <span className="pos">{posAbbr(player.pos)}</span>
+                <span className="corner-bl">
+                  <span className="n">#{player.num}</span>
+                  <span className="pos">{posAbbr(player.pos)}</span>
+                </span>
               </div>
             ))}
           </div>

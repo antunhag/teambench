@@ -246,13 +246,32 @@ export function buildTimelineHtml(
   // Por parte, não só o total — dá pra ver de relance se o atleta jogou mais na
   // 1ª ou na 2ª, sem abrir a barra de cada parte lá em cima (mesma quebra já
   // usada no Resumo dentro do app).
-  const totalsByPid = new Map<string, { id: string; num: string; name: string; perHalf: number[]; totalSec: number }>();
+  const totalsByPid = new Map<string, { id: string; num: string; name: string; perHalf: number[]; totalSec: number; golos: number }>();
   halves.forEach((half, i) => {
     half.players.forEach((p) => {
-      const t = totalsByPid.get(p.id) || { id: p.id, num: p.num, name: p.name, perHalf: halves.map(() => 0), totalSec: 0 };
+      const t = totalsByPid.get(p.id) || { id: p.id, num: p.num, name: p.name, perHalf: halves.map(() => 0), totalSec: 0, golos: 0 };
       t.perHalf[i] = p.totalSec || 0;
       t.totalSec += p.totalSec || 0;
       totalsByPid.set(p.id, t);
+    });
+    // Golos por atleta, somados de todas as partes — só existia o registo golo a
+    // golo (ver goalsRows mais abaixo); junta aqui pra dar o total por atleta
+    // de relance, igual à coluna "G" do Resumo dentro do app.
+    half.goals.forEach((g) => {
+      if (!g.scorerId) return;
+      const t = totalsByPid.get(g.scorerId);
+      if (t) t.golos += 1;
+      else {
+        const p = playerById(g.scorerId);
+        totalsByPid.set(g.scorerId, {
+          id: g.scorerId,
+          num: p?.num ?? "?",
+          name: p?.name ?? "?",
+          perHalf: halves.map(() => 0),
+          totalSec: 0,
+          golos: 1,
+        });
+      }
     });
   });
   const totalsRows = [...totalsByPid.values()].sort((a, b) => b.totalSec - a.totalSec);
@@ -266,7 +285,8 @@ export function buildTimelineHtml(
         // arredondamento é independente). Em mm:ss a soma bate sempre, porque é a
         // mesma contagem de segundos, só formatada.
         t.perHalf.map((sec) => `<td class="num">${fmtMinSec(sec * 1000)}</td>`).join("") +
-        `<td class="num">${fmtMinSec(t.totalSec * 1000)}</td></tr>`
+        `<td class="num">${fmtMinSec(t.totalSec * 1000)}</td>` +
+        `<td class="num">${t.golos}</td></tr>`
     )
     .join("");
 
@@ -504,7 +524,7 @@ export function buildTimelineHtml(
     '<div class="it"><span class="sw pause"></span>Pedido de tempo</div><div class="it"><span class="ball-sample">⚽</span>Golo sofrido</div></div>' +
     "</div>" +
     '<div class="card"><div class="half-title" style="margin-bottom:8px;"><h2>Minutos em quadra (total do jogo)</h2></div>' +
-    `<div class="tablewrap"><table class="gtable"><thead><tr><th>Atleta</th>${totalsHeadHtml}<th class="num">Total</th></tr></thead>` +
+    `<div class="tablewrap"><table class="gtable"><thead><tr><th>Atleta</th>${totalsHeadHtml}<th class="num">Total</th><th class="num">Golos</th></tr></thead>` +
     `<tbody>${totalsHtml}</tbody></table></div></div>` +
     '<div class="card"><div class="half-title" style="margin-bottom:8px;"><h2>Registo de golos</h2></div>' +
     '<div class="tablewrap"><table class="gtable"><thead><tr><th>Parte</th><th class="num">Tempo</th><th>Equipa</th><th>Marcador</th><th>Assist.</th><th>Tipo</th><th class="num">Zona</th><th>Marcha</th></tr></thead>' +

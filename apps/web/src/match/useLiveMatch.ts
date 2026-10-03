@@ -231,20 +231,34 @@ export function useLiveMatch(matchId: string, teamId: string, format: engine.Mat
       }),
     pause: (label: string, reasonId?: string) => apply((s) => engine.pause(s, now(), label, reasonId)),
     endPause: () => apply((s) => engine.endPause(s, now())),
+    // `atNowMs` deixa quem chama fixar o instante do golo no momento em que
+    // ABRIU a tela de registo (1º toque), não em que a fechou — preencher
+    // marcador/tipo/zona/assistência leva vários toques, e usar now() só no
+    // fim atrasaria o tempo gravado do golo pelo tanto que isso demorou.
+    // Sem o parâmetro, cai em now() como antes (demais ações, de um toque só).
     doGoal: (
       scorerId: string,
       assistId: string | null,
       tipo?: string | null,
       zona?: number | null,
       transicaoNumeros?: string | null,
-      transicaoBalizaDeserta?: boolean
-    ) => apply((s) => engine.doGoal(s, scorerId, assistId, now(), tipo, zona, transicaoNumeros, transicaoBalizaDeserta)),
-    doOppGoal: (tipo?: string | null, zona?: number | null, transicaoNumeros?: string | null, transicaoBalizaDeserta?: boolean) =>
-      apply((s) => engine.doOppGoal(s, now(), tipo, zona, transicaoNumeros, transicaoBalizaDeserta)),
+      transicaoBalizaDeserta?: boolean,
+      atNowMs?: number
+    ) => apply((s) => engine.doGoal(s, scorerId, assistId, atNowMs ?? now(), tipo, zona, transicaoNumeros, transicaoBalizaDeserta)),
+    doOppGoal: (
+      tipo?: string | null,
+      zona?: number | null,
+      transicaoNumeros?: string | null,
+      transicaoBalizaDeserta?: boolean,
+      atNowMs?: number
+    ) => apply((s) => engine.doOppGoal(s, atNowMs ?? now(), tipo, zona, transicaoNumeros, transicaoBalizaDeserta)),
     doCard: (playerId: string, kind: "amarelo" | "vermelho") => apply((s) => engine.doCard(s, playerId, kind, now())),
     doFoul: (playerId: string) => apply((s) => engine.doFoul(s, playerId, now())),
     doFoulSuffered: (playerId: string) => apply((s) => engine.doFoulSuffered(s, playerId, now())),
-    doSub: (outId: string, inId: string) => apply((s) => engine.doSub(s, outId, inId, now())),
+    // `atNowMs` opcional, mesmo motivo do doGoal/doOppGoal acima: a troca é
+    // escolhida em 2 toques (quem sai, quem entra) — o tempo gravado é o do
+    // 1º toque da sequência, não o do 2º que só termina de decidir.
+    doSub: (outId: string, inId: string, atNowMs?: number) => apply((s) => engine.doSub(s, outId, inId, atNowMs ?? now())),
     doEnter: (inId: string) => apply((s) => engine.doEnter(s, inId, now())),
     startTreatment: (playerId: string) => apply((s) => engine.startTreatment(s, playerId, now())),
     endTreatment: () => apply((s) => engine.endTreatment(s, now())),

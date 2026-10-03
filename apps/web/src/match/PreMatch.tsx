@@ -29,9 +29,11 @@ export function PreMatch({ live, roster, opponent, onConfirm }: Props) {
               className={`pchip checkbox-chip${checked ? " checked" : ""}${gk ? " gr" : ""}`}
               onClick={() => live.toggleConvocado(p.id)}
             >
-              <span className="n">#{p.num}</span>
               <span className="nm">{p.name}</span>
-              <span className="pos">{posAbbr(p.position)}</span>
+              <span className="corner-bl">
+                <span className="n">#{p.num}</span>
+                <span className="pos">{posAbbr(p.position)}</span>
+              </span>
             </button>
           );
         })}
@@ -52,9 +54,11 @@ export function PreMatch({ live, roster, opponent, onConfirm }: Props) {
                 className={`pchip${selected ? " selected" : ""}${gk ? " gr" : ""}`}
                 onClick={() => live.toggleTitular(p.id)}
               >
-                <span className="n">#{p.num}</span>
                 <span className="nm">{p.name}</span>
-                <span className="pos">{posAbbr(p.position)}</span>
+                <span className="corner-bl">
+                  <span className="n">#{p.num}</span>
+                  <span className="pos">{posAbbr(p.position)}</span>
+                </span>
               </button>
             );
           })}
