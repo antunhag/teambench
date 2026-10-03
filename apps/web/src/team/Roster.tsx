@@ -1,6 +1,8 @@
+import * as engine from "@teambench/engine";
 import { useState } from "preact/hooks";
 import { toErrorMessage } from "../errorMessage";
 import { POSITIONS, posAbbr, type Position } from "./positions";
+import { usePlayerAptitudes } from "./usePlayerAptitudes";
 import { usePlayers, type PlayerRow } from "./usePlayers";
 
 interface Props {
@@ -8,37 +10,90 @@ interface Props {
   canManage: boolean; // só team_admin gerencia o plantel
 }
 
-function EditRow({ p, onSave, onCancel }: { p: PlayerRow; onSave: (fields: { num: string; name: string; position: Position }) => void; onCancel: () => void }) {
+/** Vagas que faltam preencher nos outros 3 selects deste atleta — evita que a UI deixe escolher a mesma vaga duas vezes. */
+function aptitudeOptions(current: engine.RotationSlotType[], index: number): engine.RotationSlotType[] {
+  const usedElsewhere = new Set(current.filter((_, i) => i !== index));
+  return engine.ROTATION_SLOT_TYPES.filter((s) => !usedElsewhere.has(s));
+}
+
+function EditRow({
+  p,
+  aptitude,
+  columnCount,
+  onSave,
+  onCancel,
+}: {
+  p: PlayerRow;
+  aptitude: engine.RotationSlotType[];
+  columnCount: number;
+  onSave: (fields: { num: string; name: string; position: Position }, aptitude: engine.RotationSlotType[]) => void;
+  onCancel: () => void;
+}) {
   const [num, setNum] = useState(p.num ?? "");
   const [name, setName] = useState(p.name);
   const [position, setPosition] = useState<Position>(p.position ?? "Universal");
+  const [slots, setSlots] = useState<engine.RotationSlotType[]>(aptitude);
+
+  function changeSlot(index: number, value: engine.RotationSlotType | "") {
+    setSlots((prev) => {
+      const next = [...prev];
+      if (value === "") next.splice(index, 1);
+      else next[index] = value;
+      return next;
+    });
+  }
+
   return (
-    <tr>
-      <td>
-        <input value={num} onInput={(e) => setNum((e.target as HTMLInputElement).value)} style={{ width: 50 }} />
-      </td>
-      <td>
-        <input value={name} onInput={(e) => setName((e.target as HTMLInputElement).value)} style={{ width: 160 }} />
-      </td>
-      <td>
-        <select value={position} onChange={(e) => setPosition((e.target as HTMLSelectElement).value as Position)}>
-          {POSITIONS.map((pos) => (
-            <option key={pos} value={pos}>{pos}</option>
-          ))}
-        </select>
-      </td>
-      <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
-        <button type="button" className="btn sm primary" onClick={() => onSave({ num, name, position })}>Salvar</button>{" "}
-        <button type="button" className="btn sm ghost" onClick={onCancel}>Cancelar</button>
-      </td>
-    </tr>
+    <>
+      <tr>
+        <td>
+          <input value={num} onInput={(e) => setNum((e.target as HTMLInputElement).value)} style={{ width: 50 }} />
+        </td>
+        <td>
+          <input value={name} onInput={(e) => setName((e.target as HTMLInputElement).value)} style={{ width: 160 }} />
+        </td>
+        <td>
+          <select value={position} onChange={(e) => setPosition((e.target as HTMLSelectElement).value as Position)}>
+            {POSITIONS.map((pos) => (
+              <option key={pos} value={pos}>{pos}</option>
+            ))}
+          </select>
+        </td>
+        <td />
+        <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+          <button type="button" className="btn sm primary" onClick={() => onSave({ num, name, position }, slots)}>Salvar</button>{" "}
+          <button type="button" className="btn sm ghost" onClick={onCancel}>Cancelar</button>
+        </td>
+      </tr>
+      <tr>
+        <td colSpan={columnCount} style={{ paddingTop: 0 }}>
+          <div className="hint" style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+            <span>Aptidões (vagas de rotação, em ordem):</span>
+            {[0, 1, 2, 3].map((i) => (
+              <select
+                key={i}
+                value={slots[i] ?? ""}
+                onChange={(e) => changeSlot(i, e.currentTarget.value as engine.RotationSlotType | "")}
+              >
+                <option value="">—</option>
+                {aptitudeOptions(slots, i).map((opt) => (
+                  <option key={opt} value={opt}>{opt}</option>
+                ))}
+              </select>
+            ))}
+          </div>
+        </td>
+      </tr>
+    </>
   );
 }
 
 export function Roster({ teamId, canManage }: Props) {
   const { players, status, errorMessage, addPlayer, updatePlayer, deactivatePlayer, reactivatePlayer, bulkImport } = usePlayers(teamId);
+  const aptitudes = usePlayerAptitudes(teamId);
   const active = players.filter((p) => p.active);
   const inactive = players.filter((p) => !p.active);
+  const columnCount = canManage ? 5 : 4; // Nº, Nome, Posição, Aptidões, (Ações)
 
   const [num, setNum] = useState("");
   const [name, setName] = useState("");
@@ -47,6 +102,7 @@ export function Roster({ teamId, canManage }: Props) {
   const [addError, setAddError] = useState("");
 
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [aptitudeError, setAptitudeError] = useState("");
   const [showInactive, setShowInactive] = useState(false);
 
   const [importText, setImportText] = useState("");
@@ -103,6 +159,7 @@ export function Roster({ teamId, canManage }: Props) {
                 <th className="num">Nº</th>
                 <th>Nome</th>
                 <th>Posição</th>
+                <th>Aptidões</th>
                 {canManage && <th />}
               </tr>
             </thead>
@@ -112,9 +169,17 @@ export function Roster({ teamId, canManage }: Props) {
                   <EditRow
                     key={p.id}
                     p={p}
+                    aptitude={aptitudes.byPlayer[p.id] ?? []}
+                    columnCount={columnCount}
                     onCancel={() => setEditingId(null)}
-                    onSave={async (fields) => {
+                    onSave={async (fields, slots) => {
                       await updatePlayer(p.id, fields);
+                      try {
+                        await aptitudes.saveAptitudes(p.id, slots);
+                        setAptitudeError("");
+                      } catch (err) {
+                        setAptitudeError(toErrorMessage(err));
+                      }
                       setEditingId(null);
                     }}
                   />
@@ -123,6 +188,7 @@ export function Roster({ teamId, canManage }: Props) {
                     <td className="num">{p.num}</td>
                     <td>{p.name}</td>
                     <td>{posAbbr(p.position)}</td>
+                    <td className="hint">{(aptitudes.byPlayer[p.id] ?? []).join(" › ") || "—"}</td>
                     {canManage && (
                       <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
                         <button type="button" className="btn sm ghost" onClick={() => setEditingId(p.id)}>Editar</button>{" "}
@@ -136,6 +202,7 @@ export function Roster({ teamId, canManage }: Props) {
           </table>
         </div>
       )}
+      {aptitudeError && <p className="banner error" style={{ marginTop: 8 }}>Não consegui guardar a aptidão — {aptitudeError}</p>}
 
       {canManage && inactive.length > 0 && (
         <div style={{ marginTop: 12 }}>

@@ -3,7 +3,13 @@
 // (sempre event-sourced, olhando para o que já aconteceu), isto é um plano
 // hipotético pré-jogo: nunca lê nem escreve em MatchEvent, e vive numa
 // tabela própria no Supabase — nunca em match_events.
-import type { MatchFormat, Player } from "./types";
+//
+// O plano é montado À MÃO pelo treinador, turno a turno — não há geração
+// automática aqui (já existiu uma versão com divisão igual automática;
+// o pedido foi tirar isso e deixar o treinador montar o plano ele mesmo,
+// jogo a jogo). O que resta neste módulo são só os blocos que qualquer
+// forma de montar o plano precisa: validar que dois turnos da mesma vaga
+// não se sobrepõem, e agregar os segundos previstos por atleta.
 
 export interface RotationStint {
   playerId: string;
@@ -14,54 +20,73 @@ export interface RotationStint {
   endSec: number;
 }
 
-// Uma vaga por posição distinta entre os de linha (nunca mistura Ala com
-// Pivô na mesma vaga) — não assume uma formação fixa (ex.: não sabe que
-// "Ala" normalmente tem duas vagas em quadra simultâneas; se houver 3 Alas
-// convocados, os 3 revezam numa vaga só). É só um ponto de partida: o
-// treinador ajusta os instantes de troca depois; se quiser outro
-// agrupamento, regenera o plano com outra convocação. Como só há 4 posições
-// de linha possíveis, nunca passa de 4 vagas.
-const POSITION_ORDER = ["Fixo", "Ala", "Pivô", "Universal"];
+// 4 vagas FIXAS de linha, sempre nesta ordem — slotIndex é o índice neste
+// array (0=Fixo, 1=Ala Esquerda, 2=Ala Direita, 3=Pivô). Combina com a
+// formação real do futsal (1 Fixo + 2 Alas + 1 Pivô em quadra ao mesmo
+// tempo) — ao contrário de agrupar por uma única posição do plantel, as duas
+// Alas são vagas diferentes e simultâneas (o atleta joga do lado oposto ao
+// pé dominante, pra poder cortar pra dentro e rematar). Guarda-redes nem dá
+// pra representar aqui — o próprio tipo já impede, sem precisar filtrar.
+export type RotationSlotType = "Fixo" | "Ala Esquerda" | "Ala Direita" | "Pivô";
+export const ROTATION_SLOT_TYPES: readonly RotationSlotType[] = ["Fixo", "Ala Esquerda", "Ala Direita", "Pivô"];
 
-function groupIntoSlots(outfield: Player[]): Player[][] {
-  const byPosition = new Map<string, Player[]>();
-  outfield.forEach((p) => {
-    const arr = byPosition.get(p.pos) ?? [];
-    arr.push(p);
-    byPosition.set(p.pos, arr);
-  });
-  return POSITION_ORDER.map((pos) => byPosition.get(pos) ?? []).filter((group) => group.length > 0);
+/** Posições que um atleta sabe jogar, em ordem de prioridade (0 a 4 itens) — dado do atleta, não do jogo. */
+export interface PlayerAptitude {
+  playerId: string;
+  slots: RotationSlotType[];
 }
 
 /**
- * Gera o ponto de partida do plano: exclui guarda-redes (assume-se que jogam
- * a parte inteira, sem troca prevista), agrupa o resto em até 4 vagas, e
- * divide cada parte regular em fatias iguais e contíguas por vaga — os
- * limites de cada fatia são calculados independentemente a partir do índice
- * (nunca somando a fatia anterior), então nunca sobra nem falta um segundo
- * entre duas fatias vizinhas, mesmo quando a divisão não é exata (ex.: 3
- * atletas numa parte de 1500s → 500/500/500; com 1501s → 500/500/501, sem
- * criar um buraco de 1s em lugar nenhum). Não preenche prolongamento
- * automaticamente — fica para o treinador decidir se/como ajustar depois.
+ * Verdadeiro se um turno de `startSec` a `endSec` nessa vaga/parte bateria
+ * com algum turno já existente — usado antes de aceitar um turno novo
+ * montado à mão, pra nunca deixar dois atletas sobrepostos na mesma vaga.
+ * `ignoreStintId` exclui o próprio turno da checagem ao editar um já
+ * existente (comparando por referência, já que `RotationStint` não tem id
+ * próprio — quem chama passa o objeto que está editando).
  */
-export function generateRotationPlan(players: Player[], format: MatchFormat): RotationStint[] {
-  const outfield = players.filter((p) => p.pos !== "Guarda-Redes");
-  const slots = groupIntoSlots(outfield);
-  const stints: RotationStint[] = [];
+export function stintsOverlap(
+  stints: RotationStint[],
+  slotIndex: number,
+  period: number,
+  startSec: number,
+  endSec: number,
+  ignoreStint?: RotationStint
+): boolean {
+  return stints.some(
+    (s) =>
+      s !== ignoreStint &&
+      s.slotIndex === slotIndex &&
+      s.period === period &&
+      startSec < s.endSec &&
+      endSec > s.startSec
+  );
+}
 
-  for (let period = 1; period <= format.periodCount; period++) {
-    const durSec = format.periodMinutes * 60;
-    slots.forEach((slotPlayers, slotIndex) => {
-      const n = slotPlayers.length;
-      if (n === 0) return;
-      slotPlayers.forEach((p, i) => {
-        const startSec = Math.round((i * durSec) / n);
-        const endSec = Math.round(((i + 1) * durSec) / n);
-        if (endSec > startSec) stints.push({ playerId: p.id, slotIndex, period, startSec, endSec });
-      });
-    });
-  }
-  return stints;
+/**
+ * O turno de OUTRA vaga que bateria com um turno de `startSec` a `endSec`
+ * pra esse atleta nessa parte, se houver — um atleta não pode estar em duas
+ * vagas ao mesmo tempo em quadra (ex.: Ala Direita e Pivô simultaneamente).
+ * Turnos do atleta NA MESMA vaga (`slotIndex`) não contam — ele pode voltar
+ * pra mesma vaga mais tarde na parte, isso não é um conflito.
+ */
+export function playerOverlapsOtherSlot(
+  stints: RotationStint[],
+  playerId: string,
+  period: number,
+  slotIndex: number,
+  startSec: number,
+  endSec: number
+): RotationStint | null {
+  return (
+    stints.find(
+      (s) =>
+        s.playerId === playerId &&
+        s.period === period &&
+        s.slotIndex !== slotIndex &&
+        startSec < s.endSec &&
+        endSec > s.startSec
+    ) ?? null
+  );
 }
 
 /** O turno que um atleta deveria estar cumprindo num instante `atSec` da parte, se houver. */
