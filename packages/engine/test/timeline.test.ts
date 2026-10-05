@@ -360,4 +360,34 @@ describe("buildTimelineHtml", () => {
     expect(html).toContain("pause-band");
     expect(html).toContain("Pedido de Tempo — AAL");
   });
+
+  it("sem plano de rotação (parâmetro omitido), não mostra a secção 'Planeado vs. Real'", () => {
+    const events: MatchEvent[] = [createEvent("fim_periodo", null, 600_000, 1, 0, { duracaoSec: 600 })];
+    const halves = buildTimelineData(events, roster, [salvador.id]);
+    const html = buildTimelineHtml({ adversario: "Ordem" }, halves, 0, 0, byId);
+    expect(html).not.toContain("Planeado vs. Real");
+  });
+
+  it("com plano de rotação, mostra 'Planeado vs. Real' por atleta — mas nunca para o guarda-redes", () => {
+    const events: MatchEvent[] = [
+      createEvent("substituicao", joao.id, 300_000, 1, 0, { outId: salvador.id }),
+      createEvent("fim_periodo", null, 600_000, 1, 0, { duracaoSec: 600 }),
+    ];
+    // Titulares incluem o guarda-redes (joga o jogo inteiro, como sempre) — a
+    // tabela "Planeado vs. Real" só existe pra comparar as 4 vagas de linha
+    // (ver ROTATION_SLOT_TYPES), então ele nunca deve aparecer aqui, mesmo
+    // tendo "real" diferente de zero.
+    const halves = buildTimelineData(events, roster, [salvador.id, guarda.id]);
+    const plannedTotalByPlayer = { [salvador.id]: 400, [joao.id]: 200 };
+    const html = buildTimelineHtml({ adversario: "Ordem" }, halves, 0, 0, byId, plannedTotalByPlayer);
+
+    expect(html).toContain("Planeado vs. Real");
+    const doc = html.match(/<h2>Planeado vs\. Real<\/h2>[\s\S]*?<\/table>/)?.[0] ?? "";
+    expect(doc).toContain("Salvador Silva Gonçalves");
+    // Salvador: planeado 400s (06:40), real 300s (05:00) — diferença −01:40.
+    expect(doc).toContain("06:40");
+    expect(doc).toContain("05:00");
+    expect(doc).toContain("−01:40");
+    expect(doc).not.toContain("Rui Guarda");
+  });
 });

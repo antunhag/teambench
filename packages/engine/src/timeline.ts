@@ -235,7 +235,9 @@ export function buildTimelineHtml(
   halves: TimelineHalf[],
   scoreNos: number,
   scoreAdv: number,
-  playerById: (id: string) => Player | undefined
+  playerById: (id: string) => Player | undefined,
+  /** Total de segundos previstos por atleta (plannedSecondsByPlayer dos stints do plano de rotação) — opcional, só existe quando o jogo teve um plano montado em "Planear rotações". */
+  plannedTotalByPlayer: Record<string, number> = {}
 ): string {
   function pct2(sec: number, dur: number): string {
     return `${((Math.min(sec, dur) / dur) * 100).toFixed(2)}%`;
@@ -279,6 +281,37 @@ export function buildTimelineHtml(
     });
   });
   const totalsRows = [...totalsByPid.values()].sort((a, b) => b.totalSec - a.totalSec);
+
+  // Guarda-redes nunca entra no plano de rotação (só as 4 vagas de linha —
+  // ver ROTATION_SLOT_TYPES) — "planeado: 0" pra ele não é "sem plano ainda",
+  // é categoricamente fora do que esta comparação mede, por isso fica fora
+  // mesmo quando jogou o jogo inteiro (ver mesma exclusão no Resumo do app).
+  // Sem NENHUM plano pra este jogo (nunca se montou "Planear rotações"), a secção
+  // inteira fica fora — não só por atleta: sem isto, todo mundo aparecia com
+  // "Planeado: 00:00" e uma diferença sem sentido, o mesmo problema que motivou
+  // excluir o guarda-redes, só que pra todos (ver mesmo gate hasRotationPlan no Resumo do app).
+  const hasPlan = Object.keys(plannedTotalByPlayer).length > 0;
+  const plannedVsRealIds = hasPlan ? new Set([...Object.keys(plannedTotalByPlayer), ...totalsByPid.keys()]) : new Set<string>();
+  const plannedVsRealRows = [...plannedVsRealIds]
+    .filter((id) => playerById(id)?.pos !== "Guarda-Redes")
+    .map((id) => {
+      const p = playerById(id);
+      const t = totalsByPid.get(id);
+      const plannedSec = plannedTotalByPlayer[id] ?? 0;
+      const realSec = t?.totalSec ?? 0;
+      return { num: p?.num ?? t?.num ?? "?", name: p?.name ?? t?.name ?? "?", plannedSec, realSec, diffSec: realSec - plannedSec };
+    })
+    .filter((r) => r.plannedSec !== 0 || r.realSec !== 0)
+    .sort((a, b) => b.realSec - a.realSec);
+  const plannedVsRealHtml = plannedVsRealRows
+    .map(
+      (r) =>
+        `<tr><td>#${esc(r.num)} ${esc(r.name)}</td>` +
+        `<td class="num">${fmtMinSec(r.plannedSec * 1000)}</td>` +
+        `<td class="num">${fmtMinSec(r.realSec * 1000)}</td>` +
+        `<td class="num">${r.diffSec > 0 ? "+" : r.diffSec < 0 ? "−" : ""}${fmtMinSec(Math.abs(r.diffSec) * 1000)}</td></tr>`
+    )
+    .join("");
   const totalsHeadHtml = halves.map((h, i) => `<th class="num" title="${esc(h.label)}">${esc(halfShortLabel(h.label))}</th>`).join("");
   const totalsHtml = totalsRows
     .map(
@@ -533,6 +566,11 @@ export function buildTimelineHtml(
     '<div class="card"><div class="half-title" style="margin-bottom:8px;"><h2>Minutos em quadra (total do jogo)</h2></div>' +
     `<div class="tablewrap"><table class="gtable"><thead><tr><th>Atleta</th>${totalsHeadHtml}<th class="num">Total</th><th class="num">Golos</th></tr></thead>` +
     `<tbody>${totalsHtml}</tbody></table></div></div>` +
+    (plannedVsRealRows.length > 0
+      ? '<div class="card"><div class="half-title" style="margin-bottom:8px;"><h2>Planeado vs. Real</h2></div>' +
+        '<div class="tablewrap"><table class="gtable"><thead><tr><th>Atleta</th><th class="num">Planeado</th><th class="num">Real</th><th class="num">Diferença</th></tr></thead>' +
+        `<tbody>${plannedVsRealHtml}</tbody></table></div></div>`
+      : "") +
     '<div class="card"><div class="half-title" style="margin-bottom:8px;"><h2>Registo de golos</h2></div>' +
     '<div class="tablewrap"><table class="gtable"><thead><tr><th>Parte</th><th class="num">Tempo</th><th>Equipa</th><th>Marcador</th><th>Assist.</th><th>Tipo</th><th class="num">Zona</th><th>Marcha</th></tr></thead>' +
     `<tbody>${goalsRows}</tbody></table></div></div>` +

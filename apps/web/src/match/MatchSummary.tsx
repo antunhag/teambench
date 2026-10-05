@@ -118,7 +118,7 @@ export function MatchSummary({ live, roster, opponent, matchId, teamId, onClose,
   }
 
   function handleDownloadTimeline() {
-    const html = engine.buildTimelineHtml({ adversario: opponent, ourLabel }, halves, state.score.nos, state.score.advers, byId);
+    const html = engine.buildTimelineHtml({ adversario: opponent, ourLabel }, halves, state.score.nos, state.score.advers, byId, plannedTotalByPlayer);
     const blob = new Blob([html], { type: "text/html;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -228,23 +228,28 @@ export function MatchSummary({ live, roster, opponent, matchId, teamId, onClose,
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r) => {
-                  const plannedSec = plannedTotalByPlayer[r.playerId] ?? 0;
-                  const realSec = (secsByPlayerHalf.get(r.playerId) || []).reduce((a, b) => a + b, 0);
-                  const diffSec = realSec - plannedSec;
-                  if (plannedSec === 0 && realSec === 0) return null;
-                  return (
-                    <tr key={r.playerId}>
-                      <td>#{r.num} {r.nome}</td>
-                      <td className="num">{engine.fmtMinSec(plannedSec * 1000)}</td>
-                      <td className="num">{engine.fmtMinSec(realSec * 1000)}</td>
-                      <td className="num">
-                        {diffSec > 0 ? "+" : diffSec < 0 ? "−" : ""}
-                        {engine.fmtMinSec(Math.abs(diffSec) * 1000)}
-                      </td>
-                    </tr>
-                  );
-                })}
+                {rows
+                  // Guarda-redes nunca entra no plano de rotação (as 4 vagas são só de linha —
+                  // ver ROTATION_SLOT_TYPES) — mostrar "planeado: 0" pra ele aqui não é "sem
+                  // plano ainda", é categoricamente fora do que esta tabela compara.
+                  .filter((r) => players.find((p) => p.id === r.playerId)?.pos !== "Guarda-Redes")
+                  .map((r) => {
+                    const plannedSec = plannedTotalByPlayer[r.playerId] ?? 0;
+                    const realSec = (secsByPlayerHalf.get(r.playerId) || []).reduce((a, b) => a + b, 0);
+                    const diffSec = realSec - plannedSec;
+                    if (plannedSec === 0 && realSec === 0) return null;
+                    return (
+                      <tr key={r.playerId}>
+                        <td>#{r.num} {r.nome}</td>
+                        <td className="num">{engine.fmtMinSec(plannedSec * 1000)}</td>
+                        <td className="num">{engine.fmtMinSec(realSec * 1000)}</td>
+                        <td className="num">
+                          {diffSec > 0 ? "+" : diffSec < 0 ? "−" : ""}
+                          {engine.fmtMinSec(Math.abs(diffSec) * 1000)}
+                        </td>
+                      </tr>
+                    );
+                  })}
               </tbody>
             </table>
           </div>
