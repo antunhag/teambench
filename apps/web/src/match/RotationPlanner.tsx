@@ -91,10 +91,11 @@ interface AddForm {
   end: string;
 }
 
-/** "#10 Martim S — Ala Esquerda, Ala Direita, Pivô" — só leitura, pro treinador ver a aptidão cadastrada (em Plantel) na hora de escolher quem entra em cada vaga. Sem aptidão cadastrada, mostra só o nome. */
-function playerOptionLabel(p: engine.Player, aptitude: engine.RotationSlotType[] | undefined): string {
+/** "#10 Martim S — Ala Esquerda (A), Pivô (B)" — só leitura, pro treinador ver a classificação cadastrada (em Plantel) na hora de escolher quem entra em cada vaga. Sem vaga habitual cadastrada, mostra só o nome. */
+function playerOptionLabel(p: engine.Player, aptitude: engine.AptitudeBySlot | undefined): string {
   const base = `#${p.num} ${p.name}`;
-  return aptitude && aptitude.length > 0 ? `${base} — ${aptitude.join(", ")}` : base;
+  const slots = engine.sortedAptitudeSlots(aptitude ?? {});
+  return slots.length > 0 ? `${base} — ${slots.map((slot) => engine.aptitudeLabel(slot, aptitude![slot])).join(", ")}` : base;
 }
 
 export function RotationPlanner({ teamId, matchId, opponent, formatId, onClose }: Props) {

@@ -47,6 +47,8 @@ export interface TimelinePause {
   start: number;
   end: number;
   label: string | null;
+  /** "tempo_nos"/"tempo_advers" = pedido de tempo de verdade; qualquer outro valor (ex.: "outro") é pausa por outro motivo (lesão, árbitro, etc.) — distingue o estilo visual da faixa, já que nem toda pausa é um pedido de tempo. */
+  reasonId: string | null;
 }
 
 export interface TimelineHalf {
@@ -112,6 +114,7 @@ export function buildTimelineData(events: MatchEvent[], playersList: Player[], t
     let paused = false;
     let pauseStart = 0;
     let pauseLabel: string | null = null;
+    let pauseReasonId: string | null = null;
     const pauses: TimelinePause[] = [];
 
     evs.forEach((e) => {
@@ -120,6 +123,7 @@ export function buildTimelineData(events: MatchEvent[], playersList: Player[], t
         paused = true;
         pauseStart = sec;
         pauseLabel = e.label ?? null;
+        pauseReasonId = e.reasonId ?? null;
         onCourtSet.forEach((id) => {
           if (openStart.has(id)) {
             const arr = intervals.get(id) || [];
@@ -130,7 +134,7 @@ export function buildTimelineData(events: MatchEvent[], playersList: Player[], t
         });
       } else if (e.type === "fim_pausa") {
         paused = false;
-        pauses.push({ start: pauseStart, end: sec, label: pauseLabel });
+        pauses.push({ start: pauseStart, end: sec, label: pauseLabel, reasonId: pauseReasonId });
         onCourtSet.forEach((id) => {
           if (!openStart.has(id)) openStart.set(id, sec);
         });
@@ -360,8 +364,9 @@ export function buildTimelineHtml(
       // minutos à direita).
       const pauseBandsHtml = half.pauses
         .map((p) => {
+          const isTimeout = p.reasonId === "tempo_nos" || p.reasonId === "tempo_advers";
           const title = p.label ? `${esc(p.label)} — ` : "Pausa — ";
-          return `<div class="pause-band" style="left:${pct2(p.start, half.durSec)};width:${pct2(
+          return `<div class="pause-band${isTimeout ? "" : " other"}" style="left:${pct2(p.start, half.durSec)};width:${pct2(
             Math.max(0, p.end - p.start),
             half.durSec
           )};" title="${title}${fmtMinSec(p.start * 1000)} a ${fmtMinSec(p.end * 1000)}"></div>`;
@@ -449,9 +454,9 @@ export function buildTimelineHtml(
     '<meta name="viewport" content="width=device-width, initial-scale=1">' +
     `<title>Timeline — ${esc(matchInfo.adversario || "Jogo")}</title>` +
     "<style>" +
-    ':root{color-scheme:light;--surface-1:#fcfcfb;--page:#f2f1ec;--text-primary:#0b0b0b;--text-secondary:#52514e;--muted:#898781;--grid:#e1e0d9;--border:rgba(11,11,11,.10);--series-1:#2a78d6;--good:#0ca30c;--critical:#d03b3b;--warning:#fab219;--pause:#fab219;--shadow:0 1px 2px rgba(11,11,11,.05),0 6px 20px rgba(11,11,11,.06);--label-w:132px;}' +
-    '@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){color-scheme:dark;--surface-1:#1a1a19;--page:#0d0d0d;--text-primary:#fff;--text-secondary:#c3c2b7;--muted:#898781;--grid:#2c2c2a;--border:rgba(255,255,255,.10);--series-1:#3987e5;--good:#0ca30c;--critical:#e66767;--warning:#c98500;--shadow:0 1px 2px rgba(0,0,0,.35),0 8px 26px rgba(0,0,0,.4);}}' +
-    ':root[data-theme="dark"]{color-scheme:dark;--surface-1:#1a1a19;--page:#0d0d0d;--text-primary:#fff;--text-secondary:#c3c2b7;--muted:#898781;--grid:#2c2c2a;--border:rgba(255,255,255,.10);--series-1:#3987e5;--good:#0ca30c;--critical:#e66767;--warning:#c98500;--shadow:0 1px 2px rgba(0,0,0,.35),0 8px 26px rgba(0,0,0,.4);}' +
+    ':root{color-scheme:light;--surface-1:#fcfcfb;--page:#f2f1ec;--text-primary:#0b0b0b;--text-secondary:#52514e;--muted:#898781;--grid:#e1e0d9;--border:rgba(11,11,11,.10);--series-1:#2a78d6;--good:#0ca30c;--critical:#d03b3b;--warning:#fab219;--pause:#fab219;--pause-other:#8a5fd1;--shadow:0 1px 2px rgba(11,11,11,.05),0 6px 20px rgba(11,11,11,.06);--label-w:132px;}' +
+    '@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){color-scheme:dark;--surface-1:#1a1a19;--page:#0d0d0d;--text-primary:#fff;--text-secondary:#c3c2b7;--muted:#898781;--grid:#2c2c2a;--border:rgba(255,255,255,.10);--series-1:#3987e5;--good:#0ca30c;--critical:#e66767;--warning:#c98500;--pause-other:#a07ee0;--shadow:0 1px 2px rgba(0,0,0,.35),0 8px 26px rgba(0,0,0,.4);}}' +
+    ':root[data-theme="dark"]{color-scheme:dark;--surface-1:#1a1a19;--page:#0d0d0d;--text-primary:#fff;--text-secondary:#c3c2b7;--muted:#898781;--grid:#2c2c2a;--border:rgba(255,255,255,.10);--series-1:#3987e5;--good:#0ca30c;--critical:#e66767;--warning:#c98500;--pause-other:#a07ee0;--shadow:0 1px 2px rgba(0,0,0,.35),0 8px 26px rgba(0,0,0,.4);}' +
     "*{box-sizing:border-box;}body{margin:0;background:var(--page);color:var(--text-primary);font-family:system-ui,-apple-system,'Segoe UI',sans-serif;padding:20px 16px 40px;}" +
     ".wrap{max-width:920px;margin:0 auto;display:flex;flex-direction:column;gap:16px;}" +
     ".card{background:var(--surface-1);border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow);padding:18px;}" +
@@ -488,12 +493,14 @@ export function buildTimelineHtml(
     ".mk.foul.sofrida{background:var(--surface-1);color:var(--series-1);border-color:var(--series-1);}" +
     ".half-block{margin-top:18px;}.half-block:first-of-type{margin-top:4px;}.rows{display:flex;flex-direction:column;gap:6px;}" +
     ".pause-band{position:absolute;top:-6px;bottom:-6px;background:repeating-linear-gradient(45deg,var(--pause) 0,var(--pause) 4px,transparent 4px,transparent 9px);opacity:.4;border-left:1px dashed var(--pause);border-right:1px dashed var(--pause);}" +
+    ".pause-band.other{background:repeating-linear-gradient(45deg,var(--pause-other) 0,var(--pause-other) 4px,transparent 4px,transparent 9px);border-left-color:var(--pause-other);border-right-color:var(--pause-other);}" +
     ".lane-row{margin-bottom:2px;}" +
     ".lane-row .nm{color:var(--muted);font-size:11px;font-style:italic;}" +
     ".lane-track{background:transparent;}" +
     ".legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:16px;padding-top:14px;border-top:1px solid var(--grid);font-size:11.5px;color:var(--text-secondary);}" +
     ".legend .it{display:flex;align-items:center;gap:6px;}.legend .sw{width:18px;height:8px;border-radius:4px;background:var(--series-1);}" +
     ".legend .sw.pause{background:repeating-linear-gradient(45deg,var(--pause) 0,var(--pause) 3px,transparent 3px,transparent 6px);border:1px dashed var(--pause);}" +
+    ".legend .sw.pause.other{background:repeating-linear-gradient(45deg,var(--pause-other) 0,var(--pause-other) 3px,transparent 3px,transparent 6px);border-color:var(--pause-other);}" +
     ".legend .ball-sample{width:14px;height:14px;border-radius:50%;background:var(--critical);color:#fff;display:flex;align-items:center;justify-content:center;font-size:8.5px;flex:0 0 auto;}" +
     ".legend .mk-sample{width:14px;height:14px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:800;flex:0 0 auto;border:1.5px solid var(--surface-1);}" +
     ".legend .mk-sample.foul.cometida{background:var(--muted);color:#fff;}" +
@@ -521,7 +528,7 @@ export function buildTimelineHtml(
     `<div class="card">${halvesHtml}` +
     '<div class="legend"><div class="it"><span class="sw"></span>Em quadra</div><div class="it">⚽ Golo marcado</div><div class="it">🟨/🟥 Cartão</div>' +
     '<div class="it"><span class="mk-sample foul cometida">F</span>Falta cometida</div><div class="it"><span class="mk-sample foul sofrida">F</span>Falta sofrida</div>' +
-    '<div class="it"><span class="sw pause"></span>Pedido de tempo</div><div class="it"><span class="ball-sample">⚽</span>Golo sofrido</div></div>' +
+    '<div class="it"><span class="sw pause"></span>Pedido de tempo</div><div class="it"><span class="sw pause other"></span>Pausa (outro motivo)</div><div class="it"><span class="ball-sample">⚽</span>Golo sofrido</div></div>' +
     "</div>" +
     '<div class="card"><div class="half-title" style="margin-bottom:8px;"><h2>Minutos em quadra (total do jogo)</h2></div>' +
     `<div class="tablewrap"><table class="gtable"><thead><tr><th>Atleta</th>${totalsHeadHtml}<th class="num">Total</th><th class="num">Golos</th></tr></thead>` +

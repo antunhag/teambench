@@ -30,10 +30,28 @@ export interface RotationStint {
 export type RotationSlotType = "Fixo" | "Ala Esquerda" | "Ala Direita" | "Pivô";
 export const ROTATION_SLOT_TYPES: readonly RotationSlotType[] = ["Fixo", "Ala Esquerda", "Ala Direita", "Pivô"];
 
-/** Posições que um atleta sabe jogar, em ordem de prioridade (0 a 4 itens) — dado do atleta, não do jogo. */
-export interface PlayerAptitude {
-  playerId: string;
-  slots: RotationSlotType[];
+/**
+ * Classificação do atleta numa vaga — dado do ATLETA (cadastrado uma vez no
+ * Plantel), não do jogo. A=primeira opção, B=rotação, C=apoio. Uma vaga
+ * AUSENTE do objeto nunca é "C" nem "sem nota" — significa que não é vaga
+ * habitual pro atleta. Uma vaga PRESENTE com `null` significa o oposto: é
+ * habitual, só ainda não foi avaliada. Ao contrário do modelo antigo (lista
+ * ordenada, um atleta por posição no ranking de cada um), aqui vários
+ * atletas podem ser "A" na mesma vaga ao mesmo tempo — é assim que times de
+ * verdade têm 2-3 opções igualmente boas pra uma posição.
+ */
+export type AptitudeQuality = "A" | "B" | "C";
+export type AptitudeBySlot = Partial<Record<RotationSlotType, AptitudeQuality | null>>;
+
+/** Vagas habituais do atleta (as presentes em `bySlot`), ordenadas por qualidade — A, depois B, depois C, sem-classificação por último. Empate mantém a ordem fixa de ROTATION_SLOT_TYPES (sort é estável). */
+export function sortedAptitudeSlots(bySlot: AptitudeBySlot): RotationSlotType[] {
+  const rank = (q: AptitudeQuality | null | undefined) => (q ? { A: 0, B: 1, C: 2 }[q] : 3);
+  return ROTATION_SLOT_TYPES.filter((slot) => slot in bySlot).sort((a, b) => rank(bySlot[a]) - rank(bySlot[b]));
+}
+
+/** "Ala Esquerda (A)" quando classificada; só "Ala Esquerda" quando habitual mas ainda sem nota. */
+export function aptitudeLabel(slot: RotationSlotType, quality: AptitudeQuality | null | undefined): string {
+  return quality ? `${slot} (${quality})` : slot;
 }
 
 /**

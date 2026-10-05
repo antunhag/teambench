@@ -1,11 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
+  aptitudeLabel,
   currentStintFor,
   nextStintInSlot,
   plannedSecondsByPlayer,
   plannedSecondsByPlayerPerPeriod,
   playerOverlapsOtherSlot,
+  sortedAptitudeSlots,
   stintsOverlap,
+  type AptitudeBySlot,
   type RotationStint,
 } from "../src/rotationPlan";
 
@@ -74,6 +77,38 @@ describe("currentStintFor / nextStintInSlot", () => {
     const next = nextStintInSlot(stints, 1, 1, 750);
     expect(next?.playerId).toBe(ala2);
     expect(nextStintInSlot(stints, 1, 1, 1500)).toBeNull(); // não há mais ninguém depois do fim da parte
+  });
+});
+
+describe("sortedAptitudeSlots", () => {
+  it("vazio dá lista vazia — atleta sem vaga habitual cadastrada", () => {
+    expect(sortedAptitudeSlots({})).toEqual([]);
+  });
+
+  it("ordena por qualidade — A, depois B, depois C, sem-classificação por último", () => {
+    const bySlot: AptitudeBySlot = { Pivô: "C", Fixo: "A", "Ala Direita": null, "Ala Esquerda": "B" };
+    expect(sortedAptitudeSlots(bySlot)).toEqual(["Fixo", "Ala Esquerda", "Pivô", "Ala Direita"]);
+  });
+
+  it("empate na qualidade mantém a ordem fixa de ROTATION_SLOT_TYPES", () => {
+    const bySlot: AptitudeBySlot = { Pivô: "A", Fixo: "A" };
+    expect(sortedAptitudeSlots(bySlot)).toEqual(["Fixo", "Pivô"]); // Fixo vem antes de Pivô em ROTATION_SLOT_TYPES
+  });
+
+  it("vaga ausente do objeto não aparece, mesmo que outras estejam classificadas", () => {
+    const bySlot: AptitudeBySlot = { Fixo: "A" };
+    expect(sortedAptitudeSlots(bySlot)).toEqual(["Fixo"]);
+  });
+});
+
+describe("aptitudeLabel", () => {
+  it("inclui a letra quando classificado", () => {
+    expect(aptitudeLabel("Ala Esquerda", "A")).toBe("Ala Esquerda (A)");
+  });
+
+  it("mostra só o nome da vaga quando ainda sem classificação (null ou undefined)", () => {
+    expect(aptitudeLabel("Pivô", null)).toBe("Pivô");
+    expect(aptitudeLabel("Pivô", undefined)).toBe("Pivô");
   });
 });
 

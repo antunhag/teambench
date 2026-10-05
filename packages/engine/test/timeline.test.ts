@@ -127,7 +127,19 @@ describe("buildTimelineData", () => {
       createEvent("fim_periodo", null, 600_000, 1, 0, { duracaoSec: 600 }),
     ];
     const halves = buildTimelineData(events, roster, [salvador.id]);
-    expect(halves[0].pauses).toEqual([{ start: 200, end: 260, label: "Pedido de Tempo — AAL" }]);
+    expect(halves[0].pauses).toEqual([{ start: 200, end: 260, label: "Pedido de Tempo — AAL", reasonId: "tempo_nos" }]);
+  });
+
+  it("preserva o reasonId de uma pausa por outro motivo — não deve ser confundida com pedido de tempo na faixa visual", () => {
+    const events: MatchEvent[] = [
+      createEvent("pausa", null, 200_000, 1, 0, { label: "Outro motivo (lesão, árbitro, etc.)", reasonId: "outro" }),
+      createEvent("fim_pausa", null, 260_000, 1, 0, { duracaoSec: 60 }),
+      createEvent("fim_periodo", null, 600_000, 1, 0, { duracaoSec: 600 }),
+    ];
+    const halves = buildTimelineData(events, roster, [salvador.id]);
+    expect(halves[0].pauses).toEqual([
+      { start: 200, end: 260, label: "Outro motivo (lesão, árbitro, etc.)", reasonId: "outro" },
+    ]);
   });
 
   it("REGRESSÃO — usa o kickoff da parte pra saber quem começa em quadra, mesmo quando difere de quem terminou a parte anterior", () => {
