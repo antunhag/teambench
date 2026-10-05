@@ -130,6 +130,24 @@ export function MatchSummary({ live, roster, opponent, matchId, teamId, onClose,
     setTimeout(() => URL.revokeObjectURL(url), 2000);
   }
 
+  // Exportação estruturada (JSON) do registo cronológico, pensada pra
+  // alimentar uma ferramenta externa de corte de vídeo por lance — essa
+  // ferramenta não existe ainda, aqui só entrega o dado em tempo de JOGO
+  // (nunca tempo de vídeo, ver nota em buildEventsExport).
+  function handleExportEvents() {
+    const data = engine.buildEventsExport(state.events, byId, live.format, { adversario: opponent, ourLabel, score: state.score });
+    const json = JSON.stringify(data, null, 2);
+    const blob = new Blob([json], { type: "application/json;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `eventos_${(opponent ?? "jogo").replace(/\s+/g, "_")}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+  }
+
   async function handleFinish() {
     setFinishStatus("saving");
     const { error } = await supabase.from("matches").update({ status: "finished" }).eq("id", matchId);
@@ -188,6 +206,7 @@ export function MatchSummary({ live, roster, opponent, matchId, teamId, onClose,
       <div className="btn-row" style={{ marginTop: 16 }}>
         <button type="button" className="btn" onClick={handleCopy}>📋 Copiar resumo</button>
         <button type="button" className="btn" onClick={handleDownloadTimeline}>🗓️ Descarregar timeline</button>
+        <button type="button" className="btn" onClick={handleExportEvents}>🎬 Exportar eventos (JSON)</button>
         <button type="button" className="btn primary" onClick={handleFinish} disabled={finishStatus === "saving" || finishStatus === "done"}>
           {finishStatus === "done" ? "✅ Jogo terminado" : "Marcar jogo como terminado"}
         </button>

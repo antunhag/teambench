@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createEvent } from "../src/events";
-import { describeEvent, describeEvents, exportText } from "../src/report";
+import { buildEventsExport, describeEvent, describeEvents, exportText } from "../src/report";
 import type { MatchEvent, MatchRow, Player } from "../src/types";
 
 const salvador: Player = { id: "athlete-salvador", num: "30", name: "Salvador Silva Gonçalves", pos: "Ala Esquerda" };
@@ -82,5 +82,52 @@ describe("exportText", () => {
   it("usa o nome do clube e do adversário quando informados, em vez de 'Nós'/'Adversário'", () => {
     const text = exportText([], [], { nos: 2, advers: 1 }, byId, undefined, "AAL", "Ordem SC");
     expect(text).toContain("Resultado: AAL 2 - 1 Ordem SC");
+  });
+});
+
+describe("buildEventsExport", () => {
+  it("exporta cada evento com tipo, parte, tempo de jogo (segundos e mm:ss) e descrição textual", () => {
+    const events: MatchEvent[] = [createEvent("golo", salvador.id, 65_000, 1, 0, { assistId: joao.id })];
+    const out = buildEventsExport(events, byId, undefined, { adversario: "Ordem SC", ourLabel: "AAL", score: { nos: 1, advers: 0 } });
+
+    expect(out.adversario).toBe("Ordem SC");
+    expect(out.ourLabel).toBe("AAL");
+    expect(out.score).toEqual({ nos: 1, advers: 0 });
+    expect(out.events).toHaveLength(1);
+    const ev = out.events[0];
+    expect(ev.type).toBe("golo");
+    expect(ev.period).toBe(1);
+    expect(ev.timeSec).toBe(65);
+    expect(ev.timeLabel).toBe("01:05");
+    expect(ev.playerId).toBe(salvador.id);
+    expect(ev.playerName).toBe("#30 Salvador Silva Gonçalves");
+    expect(ev.assistPlayerId).toBe(joao.id);
+    expect(ev.assistPlayerName).toBe("#30 João Magalhães");
+    expect(ev.description).toContain("GOLO — #30 Salvador Silva Gonçalves");
+  });
+
+  it("identifica quem entra/sai numa substituição e ordena os eventos cronologicamente", () => {
+    const events: MatchEvent[] = [
+      createEvent("substituicao", joao.id, 100_000, 1, 0, { outId: salvador.id }),
+      createEvent("kickoff", null, 0, 1, 0, { lineup: [salvador.id] }),
+    ];
+    const out = buildEventsExport(events, byId, undefined, { score: { nos: 0, advers: 0 } });
+
+    expect(out.events.map((e) => e.type)).toEqual(["kickoff", "substituicao"]);
+    const sub = out.events[1];
+    expect(sub.playerId).toBe(joao.id);
+    expect(sub.playerName).toBe("#30 João Magalhães");
+    expect(sub.outPlayerId).toBe(salvador.id);
+    expect(sub.outPlayerName).toBe("#30 Salvador Silva Gonçalves");
+  });
+
+  it("usa null quando não há jogador/assistência/saída associada ao evento", () => {
+    const events: MatchEvent[] = [createEvent("fim_periodo", null, 600_000, 1, 0, { duracaoSec: 600 })];
+    const out = buildEventsExport(events, byId, undefined, { score: { nos: 0, advers: 0 } });
+    const ev = out.events[0];
+    expect(ev.playerId).toBeNull();
+    expect(ev.playerName).toBeNull();
+    expect(ev.outPlayerId).toBeNull();
+    expect(ev.assistPlayerId).toBeNull();
   });
 });

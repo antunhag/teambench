@@ -142,6 +142,74 @@ export interface MatchMeta {
   adversario?: string | null;
 }
 
+export interface MatchEventExport {
+  id: string;
+  type: MatchEvent["type"];
+  period: number;
+  /** Segundos decorridos de tempo de jogo dentro da parte — nunca tempo de vídeo (ver nota em buildEventsExport). */
+  timeSec: number;
+  timeLabel: string;
+  playerId: string | null;
+  playerName: string | null;
+  outPlayerId: string | null;
+  outPlayerName: string | null;
+  assistPlayerId: string | null;
+  assistPlayerName: string | null;
+  description: string;
+}
+
+export interface MatchEventsExport {
+  adversario: string | null;
+  ourLabel: string | null;
+  score: Score;
+  events: MatchEventExport[];
+}
+
+/**
+ * Exportação estruturada (JSON) do registo cronológico — pensada pra servir
+ * de entrada pra uma ferramenta externa de corte de vídeo por lance (nunca
+ * processa ou referencia vídeo aqui, só entrega "o que aconteceu, em que
+ * parte, em que segundo de tempo de JOGO"). Quem for cortar vídeo é quem
+ * sabe converter isso pro tempo absoluto do próprio ficheiro — essa
+ * exportação não assume nenhum offset entre os dois.
+ *
+ * Reaproveita describeEvents (não duplica a lógica de descrição textual do
+ * "Copiar resumo") e devolve os eventos já ordenados cronologicamente.
+ */
+export function buildEventsExport(
+  events: MatchEvent[],
+  playerById: PlayerLookup,
+  format: MatchFormat | undefined,
+  meta: { adversario?: string | null; ourLabel?: string | null; score: Score }
+): MatchEventsExport {
+  const sorted = [...events].sort((a, b) => a.period - b.period || eventMs(a) - eventMs(b) || a.ts - b.ts);
+  const descriptions = describeEvents(sorted, playerById, format);
+  const nameOf = (id: string | null | undefined): string | null => {
+    if (!id) return null;
+    const p = playerById(id);
+    return p ? `#${p.num} ${p.name}` : null;
+  };
+  return {
+    adversario: meta.adversario ?? null,
+    ourLabel: meta.ourLabel ?? null,
+    score: meta.score,
+    events: sorted.map((e) => ({
+      id: e.id,
+      type: e.type,
+      period: e.period,
+      timeSec: Math.round(eventMs(e) / 1000),
+      timeLabel: fmtMinSec(eventMs(e)),
+      playerId: e.playerId,
+      playerName: nameOf(e.playerId),
+      outPlayerId: e.outId ?? null,
+      outPlayerName: nameOf(e.outId),
+      assistPlayerId: e.assistId ?? null,
+      assistPlayerName: nameOf(e.assistId),
+      description: descriptions.get(e.id) ?? describeEvent(e, playerById, format),
+    })),
+  };
+}
+
 /** Texto tabulado pronto para colar na folha "Jogo - Registo" do Excel do clube. */
 export function exportText(
   rows: MatchRow[],
