@@ -12,7 +12,12 @@
 - **Robustecer o acesso multiusuário do clube atual** — foco ativo definido na
   constituição v1.1.0. Vários treinadores/assistentes vão usar a mesma equipa ao
   mesmo tempo; o sistema de papéis (Admin/Lançador/Visualizador) e convites já
-  existe, mas precisa aguentar uso real simultâneo sem surpresas.
+  existe, mas precisa aguentar uso real simultâneo sem surpresas. Especificação
+  completa em [specs/001-multi-user-access/spec.md](../specs/001-multi-user-access/spec.md)
+  — uma única trava "uma conta, um recurso, até libertar" (generalização da
+  trava de jogo já existente) estendida a 4 telas: jogo ao vivo, corretor
+  pós-jogo, Plantel, Formato de Jogo, Convites; mais histórico de acesso e
+  proteção do último Admin.
   - Verificar domínio de envio no Resend (resend.com/domains) — hoje bloqueia
     qualquer convite de chegar por email pra quem não é o dono da conta
     ([docs/SECURITY.md](SECURITY.md)).

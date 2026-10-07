@@ -3,6 +3,7 @@ import { useEffect, useState } from "preact/hooks";
 import { supabase } from "../supabaseClient";
 import { usePlayers, type PlayerRow } from "../team/usePlayers";
 import { PlayerChip, Sheet } from "./PickerUI";
+import { useMatchLock } from "./useMatchLock";
 
 interface Props {
   teamId: string;
@@ -130,6 +131,11 @@ function draftsEqual(a: Draft, b: Draft): boolean {
  * dados.
  */
 export function MatchEventEditor({ teamId, matchId, opponent, onClose, canDelete, ourLabel }: Props) {
+  // Mesma trava do jogo ao vivo (useMatchLock, migração 0009), agora também
+  // aqui — corrigir um jogo já terminado tem o mesmo risco de duas contas se
+  // atropelarem que o jogo ao vivo já tinha, e a trava é por match_id, nunca
+  // ligada a "está ao vivo" (ver specs/001-multi-user-access/research.md).
+  const lock = useMatchLock(matchId);
   const { players: roster } = usePlayers(teamId);
   const [rows, setRows] = useState<EventRow[] | null>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
@@ -343,6 +349,22 @@ export function MatchEventEditor({ teamId, matchId, opponent, onClose, canDelete
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [matchId]);
+
+  if (lock.status === "checking") {
+    return <p className="empty">A verificar...</p>;
+  }
+  if (lock.status === "readonly") {
+    return (
+      <div>
+        <button type="button" className="btn sm ghost" onClick={onClose} style={{ marginBottom: 12 }}>
+          ← Voltar
+        </button>
+        <p className="banner warn">
+          Este jogo está a ser corrigido por outra pessoa agora. Tente novamente dentro de alguns instantes.
+        </p>
+      </div>
+    );
+  }
 
   async function saveRow(row: EventRow) {
     const draft = drafts[row.id];
