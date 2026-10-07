@@ -200,7 +200,16 @@ function TeamApp({
         <>
           <div className="topbar">
             <div className="brand" style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8, width: "100%" }}>
-              <h1>⚽ {team.teamName}</h1>
+              <h1 style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+                <img
+                  src="/teambench/brand/crest.png"
+                  alt=""
+                  width={22}
+                  height={22}
+                  style={{ display: "block", flexShrink: 0, marginTop: 2 }}
+                />
+                {team.teamName}
+              </h1>
               <button type="button" className="btn sm ghost" onClick={() => supabase.auth.signOut()}>
                 Sair
               </button>

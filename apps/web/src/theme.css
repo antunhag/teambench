@@ -1,61 +1,73 @@
-/* Sistema visual portado do banco.html original (Banco Sub-15) — mesmas
-   variáveis, tipografia e componentes, para o teambench ter pelo menos o
-   mesmo "look and feel" do app anterior. */
+/* Sistema visual alinhado com a identidade real da Académica de Leça
+   (brasão + Cartilha do Atleta 2026/27): preto/branco + dourado da marca,
+   em vez da paleta verde/laranja provisória usada até aqui. --court e
+   --accent mantêm os nomes antigos (verde-campo / laranja) por compatibi-
+   lidade com os componentes — só os VALORES mudaram, para o preto fazer
+   o papel de cor estrutural dominante (como o verde fazia) e o dourado o
+   de destaque/CTA (como o laranja fazia). --yellow (cartão amarelo) foi
+   mantido bem mais vivo/limão do que o dourado da marca, de propósito,
+   para nunca se confundirem num relance. */
 :root {
-  --bg: #f3f6f2;
+  --bg: #f7f6f3;
   --surface: #ffffff;
-  --surface-2: #e9efe6;
-  --ink: #12261c;
-  --ink-dim: #516156;
-  --line: #d3ded2;
-  --accent: #e8600a;
-  --accent-ink: #ffffff;
-  --court: #1f7a4d;
+  --surface-2: #ecece8;
+  --ink: #141414;
+  --ink-dim: #5c5b56;
+  --line: #ddd9d1;
+  --accent: #b08f4a;
+  --accent-ink: #141414;
+  --court: #141414;
   --court-ink: #ffffff;
-  --yellow: #f4b400;
+  --yellow: #ffc107;
   --red: #d6392e;
-  --bench: #7c8b80;
+  --bench: #83807a;
   --gr: #2d6fe0;
   --gr-ink: #ffffff;
-  --shadow: 0 1px 2px rgba(18, 38, 28, 0.06), 0 4px 14px rgba(18, 38, 28, 0.08);
+  --shadow: 0 1px 2px rgba(20, 20, 20, 0.08), 0 3px 10px rgba(20, 20, 20, 0.08);
+  /* Diz ao browser pra desenhar os próprios controlos nativos (a caixa do
+     <select> quando aberta, scrollbars, etc.) em modo claro — sem isto eles
+     ficam sempre claros mesmo dentro de um ecrã escuro, destoando. */
+  color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #0e1712;
-    --surface: #16231c;
-    --surface-2: #1d2c23;
-    --ink: #eaf2ea;
-    --ink-dim: #9db0a3;
-    --line: #2a3b30;
-    --accent: #ff8a3d;
-    --accent-ink: #1a0e00;
-    --court: #2e9a63;
-    --court-ink: #06180f;
-    --yellow: #f7c948;
+    --bg: #121212;
+    --surface: #1c1c1a;
+    --surface-2: #242421;
+    --ink: #f5f3ee;
+    --ink-dim: #a8a59c;
+    --line: #38372f;
+    --accent: #cfa75e;
+    --accent-ink: #19140d;
+    --court: #2e2c26;
+    --court-ink: #cfa75e;
+    --yellow: #ffcd3c;
     --red: #f0564a;
-    --bench: #5e7268;
+    --bench: #716e67;
     --gr: #5b9bff;
     --gr-ink: #071127;
     --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 6px 18px rgba(0, 0, 0, 0.35);
+    color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
-  --bg: #0e1712;
-  --surface: #16231c;
-  --surface-2: #1d2c23;
-  --ink: #eaf2ea;
-  --ink-dim: #9db0a3;
-  --line: #2a3b30;
-  --accent: #ff8a3d;
-  --accent-ink: #1a0e00;
-  --court: #2e9a63;
-  --court-ink: #06180f;
-  --yellow: #f7c948;
+  --bg: #121212;
+  --surface: #1c1c1a;
+  --surface-2: #242421;
+  --ink: #f5f3ee;
+  --ink-dim: #a8a59c;
+  --line: #38372f;
+  --accent: #cfa75e;
+  --accent-ink: #19140d;
+  --court: #2e2c26;
+  --court-ink: #cfa75e;
+  --yellow: #ffcd3c;
   --red: #f0564a;
-  --bench: #5e7268;
+  --bench: #716e67;
   --gr: #5b9bff;
   --gr-ink: #071127;
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 6px 18px rgba(0, 0, 0, 0.35);
+  color-scheme: dark;
 }
 
 * {
@@ -194,6 +206,22 @@ a {
   font-size: 15px;
   width: 100%;
   font-family: inherit;
+}
+
+/* Base pra QUALQUER <select> da app, mesmo os sem classe nenhuma (há vários
+   espalhados — Roster, Calendar, RotationPlanner, MatchEventEditor,
+   TeamMembers) — sem isto cada um fica com o visual nativo do sistema
+   operativo (normalmente branco), destoando duma tela escura. .field select
+   acima continua a tratar o tamanho/padding de formulário; esta regra trata
+   só a aparência (cor/fundo/contorno), nunca sobreposta por ela. */
+select {
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 6px 8px;
+  font-family: inherit;
+  font-size: 13px;
 }
 .row2 {
   display: grid;
@@ -593,7 +621,14 @@ a {
   margin-top: 10px;
 }
 .zonegrid .zbtn {
-  padding: 16px 6px;
+  /* Alvo de toque com folga real acima do mínimo de 48px (M3/WCAG) — este
+     botão escolhe a zona do golo a meio do jogo, errar o toque custa tempo
+     a corrigir depois. */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 56px;
+  padding: 18px 10px;
   border-radius: 12px;
   border: 1px solid var(--line);
   background: var(--surface-2);
@@ -694,6 +729,7 @@ textarea.exportbox {
 }
 .list-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
