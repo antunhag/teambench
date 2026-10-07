@@ -127,6 +127,67 @@ corrigidos e já aplicados em produção via
   simples quebraria a edição legítima de outros campos por um `team_admin`
   comum, já que RLS não compara o valor antigo com o novo.
 
+## Acesso multiusuário robusto (migrações 0016–0018, mesmo dia)
+
+Três migrações pequenas e independentes, cada uma revista pelo
+`security-auditor` antes de aplicar (Princípio II) — ver
+`specs/001-multi-user-access/` pro processo completo.
+
+- **`resource_locks` (0016)** — generaliza a trava de edição ao vivo do jogo
+  (`matches.live_holder_id`) pras telas de Plantel/Formato de Jogo/Convites,
+  chave composta `(team_id, resource_type)`, `claim_resource_lock`/
+  `release_resource_lock` `SECURITY DEFINER`. Revisão: sem achados.
+- **`team_access_log` + proteção do último Admin (0017)** — revisão em DUAS
+  rondas, não uma:
+  1. 1ª ronda, achado **CRÍTICO**: a 1ª versão só cobria `DELETE` em
+     `team_members`. Mas `accept_invite()` (0007) já trocava o papel de
+     alguém via `insert ... on conflict (team_id, user_id) do update set
+     role = excluded.role` ao reaceitar um convite — esse caminho dispara
+     gatilhos de `UPDATE`, não `INSERT`/`DELETE`, passando completamente ao
+     lado tanto do histórico quanto da proteção do último Admin. Um
+     team_admin podia (sem querer ou não) convidar alguém que já era membro
+     com um papel diferente, e aceitar esse convite despromovia em silêncio,
+     até zerando os Admins, sem registo e sem bloqueio. Reescrito cobrindo
+     `UPDATE OF role` também; `target_user_id`/`actor_id` trocados de FK
+     obrigatória pra nullable com `on delete set null` + snapshot de email
+     (`target_email`/`actor_email`), pra nunca bloquear apagar uma conta
+     (RGPD) só por ela aparecer no histórico.
+  2. 2ª ronda (pós-reescrita), mais 2 bugs de SQL reais, não apenas
+     estilísticos: `for update` combinado com `count(*)` é sintaxe inválida
+     em Postgres (teria quebrado a remoção/despromoção de QUALQUER Admin,
+     não só o caso do último — corrigido separando a trava da contagem);
+     e `target_email not null` podia ser violado exatamente no cenário de
+     cascata de apagar conta que a própria reescrita tentava desbloquear
+     (o email já não está visível na mesma transação quando o DELETE vem em
+     cascata de `auth.users` — corrigido com `coalesce(..., '(conta
+     removida)')`). Sem achados pendentes após a 2ª ronda.
+- **Mudar papel diretamente (0018)** — follow-up pedido pelo utilizador:
+  antes só dava pra mudar o papel de alguém reconvidando-o (efeito colateral
+  indireto do `accept_invite()`), o que não deveria ser trivial assim.
+  Adiciona uma policy de `UPDATE` em `team_members` restrita a team_admin da
+  própria equipa, mais um trigger (`prevent_team_member_identity_change`)
+  que impede mudar `team_id`/`user_id` via update (RLS sozinho não compara
+  OLD vs NEW, mesma razão do `teams_club_reassignment_guard` acima).
+  Reaproveita os 2 triggers da 0017 sem alterá-los — ambos já disparam em
+  qualquer `UPDATE OF role`. Revisão: sem achados.
+
+Validação em produção: troca de papel testada ao vivo (conta de teste,
+promover/despromover e voltar), histórico gravou corretamente. Caminho de
+`DELETE` (remover um não-Admin) e o sub-caso "auto-remoção sendo o único
+Admin" ficaram validados só por revisão de código (o primeiro foi bloqueado
+pelo classificador de permissões da sessão como alteração de recurso
+partilhado; o segundo foi deliberadamente não testado ao vivo por mexer na
+única conta `team_admin` real, sem forma barata de reverter se houvesse bug).
+
+**Risco aceite, não corrigido**: apagar a conta do único `team_admin` de uma
+equipa diretamente em `auth.users` (painel do Supabase/RGPD) ainda aborta
+essa transação — `prevent_last_admin_removal` dispara no `DELETE` em
+cascata de `team_members` como dispararia em qualquer outro. Não há hoje
+nenhum fluxo de "apagar a minha conta" na UI, então isto só afetaria uma
+remoção manual feita direto no painel; promover outra pessoa a Admin
+primeiro resolve. Revisitar se/quando existir um fluxo de self-service de
+apagar conta.
+
 ## O que ainda não está endurecido (próximos candidatos a `security-auditor`)
 
 - **`match_events` confia que o cliente só reenvia dados idênticos num
@@ -141,6 +202,14 @@ corrigidos e já aplicados em produção via
 - Sem testes automatizados de RLS (os testes de `packages/engine` nunca tocam
   Supabase) — toda garantia de RLS hoje é leitura manual da policy, não
   verificação executável.
+- **Remover/despromover os 2 últimos Admins de uma equipa ao mesmo tempo**
+  (duas transações simultâneas, caso raríssimo) produz um erro de deadlock
+  do Postgres em vez da mensagem traduzida "é o único Admin" — a trava
+  (`for update` em `prevent_last_admin_removal`, migração 0017) já garante
+  que a equipa nunca fica com zero Admins nesse cenário, só com um erro
+  menos amigável numa das duas transações. Não corrigido — exigiria lógica
+  de retry/mensagem especial pra um caso extremamente improvável num clube
+  com poucos Admins.
 - **Dependências de desenvolvimento** (`vite`/`vitest`, nunca enviadas pro
   bundle de produção — `npm audit --omit=dev` dá 0 achados) têm 6
   vulnerabilidades conhecidas, incluindo uma crítica (RCE via poluição de

@@ -18,17 +18,28 @@ export interface PendingInviteRow {
   expiresAt: string;
 }
 
-/** Gestão de quem tem acesso à equipa: membros já aceites + convites pendentes. */
+export interface AccessLogRow {
+  id: string;
+  eventType: "granted" | "revoked";
+  role: TeamRole;
+  targetEmail: string;
+  /** null quando o acesso foi concedido via aceite de convite — não há um "admin agindo" nesse instante, ver migração 0017. */
+  actorEmail: string | null;
+  createdAt: string;
+}
+
+/** Gestão de quem tem acesso à equipa: membros já aceites + convites pendentes + histórico. */
 export function useTeamMembers(teamId: string) {
   const [members, setMembers] = useState<TeamMemberRow[]>([]);
   const [invites, setInvites] = useState<PendingInviteRow[]>([]);
+  const [accessLog, setAccessLog] = useState<AccessLogRow[]>([]);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [errorMessage, setErrorMessage] = useState("");
 
   const refresh = useCallback(async () => {
     setStatus("loading");
 
-    const [membersRes, invitesRes] = await Promise.all([
+    const [membersRes, invitesRes, accessLogRes] = await Promise.all([
       supabase.rpc("list_team_members_with_email", { p_team_id: teamId }),
       supabase
         .from("invites")
@@ -36,6 +47,7 @@ export function useTeamMembers(teamId: string) {
         .eq("team_id", teamId)
         .is("accepted_at", null)
         .order("created_at", { ascending: false }),
+      supabase.rpc("list_team_access_log", { p_team_id: teamId }),
     ]);
 
     if (membersRes.error) {
@@ -47,6 +59,31 @@ export function useTeamMembers(teamId: string) {
       setStatus("error");
       setErrorMessage(invitesRes.error.message);
       return;
+    }
+    // O histórico (migração 0017) é mais recente que o resto desta tela —
+    // se ainda não foi aplicado no Supabase, falha em silêncio (fica vazio)
+    // em vez de derrubar a tela inteira de Acesso à Equipa por causa dele.
+    if (accessLogRes.error) {
+      setAccessLog([]);
+    } else {
+      type AccessLogRes = {
+        id: string;
+        event_type: "granted" | "revoked";
+        role: TeamRole;
+        target_email: string;
+        actor_email: string | null;
+        created_at: string;
+      };
+      setAccessLog(
+        ((accessLogRes.data ?? []) as AccessLogRes[]).map((l) => ({
+          id: l.id,
+          eventType: l.event_type,
+          role: l.role,
+          targetEmail: l.target_email,
+          actorEmail: l.actor_email,
+          createdAt: l.created_at,
+        }))
+      );
     }
 
     type MemberRow = { id: string; user_id: string; email: string; role: TeamRole };
@@ -88,7 +125,13 @@ export function useTeamMembers(teamId: string) {
     await refresh();
   }
 
-  return { members, invites, status, errorMessage, createInvite, revokeInvite, removeMember, refresh };
+  async function changeRole(id: string, role: TeamRole) {
+    const { error } = await supabase.from("team_members").update({ role }).eq("id", id);
+    if (error) throw error;
+    await refresh();
+  }
+
+  return { members, invites, accessLog, status, errorMessage, createInvite, revokeInvite, removeMember, changeRole, refresh };
 }
 
 export function inviteLink(token: string): string {

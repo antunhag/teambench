@@ -9,27 +9,42 @@
 
 ## Agora
 
-- **Robustecer o acesso multiusuário do clube atual** — foco ativo definido na
-  constituição v1.1.0. Vários treinadores/assistentes vão usar a mesma equipa ao
-  mesmo tempo; o sistema de papéis (Admin/Lançador/Visualizador) e convites já
-  existe, mas precisa aguentar uso real simultâneo sem surpresas. Especificação
-  completa em [specs/001-multi-user-access/spec.md](../specs/001-multi-user-access/spec.md)
-  — uma única trava "uma conta, um recurso, até libertar" (generalização da
-  trava de jogo já existente) estendida a 4 telas: jogo ao vivo, corretor
-  pós-jogo, Plantel, Formato de Jogo, Convites; mais histórico de acesso e
-  proteção do último Admin.
-  - Verificar domínio de envio no Resend (resend.com/domains) — hoje bloqueia
-    qualquer convite de chegar por email pra quem não é o dono da conta
-    ([docs/SECURITY.md](SECURITY.md)).
-  - Auditoria de segurança completa — **feita e corrigida** em 2026-10-07.
-    Dois achados reais (exposição de convites pendentes a não-admins; troca
-    indevida de clube de uma equipa), corrigidos e aplicados em produção via
-    `supabase/migrations/0015_security_audit_fixes.sql`. Detalhe completo em
-    [docs/SECURITY.md](SECURITY.md).
-  - Endurecer `match_events` contra UPDATE fora do resync idempotente
-    (achado da auditoria, adiado por exigir desenho cuidadoso de trigger).
-  - Resolver a vulnerabilidade crítica em dependências de dev (`vitest`/`vite`)
-    — exige upgrade maior, avaliar com calma antes de forçar.
+- **Navegação multi-equipa com segregação de acesso** — identificado
+  2026-10-07, assim que "Robustecer o acesso multiusuário" (abaixo) ficou
+  pronto: a partir do momento em que mais gente do clube (não só a equipa
+  Sub-15 atual) for usar o Teambench, vai ser preciso navegação própria por
+  equipa e a segregação de acesso refletida na estrutura de ecrãs, não só
+  nas RLS por trás — hoje está tudo numa tela só. O esquema já comporta isto
+  (`clubs` → `teams` → `team_members`, Princípio III da constituição) mas a
+  UI ainda não. Ainda não especificado — próximo passo é `/speckit-specify`.
+- Verificar domínio de envio no Resend (resend.com/domains) — hoje bloqueia
+  qualquer convite de chegar por email pra quem não é o dono da conta
+  ([docs/SECURITY.md](SECURITY.md)).
+- Endurecer `match_events` contra UPDATE fora do resync idempotente
+  (achado da auditoria, adiado por exigir desenho cuidadoso de trigger).
+- Resolver a vulnerabilidade crítica em dependências de dev (`vitest`/`vite`)
+  — exige upgrade maior, avaliar com calma antes de forçar.
+
+## Feito recentemente
+
+- **Robustecer o acesso multiusuário do clube atual** (2026-10-07) — spec
+  completa em [specs/001-multi-user-access/spec.md](../specs/001-multi-user-access/spec.md).
+  Entregou: trava "uma conta, um recurso, até libertar" (generalização da
+  trava de jogo já existente) estendida a 4 telas (jogo ao vivo, corretor
+  pós-jogo, Plantel, Formato de Jogo, Convites — migrações `0016`); histórico
+  de acesso (quem entrou/saiu, quando, por quem) e proteção contra uma
+  equipa ficar com zero Admins (migração `0017`, 2 rondas de revisão do
+  `security-auditor`, achado crítico real + 2 bugs de SQL corrigidos antes
+  de aplicar); mudar o papel de alguém diretamente, sem depender de
+  reconvidar (migração `0018`, follow-up pedido durante a implementação).
+  Detalhe completo em [docs/SECURITY.md](SECURITY.md) e
+  [docs/ARCHITECTURE.md](ARCHITECTURE.md).
+- Auditoria de segurança completa do resto do repositório — **feita e
+  corrigida** em 2026-10-07. Dois achados reais (exposição de convites
+  pendentes a não-admins; troca indevida de clube de uma equipa),
+  corrigidos e aplicados em produção via
+  `supabase/migrations/0015_security_audit_fixes.sql`. Detalhe completo em
+  [docs/SECURITY.md](SECURITY.md).
 
 ## A seguir
 

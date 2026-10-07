@@ -74,6 +74,45 @@ ser verificada — o app assume posse local e só reivindica a trava quando a
 rede volta (decisão consciente: priorizar conseguir registar o jogo sobre
 bloquear por uma trava inconsultável em campo).
 
+### Trava de edição nas telas de gestão
+
+Generaliza a trava do jogo (acima) pras 3 telas de gestão que podem ter dois
+Admins/Lançadores a mexer ao mesmo tempo sem perceber: Plantel, Formato de
+Jogo e Convites. `resource_locks` (migração `0016`) é uma tabela genérica
+chaveada por `(team_id, resource_type)`, com `claim_resource_lock`/
+`release_resource_lock` (`SECURITY DEFINER`, heartbeat de 20s) — mesmo
+padrão de `matches.live_holder_id`, só que parametrizado em vez de ter uma
+coluna fixa por recurso. Ao contrário do jogo (onde abrir a tela já é a
+intenção de editar), estas 3 telas ficam sempre visíveis no painel — só
+entram em disputa pela trava quando há uma edição de facto em curso (ex.:
+uma linha do Plantel aberta para editar), nunca só por ver a lista.
+`apps/web/src/team/useResourceLock.ts` consome isto, com um parâmetro
+`enabled` que não existe na trava do jogo, por essa razão.
+
+### Histórico de acesso e proteção do último Admin
+
+`team_access_log` (migração `0017`) regista automaticamente cada entrada/
+saída de alguém numa equipa (`granted`/`revoked`) — nunca escrito pelo
+cliente, só por triggers em `team_members` (`AFTER INSERT`/`AFTER DELETE`/
+`AFTER UPDATE OF role`). Guarda um snapshot do email no momento do evento
+(`target_email`/`actor_email`), não um FK obrigatório — uma conta apagada
+(RGPD) não fica presa para sempre por aparecer no histórico. Só team_admin
+lê (`list_team_access_log`, `SECURITY DEFINER`, mesmo padrão de
+`list_team_members_with_email`).
+
+Uma equipa nunca pode ficar com zero `team_admin` — `prevent_last_admin_removal`
+(migração `0017`) bloqueia tanto `DELETE` (remover alguém) quanto
+`UPDATE OF role` (despromover) quando seria o último, libertando assim que
+há 2+ Admins. Cobrir `UPDATE`, não só `DELETE`, foi necessário porque
+`accept_invite()` (migração `0007`) já mudava o papel de alguém via
+`ON CONFLICT DO UPDATE` ao reaceitar um convite — um caminho que passava
+completamente ao lado de uma proteção pensada só para `DELETE`.
+
+Mudar o papel de alguém diretamente (migração `0018`, policy de `UPDATE` em
+`team_members` restrita a team_admin da própria equipa) reaproveita esses
+mesmos dois triggers sem alterá-los — ambos já disparam em qualquer
+`UPDATE OF role`, não só no caminho do convite.
+
 ### Planeamento de rotação e aptidão
 
 `rotation_plans`/`rotation_plan_stints` guardam um plano PRÉ-jogo opcional

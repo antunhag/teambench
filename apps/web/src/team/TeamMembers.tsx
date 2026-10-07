@@ -13,9 +13,18 @@ const ROLE_LABELS: Record<TeamRole, string> = {
   viewer: "Visualizador",
 };
 
+const EVENT_LABELS: Record<"granted" | "revoked", string> = {
+  granted: "entrou",
+  revoked: "saiu",
+};
+
+function fmtDate(iso: string): string {
+  return new Date(iso).toLocaleDateString("pt-PT", { day: "2-digit", month: "2-digit", year: "numeric" });
+}
+
 /** Só visível para quem já é Admin da Equipa — gere quem tem acesso e convida gente nova. */
 export function TeamMembers({ teamId }: Props) {
-  const { members, invites, status, errorMessage, createInvite, revokeInvite, removeMember } = useTeamMembers(teamId);
+  const { members, invites, accessLog, status, errorMessage, createInvite, revokeInvite, removeMember, changeRole } = useTeamMembers(teamId);
 
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<TeamRole>("data_entry");
@@ -23,6 +32,8 @@ export function TeamMembers({ teamId }: Props) {
   const [saveError, setSaveError] = useState("");
   const [lastLink, setLastLink] = useState<{ email: string; url: string } | null>(null);
   const [copyFeedback, setCopyFeedback] = useState("");
+  const [memberError, setMemberError] = useState("");
+  const [showAccessLog, setShowAccessLog] = useState(false);
 
   // Só o formulário de gerar convite (composição multi-campo) entra em
   // disputa pela trava — remover membro/revogar convite são ações de um
@@ -42,6 +53,34 @@ export function TeamMembers({ teamId }: Props) {
     } catch (err) {
       setSaveStatus("error");
       setSaveError(toErrorMessage(err));
+    }
+  }
+
+  async function handleRemoveMember(id: string, memberEmail: string) {
+    setMemberError("");
+    try {
+      await removeMember(id);
+    } catch (err) {
+      const message = toErrorMessage(err);
+      setMemberError(
+        message.includes("last_admin")
+          ? `Não é possível remover ${memberEmail} — é o único Admin da Equipa. Promove outra pessoa a Admin primeiro.`
+          : message
+      );
+    }
+  }
+
+  async function handleChangeRole(id: string, newRole: TeamRole, memberEmail: string) {
+    setMemberError("");
+    try {
+      await changeRole(id, newRole);
+    } catch (err) {
+      const message = toErrorMessage(err);
+      setMemberError(
+        message.includes("last_admin")
+          ? `Não é possível mudar o papel de ${memberEmail} — é o único Admin da Equipa. Promove outra pessoa a Admin primeiro.`
+          : message
+      );
     }
   }
 
@@ -65,17 +104,31 @@ export function TeamMembers({ teamId }: Props) {
       <div>
         {members.map((m) => (
           <div key={m.id} className="list-row">
-            <span className="lname" style={{ fontWeight: 400 }}>
-              {m.email} <span className="lsub">— {ROLE_LABELS[m.role]}</span>
+            <span className="lname" style={{ fontWeight: 400 }}>{m.email}</span>
+            <span>
+              <select
+                value={m.role}
+                onChange={(e) => handleChangeRole(m.id, (e.target as HTMLSelectElement).value as TeamRole, m.email)}
+                style={{ marginRight: 8 }}
+              >
+                <option value="team_admin">Admin da Equipa</option>
+                <option value="data_entry">Lançador de dados</option>
+                <option value="viewer">Visualizador</option>
+              </select>
+              {members.length > 1 && (
+                <button
+                  type="button"
+                  className="btn sm danger"
+                  onClick={() => confirm(`Remover ${m.email} da equipa?`) && handleRemoveMember(m.id, m.email)}
+                >
+                  Remover
+                </button>
+              )}
             </span>
-            {members.length > 1 && (
-              <button type="button" className="btn sm danger" onClick={() => confirm(`Remover ${m.email} da equipa?`) && removeMember(m.id)}>
-                Remover
-              </button>
-            )}
           </div>
         ))}
       </div>
+      {memberError && <p className="banner error" style={{ marginTop: 8 }}>{memberError}</p>}
 
       {invites.length > 0 && (
         <>
@@ -137,6 +190,26 @@ export function TeamMembers({ teamId }: Props) {
           <p style={{ margin: "6px 0", wordBreak: "break-all", fontFamily: "ui-monospace, Menlo, monospace", fontSize: 12 }}>{lastLink.url}</p>
           <button type="button" className="btn sm ghost" onClick={() => copyLink(lastLink.url)}>Copiar link</button>
           {copyFeedback && <span className="hint" style={{ marginLeft: 8, color: "var(--court)" }}>{copyFeedback}</span>}
+        </div>
+      )}
+
+      {accessLog.length > 0 && (
+        <div style={{ marginTop: 20 }}>
+          <button type="button" className="btn sm ghost" onClick={() => setShowAccessLog((v) => !v)}>
+            {showAccessLog ? "Ocultar" : "Ver"} histórico de acesso ({accessLog.length})
+          </button>
+          {showAccessLog && (
+            <div style={{ marginTop: 8 }}>
+              {accessLog.map((l) => (
+                <div key={l.id} className="list-row" style={{ fontSize: 12.5 }}>
+                  <span className="lsub">
+                    {fmtDate(l.createdAt)} — <strong>{l.targetEmail}</strong> {EVENT_LABELS[l.eventType]} ({ROLE_LABELS[l.role]})
+                    {l.eventType === "revoked" && l.actorEmail ? ` — removido por ${l.actorEmail}` : ""}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>
