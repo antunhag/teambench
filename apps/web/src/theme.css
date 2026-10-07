@@ -359,6 +359,15 @@ select {
   font-size: 12px;
   cursor: pointer;
 }
+/* O botão "Registar com vídeo" usa .btn.ghost (genérico, pensado pra
+   fundos claros tipo .surface) mas vive dentro do placar escuro — sem
+   isto, texto/contorno escuros em cima do --court preto ficam invisíveis.
+   Mesmo padrão branco-translúcido já usado em .clock-btn/.timeout-box
+   acima, só pra este botão específico, sem tocar .btn.ghost em geral. */
+.scoreboard .btn.ghost {
+  border-color: rgba(255, 255, 255, 0.5);
+  color: var(--court-ink);
+}
 .scoreboard-fouls {
   display: flex;
   justify-content: center;
@@ -692,6 +701,22 @@ th.num {
 .tablewrap {
   overflow-x: auto;
   margin-top: 6px;
+}
+/* Coluna de ações (botões) fixa à direita ao arrastar a tabela — em ecrã
+   estreito, com as outras colunas a empurrar a tabela pra além da largura
+   do ecrã, os botões ficavam só alcançáveis arrastando pro lado, sem
+   nenhuma pista visual de que dava pra arrastar (parecia cortado/partido,
+   não escondido). Usada no Plantel (Editar/Remover) e no Calendário
+   (Iniciar jogo/Corrigir registo/Planear rotações/Editar/Apagar — por
+   isso a coluna fica larga ao arrastar nessas linhas, mas continua melhor
+   que esconder os botões sem pista nenhuma). Escopado a .actions-col de
+   propósito — não um `.tablewrap td:last-child` geral, que pregaria a
+   coluna errada nas outras tabelas da app (MatchSummary, MatchEventEditor,
+   RotationPlanner) sem terem a mesma necessidade. */
+.actions-col {
+  position: sticky;
+  right: 0;
+  background: var(--surface);
 }
 
 textarea.exportbox {

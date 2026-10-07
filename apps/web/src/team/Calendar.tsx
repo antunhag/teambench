@@ -121,7 +121,7 @@ export function Calendar({ teamId, canManage, canTrackLive, onStartMatch, onCorr
                 <th>Adversário</th>
                 <th>Competição</th>
                 <th>Local</th>
-                <th />
+                <th className="actions-col" />
               </tr>
             </thead>
             <tbody>
@@ -153,7 +153,7 @@ export function Calendar({ teamId, canManage, canTrackLive, onStartMatch, onCorr
                     <td>{m.opponent}</td>
                     <td>{m.competition}</td>
                     <td>{m.location}</td>
-                    <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                    <td className="actions-col" style={{ textAlign: "right", whiteSpace: "nowrap" }}>
                       {canTrackLive && (
                         <button type="button" className="btn sm primary" onClick={() => onStartMatch(m.id, m.opponent, m.formatId)}>
                           Iniciar jogo

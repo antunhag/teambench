@@ -182,7 +182,7 @@ export function Roster({ teamId, canManage }: Props) {
                 <th>Nome</th>
                 <th>Posição</th>
                 <th>Aptidões</th>
-                {canManage && <th />}
+                {canManage && <th className="actions-col" />}
               </tr>
             </thead>
             <tbody>
@@ -239,7 +239,7 @@ export function Roster({ teamId, canManage }: Props) {
                       {engine.sortedAptitudeSlots(bySlot).map((slot) => engine.aptitudeLabel(slot, bySlot[slot])).join(" › ") || "—"}
                     </td>
                     {canManage && (
-                      <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                      <td className="actions-col" style={{ textAlign: "right", whiteSpace: "nowrap" }}>
                         <button type="button" className="btn sm ghost" onClick={() => setEditingId(p.id)}>Editar</button>{" "}
                         <button type="button" className="btn sm danger" onClick={() => deactivatePlayer(p.id)}>Remover</button>
                       </td>
@@ -267,7 +267,7 @@ export function Roster({ teamId, canManage }: Props) {
                       <td className="num">#{p.num}</td>
                       <td>{p.name}</td>
                       <td>{posAbbr(p.position)}</td>
-                      <td style={{ textAlign: "right" }}>
+                      <td className="actions-col" style={{ textAlign: "right" }}>
                         <button type="button" className="btn sm ghost" onClick={() => reactivatePlayer(p.id)}>Reativar</button>
                       </td>
                     </tr>

@@ -168,8 +168,18 @@ function TeamApp({
   const ourLabel = useClubLabel(team.teamId);
   const { activeScreen, setActiveScreen } = useActiveScreen("calendar");
 
+  // Calendário e Plantel têm tabelas com várias colunas/texto longo que
+  // quebram em linhas de mais mesmo em ecrã grande, com a coluna estreita
+  // (.page, 520px) a sobrar espaço nas laterais sem necessidade — mesma
+  // classe .page.wide já usada no jogo ao vivo/corretor/planeador,
+  // reaproveitada aqui em vez de criar uma largura nova. Acesso à Equipa e
+  // Formato de Jogo ficam estreitos de propósito: são listas/formulários
+  // curtos, alargar só pioraria a leitura sem ganho nenhum.
+  const isWideScreen =
+    activeMatch || correctionMatch || planningMatch || activeScreen === "calendar" || activeScreen === "roster";
+
   return (
-    <div className={activeMatch || correctionMatch || planningMatch ? "page wide" : "page"}>
+    <div className={isWideScreen ? "page wide" : "page"}>
       {activeMatch ? (
         <MatchFlow
           teamId={team.teamId}
