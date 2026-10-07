@@ -4,6 +4,7 @@ import { toErrorMessage } from "../errorMessage";
 import { isLegacyAla, LEGACY_ALA, POSITIONS, posAbbr, type Position } from "./positions";
 import { usePlayerAptitudes } from "./usePlayerAptitudes";
 import { usePlayers, type PlayerRow } from "./usePlayers";
+import { useResourceLock } from "./useResourceLock";
 
 interface Props {
   teamId: string;
@@ -122,6 +123,10 @@ export function Roster({ teamId, canManage }: Props) {
   const [aptitudeError, setAptitudeError] = useState("");
   const [showInactive, setShowInactive] = useState(false);
 
+  // Trava da tela inteira (não por atleta — ver FR-005 da spec), só entra em
+  // disputa quando alguém de facto abre uma edição, nunca só por ver a lista.
+  const lock = useResourceLock(teamId, "roster", editingId !== null);
+
   const [importText, setImportText] = useState("");
   const [importSummary, setImportSummary] = useState("");
   const [importStatus, setImportStatus] = useState<"idle" | "saving" | "error">("idle");
@@ -183,6 +188,25 @@ export function Roster({ teamId, canManage }: Props) {
             <tbody>
               {active.map((p) => {
                 const bySlot = aptitudes.byPlayer[p.id] ?? {};
+                if (canManage && editingId === p.id && lock.status === "checking") {
+                  return (
+                    <tr key={p.id}>
+                      <td colSpan={columnCount} className="hint">A verificar...</td>
+                    </tr>
+                  );
+                }
+                if (canManage && editingId === p.id && lock.status === "readonly") {
+                  return (
+                    <tr key={p.id}>
+                      <td colSpan={columnCount}>
+                        <div className="banner warn" style={{ margin: 0 }}>
+                          O Plantel está a ser editado por outra pessoa agora.{" "}
+                          <button type="button" className="btn sm ghost" onClick={() => setEditingId(null)}>Fechar</button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                }
                 return canManage && editingId === p.id ? (
                   <EditRow
                     key={p.id}

@@ -1,6 +1,7 @@
 import { useState } from "preact/hooks";
 import { toErrorMessage } from "../errorMessage";
 import { inviteLink, useTeamMembers, type TeamRole } from "./useTeamMembers";
+import { useResourceLock } from "./useResourceLock";
 
 interface Props {
   teamId: string;
@@ -22,6 +23,12 @@ export function TeamMembers({ teamId }: Props) {
   const [saveError, setSaveError] = useState("");
   const [lastLink, setLastLink] = useState<{ email: string; url: string } | null>(null);
   const [copyFeedback, setCopyFeedback] = useState("");
+
+  // Só o formulário de gerar convite (composição multi-campo) entra em
+  // disputa pela trava — remover membro/revogar convite são ações de um
+  // clique só, sem estado em progresso pra perder, mesma lógica aplicada em
+  // Roster.tsx/MatchFormats.tsx (nunca trava só por ver a lista, FR-006).
+  const lock = useResourceLock(teamId, "invites", email !== "");
 
   async function handleInvite(e: Event) {
     e.preventDefault();
@@ -89,29 +96,37 @@ export function TeamMembers({ teamId }: Props) {
         </>
       )}
 
-      <form onSubmit={handleInvite} className="inline-fields" style={{ marginTop: 12 }}>
-        <div className="field" style={{ marginBottom: 0 }}>
-          <label>Email a convidar</label>
-          <input
-            type="email"
-            required
-            value={email}
-            onInput={(e) => setEmail((e.target as HTMLInputElement).value)}
-            style={{ width: 220 }}
-          />
+      {lock.status === "readonly" && (
+        <div className="banner warn" style={{ marginTop: 12 }}>
+          Os Convites estão a ser editados por outra pessoa agora.{" "}
+          <button type="button" className="btn sm ghost" onClick={() => setEmail("")}>Fechar</button>
         </div>
-        <div className="field" style={{ marginBottom: 0 }}>
-          <label>Papel</label>
-          <select value={role} onChange={(e) => setRole((e.target as HTMLSelectElement).value as TeamRole)}>
-            <option value="data_entry">Lançador de dados</option>
-            <option value="team_admin">Admin da Equipa</option>
-            <option value="viewer">Visualizador</option>
-          </select>
-        </div>
-        <button type="submit" className="btn primary" disabled={saveStatus === "saving"}>
-          Gerar convite
-        </button>
-      </form>
+      )}
+      {lock.status !== "readonly" && (
+        <form onSubmit={handleInvite} className="inline-fields" style={{ marginTop: 12 }}>
+          <div className="field" style={{ marginBottom: 0 }}>
+            <label>Email a convidar</label>
+            <input
+              type="email"
+              required
+              value={email}
+              onInput={(e) => setEmail((e.target as HTMLInputElement).value)}
+              style={{ width: 220 }}
+            />
+          </div>
+          <div className="field" style={{ marginBottom: 0 }}>
+            <label>Papel</label>
+            <select value={role} onChange={(e) => setRole((e.target as HTMLSelectElement).value as TeamRole)}>
+              <option value="data_entry">Lançador de dados</option>
+              <option value="team_admin">Admin da Equipa</option>
+              <option value="viewer">Visualizador</option>
+            </select>
+          </div>
+          <button type="submit" className="btn primary" disabled={saveStatus === "saving" || lock.status === "checking"}>
+            Gerar convite
+          </button>
+        </form>
+      )}
       {saveStatus === "error" && <p className="banner error" style={{ marginTop: 8 }}>{saveError}</p>}
 
       {lastLink && (

@@ -1,6 +1,7 @@
 import { useState } from "preact/hooks";
 import { toErrorMessage } from "../errorMessage";
 import { useMatchFormats } from "./useMatchFormats";
+import { useResourceLock } from "./useResourceLock";
 
 interface Props {
   teamId: string;
@@ -18,6 +19,12 @@ export function MatchFormats({ teamId, canManage }: Props) {
   const [overtimeMinutes, setOvertimeMinutes] = useState(0);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "error">("idle");
   const [saveError, setSaveError] = useState("");
+
+  // Esta tela não tem um "modo de edição" explícito (só o formulário de
+  // adicionar) — o sinal de "a editar" é ter começado a preencher o nome do
+  // formato novo, mesmo espírito do editingId do Plantel: nunca trava só por
+  // ver a lista (FR-006), só quando há de facto uma edição em curso.
+  const lock = useResourceLock(teamId, "match_format", name !== "");
 
   async function handleAdd(e: Event) {
     e.preventDefault();
@@ -66,7 +73,13 @@ export function MatchFormats({ teamId, canManage }: Props) {
         </div>
       )}
 
-      {canManage && (
+      {canManage && lock.status === "readonly" && (
+        <div className="banner warn" style={{ marginTop: 12 }}>
+          O Formato de Jogo está a ser editado por outra pessoa agora.{" "}
+          <button type="button" className="btn sm ghost" onClick={() => setName("")}>Fechar</button>
+        </div>
+      )}
+      {canManage && lock.status !== "readonly" && (
         <form onSubmit={handleAdd} className="inline-fields" style={{ marginTop: 12 }}>
           <div className="field" style={{ marginBottom: 0 }}>
             <label>Nome</label>
@@ -88,7 +101,7 @@ export function MatchFormats({ teamId, canManage }: Props) {
             <label>Min/prolong.</label>
             <input type="number" min={0} value={overtimeMinutes} onInput={(e) => setOvertimeMinutes(Number((e.target as HTMLInputElement).value))} style={{ width: 70 }} />
           </div>
-          <button type="submit" className="btn primary" disabled={saveStatus === "saving"}>
+          <button type="submit" className="btn primary" disabled={saveStatus === "saving" || lock.status === "checking"}>
             Adicionar formato
           </button>
         </form>
