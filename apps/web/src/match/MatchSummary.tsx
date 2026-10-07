@@ -150,7 +150,12 @@ export function MatchSummary({ live, roster, opponent, matchId, teamId, onClose,
 
   async function handleFinish() {
     setFinishStatus("saving");
-    const { error } = await supabase.from("matches").update({ status: "finished" }).eq("id", matchId);
+    // RPC, não update direto — a policy de UPDATE em matches só permite
+    // team_admin; finish_live_match (migração 0019) abre pra data_entry
+    // também, o mesmo papel que já pode registar o jogo ao vivo do início
+    // ao fim (sem isto, um Lançador de dados clicava aqui e via sempre
+    // "Não consegui marcar como terminado", sem nenhuma forma de resolver).
+    const { error } = await supabase.rpc("finish_live_match", { p_match_id: matchId });
     setFinishStatus(error ? "error" : "done");
   }
 

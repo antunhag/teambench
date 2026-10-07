@@ -3,9 +3,7 @@ import { useEffect, useState } from "preact/hooks";
 import { AcceptInvite } from "./team/AcceptInvite";
 import { Login } from "./auth/Login";
 import { isSupabaseConfigured, supabase } from "./supabaseClient";
-import { MatchEventEditor } from "./match/MatchEventEditor";
-import { MatchFlow } from "./match/MatchFlow";
-import { RotationPlanner } from "./match/RotationPlanner";
+import { MatchHub } from "./match/MatchHub";
 import { Calendar } from "./team/Calendar";
 import { ClubSettings } from "./team/ClubSettings";
 import { CreateClub } from "./team/CreateClub";
@@ -161,10 +159,14 @@ function TeamApp({
   sync: ReturnType<typeof useOutboxSync>;
 }) {
   const team = userTeams.selectedTeam!;
-  const [activeMatch, setActiveMatch] = useState<{ id: string; opponent: string | null; formatId: string | null } | null>(null);
-  const [correctionMatch, setCorrectionMatch] = useState<{ id: string; opponent: string | null } | null>(null);
-  const [planningMatch, setPlanningMatch] = useState<{ id: string; opponent: string | null; formatId: string | null } | null>(null);
+  // Ponto de entrada único por jogo (MatchHub — abas Jogo/Rotações/Registo),
+  // no lugar dos 3 estados separados que existiam antes (um por tela:
+  // ativo/correção/planeamento) — ver MatchHub.tsx.
+  const [openMatch, setOpenMatch] = useState<{ id: string; opponent: string | null; formatId: string | null; status: string } | null>(
+    null
+  );
   const canTrackLive = team.role === "team_admin" || team.role === "data_entry";
+  const canManage = team.role === "team_admin";
   const ourLabel = useClubLabel(team.teamId);
   const { activeScreen, setActiveScreen } = useActiveScreen("calendar");
 
@@ -175,36 +177,22 @@ function TeamApp({
   // reaproveitada aqui em vez de criar uma largura nova. Acesso à Equipa e
   // Formato de Jogo ficam estreitos de propósito: são listas/formulários
   // curtos, alargar só pioraria a leitura sem ganho nenhum.
-  const isWideScreen =
-    activeMatch || correctionMatch || planningMatch || activeScreen === "calendar" || activeScreen === "roster";
+  const isWideScreen = openMatch || activeScreen === "calendar" || activeScreen === "roster";
 
   return (
     <div className={isWideScreen ? "page wide" : "page"}>
-      {activeMatch ? (
-        <MatchFlow
+      {openMatch ? (
+        <MatchHub
           teamId={team.teamId}
-          matchId={activeMatch.id}
-          opponent={activeMatch.opponent}
-          formatId={activeMatch.formatId}
-          onExit={() => setActiveMatch(null)}
-          sync={sync}
-        />
-      ) : correctionMatch ? (
-        <MatchEventEditor
-          teamId={team.teamId}
-          matchId={correctionMatch.id}
-          opponent={correctionMatch.opponent}
-          onClose={() => setCorrectionMatch(null)}
-          canDelete={team.role === "team_admin"}
+          matchId={openMatch.id}
+          opponent={openMatch.opponent}
+          formatId={openMatch.formatId}
+          status={openMatch.status}
+          canManage={canManage}
+          canTrackLive={canTrackLive}
           ourLabel={ourLabel}
-        />
-      ) : planningMatch ? (
-        <RotationPlanner
-          teamId={team.teamId}
-          matchId={planningMatch.id}
-          opponent={planningMatch.opponent}
-          formatId={planningMatch.formatId}
-          onClose={() => setPlanningMatch(null)}
+          sync={sync}
+          onExit={() => setOpenMatch(null)}
         />
       ) : (
         <>
@@ -262,11 +250,9 @@ function TeamApp({
           {activeScreen === "calendar" && (
             <Calendar
               teamId={team.teamId}
-              canManage={team.role === "team_admin"}
+              canManage={canManage}
               canTrackLive={canTrackLive}
-              onStartMatch={(id, opponent, formatId) => setActiveMatch({ id, opponent, formatId })}
-              onCorrectMatch={(id, opponent) => setCorrectionMatch({ id, opponent })}
-              onPlanMatch={(id, opponent, formatId) => setPlanningMatch({ id, opponent, formatId })}
+              onOpenMatch={(id, opponent, formatId, status) => setOpenMatch({ id, opponent, formatId, status })}
             />
           )}
           {activeScreen === "roster" && <Roster teamId={team.teamId} canManage={team.role === "team_admin"} />}

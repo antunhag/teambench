@@ -170,6 +170,20 @@ export function useLiveMatch(matchId: string, teamId: string, format: engine.Mat
     return () => clearInterval(id);
   }, []);
 
+  // Assim que as duas partes terminam (state.finished, puro — nunca lê o
+  // banco), marca matches.status = 'finished' sozinho, sem depender de
+  // alguém abrir o Resumo e clicar em "Marcar jogo como terminado" — sem
+  // isto, a etiqueta do Calendário ("Continuar jogo" vs. "Ver resumo")
+  // ficava errada pra qualquer jogo que ninguém tivesse fechado à mão
+  // (descobrimos que era quase todo jogo de teste). Melhor esforço: se
+  // falhar agora (sem rede), tenta de novo da próxima vez que este hook
+  // montar com o jogo já terminado — RPC, não update direto, ver migração
+  // 0019 (a policy de UPDATE direto em matches só permite team_admin).
+  useEffect(() => {
+    if (!state.finished) return;
+    supabase.rpc("finish_live_match", { p_match_id: matchId });
+  }, [state.finished, matchId]);
+
   const now = () => (manual ? manualElapsedMs : Date.now());
   const elapsedMs = engine.matchElapsedMs(state, now());
   void tick; // usado só para disparar o re-render acima

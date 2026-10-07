@@ -7,9 +7,16 @@ interface Props {
   teamId: string;
   canManage: boolean;
   canTrackLive: boolean;
-  onStartMatch: (matchId: string, opponent: string | null, formatId: string | null) => void;
-  onCorrectMatch: (matchId: string, opponent: string | null) => void;
-  onPlanMatch: (matchId: string, opponent: string | null, formatId: string | null) => void;
+  /** Abre o ponto de entrada único do jogo (MatchHub — abas Jogo/Rotações/Registo). */
+  onOpenMatch: (matchId: string, opponent: string | null, formatId: string | null, status: string) => void;
+}
+
+/** Rótulo do botão de entrada, de acordo com o estado real do jogo — em vez
+    de "Iniciar jogo" sempre, mesmo num jogo já a meio ou já terminado. */
+function enterLabel(status: string): string {
+  if (status === "finished") return "Ver resumo";
+  if (status === "live") return "Continuar jogo";
+  return "Iniciar jogo";
 }
 
 const emptyForm: MatchFields = { matchDate: "", opponent: "", competition: null, location: null, kickoffTime: null, formatId: null };
@@ -78,7 +85,7 @@ function MatchForm({
   );
 }
 
-export function Calendar({ teamId, canManage, canTrackLive, onStartMatch, onCorrectMatch, onPlanMatch }: Props) {
+export function Calendar({ teamId, canManage, canTrackLive, onOpenMatch }: Props) {
   const { matches, status, errorMessage, createMatch, updateMatch, deleteMatch, bulkImport } = useMatches(teamId);
   const { formats } = useMatchFormats(teamId);
   const defaultFormat = formats.find((f) => f.isDefault) ?? null;
@@ -155,20 +162,16 @@ export function Calendar({ teamId, canManage, canTrackLive, onStartMatch, onCorr
                     <td>{m.location}</td>
                     <td className="actions-col" style={{ textAlign: "right", whiteSpace: "nowrap" }}>
                       {canTrackLive && (
-                        <button type="button" className="btn sm primary" onClick={() => onStartMatch(m.id, m.opponent, m.formatId)}>
-                          Iniciar jogo
-                        </button>
-                      )}{" "}
-                      {canTrackLive && (
-                        <button type="button" className="btn sm ghost" onClick={() => onCorrectMatch(m.id, m.opponent)}>
-                          Corrigir registo
+                        <button
+                          type="button"
+                          className="btn sm primary"
+                          onClick={() => onOpenMatch(m.id, m.opponent, m.formatId, m.status)}
+                        >
+                          {enterLabel(m.status)}
                         </button>
                       )}{" "}
                       {canManage && (
                         <>
-                          <button type="button" className="btn sm ghost" onClick={() => onPlanMatch(m.id, m.opponent, m.formatId)}>
-                            Planear rotações
-                          </button>{" "}
                           <button type="button" className="btn sm ghost" onClick={() => setEditingMatch(m)}>Editar</button>{" "}
                           <button type="button" className="btn sm danger" onClick={() => confirm(`Apagar o jogo vs ${m.opponent}?`) && deleteMatch(m.id)}>
                             Apagar
