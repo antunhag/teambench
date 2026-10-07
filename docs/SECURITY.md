@@ -101,10 +101,49 @@ condição?".
 nunca na anon key estar "escondida". Nenhuma service-role key é usada em
 `apps/web` (nem deveria: isso ignoraria RLS por completo).
 
+## Auditoria de segurança — 2026-10-07
+
+Primeira auditoria formal do projeto (subagente `security-auditor`, verificada
+manualmente linha a linha antes de qualquer correção). Dois achados reais,
+corrigidos e já aplicados em produção via
+`supabase/migrations/0015_security_audit_fixes.sql`:
+
+- **`invites` expunha convites pendentes (email + token) a qualquer membro da
+  equipa, não só Admin.** A policy original de SELECT (`invites_select_team`,
+  migração 0002) nunca foi apertada quando o fluxo de convites "a sério"
+  chegou em 0007 — ficou coexistindo com a nova `invites_select_own_email` via
+  OR. `accept_invite()` continua a exigir que o email bata com quem está
+  autenticado, então um token lido assim não dava pra sequestrar o convite de
+  outra pessoa — mas o email/papel do convidado ficava visível pra qualquer
+  Lançador de dados/Visualizador da equipa, o que é exposição a mais num
+  clube de menores. Corrigido: SELECT em `invites` agora é só `team_admin`
+  (+ o próprio convidado vendo o seu).
+- **`teams.club_id` podia ser trocado por um `team_admin` sem ser admin do
+  clube.** A policy de UPDATE em `teams` (migração 0003) não tinha `with
+  check` — um `team_admin` comum conseguia mover a própria equipa pra
+  qualquer clube, mesmo sem administrá-lo. Corrigido com um trigger
+  (`teams_club_reassignment_guard`) que só deixa `club_id` mudar quando quem
+  está a fazer o update já é admin do clube de destino — um `with check`
+  simples quebraria a edição legítima de outros campos por um `team_admin`
+  comum, já que RLS não compara o valor antigo com o novo.
+
 ## O que ainda não está endurecido (próximos candidatos a `security-auditor`)
 
+- **`match_events` confia que o cliente só reenvia dados idênticos num
+  resync** (migração 0005) — nada na RLS impede um `data_entry` de alterar
+  qualquer campo de um evento histórico via UPDATE direto, o que contorna a
+  restrição de DELETE (admin-only, migração 0011) por outra via. Precisa de
+  um trigger que só aceite UPDATE quando os campos de jogo não mudaram —
+  adiado por exigir desenho cuidadoso pra não quebrar o resync offline de
+  verdade (Princípio I da constituição).
 - Domínio de email não verificado no Resend (ver acima) — bloqueia onboarding
   real, não é falha de isolamento de dados, mas é o item aberto mais visível hoje.
 - Sem testes automatizados de RLS (os testes de `packages/engine` nunca tocam
   Supabase) — toda garantia de RLS hoje é leitura manual da policy, não
   verificação executável.
+- **Dependências de desenvolvimento** (`vite`/`vitest`, nunca enviadas pro
+  bundle de produção — `npm audit --omit=dev` dá 0 achados) têm 6
+  vulnerabilidades conhecidas, incluindo uma crítica (RCE via poluição de
+  protótipo no `tinypool`, usado pelo `vitest`), só corrigíveis com upgrade
+  maior (`vite` 5→8, `vitest` 4→5) — adiado deliberadamente pra não arriscar
+  quebrar a suite de testes/build sem verificação cuidadosa primeiro.
