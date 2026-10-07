@@ -47,6 +47,29 @@ clubs (Admin do Clube: acesso implícito a TODAS as equipas do clube)
 Um clube pode ter várias equipas (escalões); hoje só existe uma equipa real em uso,
 mas a estrutura já comporta mais sem mudança de esquema — ver Princípio III.
 
+### Navegação e seleção de equipa
+
+`apps/web/src/App.tsx` é uma casca (`Nav` + topbar), nunca mais uma página só com
+tudo empilhado. `useUserTeams.ts` (`apps/web/src/team/`) carrega TODAS as equipas
+a que o utilizador pertence (não só uma — isto substituiu um `useCurrentTeam.ts`
+que fazia `.limit(1)` de propósito, com um comentário já a admitir a limitação) e
+gere qual está selecionada; um seletor no topbar só aparece pra quem pertence a
+2+ equipas. A última equipa selecionada, e o último ecrã ativo
+(`useActiveScreen.ts`), ficam em `localStorage` — por aparelho, nunca
+sincronizados entre aparelhos nem com um link/URL próprio por ecrã (decisão
+deliberada, ver `specs/002-multi-team-navigation/research.md`).
+
+Quais itens de navegação aparecem é uma função pura —
+`packages/engine/src/navigation.ts` (`visibleNavItems(role)`) — reavaliada sempre
+que o papel do utilizador NA equipa selecionada muda (troca de equipa, ou perda
+de papel a meio da sessão). Um item sem o papel mínimo necessário é removido por
+completo da navegação, nunca mostrado desabilitado; isto é só apresentação — a
+proteção real continua a ser a RLS do Supabase, inalterada por esta feature.
+`useUserTeams.ts` também reconsulta a lista de equipas periodicamente (20s) e ao
+recuperar o foco da janela, pra avisar com clareza se a equipa selecionada deixar
+de estar acessível a meio da sessão (ex.: foi removido por um Admin) — sem usar
+Supabase Realtime, que este projeto não usa em mais nenhum ponto.
+
 ### Registo de jogo — event-sourced
 
 `match_events` é o coração do sistema: cada lance (substituição, golo, cartão,
@@ -132,11 +155,14 @@ packages/engine/src/
   rotationPlan.ts    # plano de rotação + aptidão A/B/C
   timeline.ts         # export visual (HTML) + buildEventsExport (JSON p/ ferramentas externas)
   report.ts            # descrições textuais, exportação pro Excel/Sheets do clube
+  navigation.ts          # itens de navegação visíveis por papel (visibleNavItems)
+  resourceLock.ts          # trava genérica das telas de gestão
   rows.ts, matchFormat.ts, goalTypes.ts, time.ts, types.ts
 
 apps/web/src/
+  Nav.tsx, useActiveScreen.ts   # casca de navegação + ecrã ativo (localStorage)
   auth/     # Login.tsx (link mágico + senha)
-  team/     # Plantel, convites, clube/equipa, AcceptInvite
+  team/     # Plantel, convites, clube/equipa, AcceptInvite, useUserTeams (todas as equipas do utilizador)
   match/    # fluxo ao vivo, Resumo, Timeline, corretor pós-jogo, planeador de rotação
   sync/     # fila de sincronização offline → Supabase
 

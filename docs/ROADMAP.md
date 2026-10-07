@@ -9,14 +9,6 @@
 
 ## Agora
 
-- **Navegação multi-equipa com segregação de acesso** — identificado
-  2026-10-07, assim que "Robustecer o acesso multiusuário" (abaixo) ficou
-  pronto: a partir do momento em que mais gente do clube (não só a equipa
-  Sub-15 atual) for usar o Teambench, vai ser preciso navegação própria por
-  equipa e a segregação de acesso refletida na estrutura de ecrãs, não só
-  nas RLS por trás — hoje está tudo numa tela só. O esquema já comporta isto
-  (`clubs` → `teams` → `team_members`, Princípio III da constituição) mas a
-  UI ainda não. Ainda não especificado — próximo passo é `/speckit-specify`.
 - Verificar domínio de envio no Resend (resend.com/domains) — hoje bloqueia
   qualquer convite de chegar por email pra quem não é o dono da conta
   ([docs/SECURITY.md](SECURITY.md)).
@@ -27,6 +19,17 @@
 
 ## Feito recentemente
 
+- **Navegação multi-equipa com segregação de acesso** (2026-10-07) — spec
+  completa em [specs/002-multi-team-navigation/spec.md](../specs/002-multi-team-navigation/spec.md).
+  Entregou: `App.tsx` deixou de ser uma página única empilhada e virou uma
+  casca com navegação por abas (Calendário, Plantel, Formato de Jogo, Acesso
+  à Equipa); `useUserTeams.ts` substituiu `useCurrentTeam.ts` e passou a
+  carregar TODAS as equipas do utilizador, com um seletor que só aparece
+  pra quem pertence a 2+; navegação escondida por completo (nunca
+  desabilitada) conforme o papel na equipa selecionada
+  (`packages/engine/src/navigation.ts`, `visibleNavItems`). Sem migração —
+  reaproveita a RLS já existente. Detalhe completo em
+  [docs/ARCHITECTURE.md](ARCHITECTURE.md).
 - **Robustecer o acesso multiusuário do clube atual** (2026-10-07) — spec
   completa em [specs/001-multi-user-access/spec.md](../specs/001-multi-user-access/spec.md).
   Entregou: trava "uma conta, um recurso, até libertar" (generalização da
@@ -69,6 +72,14 @@
   de rotação) — hoje a classificação A/B/C por vaga permite empates (vários
   atletas "A" na mesma vaga); decidir QUEM joga primeiro num empate ainda é
   manual. Adiado explicitamente até o resto da rotação provar que precisa disso.
+- **Hierarquia "Admin do Clube"** — discutido 2026-10-07: um Admin do Clube
+  poder gerir todas as equipas do clube (não só uma), com um Admin de Equipa
+  só podendo gerir atribuições dentro da sua própria equipa. Deliberadamente
+  fora do escopo de "Navegação multi-equipa" (acima) — essa spec assumiu os
+  papéis atuais, só por equipa. Hoje não existe nenhum papel ao nível do
+  clube (só `club_members`/admin do clube pra configurações básicas, ver
+  `docs/ARCHITECTURE.md`) — precisa de `/speckit-specify` próprio quando
+  entrar em foco.
 
 ## Não planeado (de propósito)
 

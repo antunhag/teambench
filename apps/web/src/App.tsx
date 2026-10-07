@@ -15,9 +15,11 @@ import { Roster } from "./team/Roster";
 import { TeamMembers } from "./team/TeamMembers";
 import { useClubLabel } from "./team/useClubLabel";
 import { useCurrentClub } from "./team/useCurrentClub";
-import { useCurrentTeam, type CurrentTeam } from "./team/useCurrentTeam";
+import { useUserTeams } from "./team/useUserTeams";
 import { useOutboxSync } from "./sync/useOutboxSync";
 import { useAppUpdate } from "./useAppUpdate";
+import { Nav } from "./Nav";
+import { useActiveScreen } from "./useActiveScreen";
 
 const ROLE_LABELS: Record<string, string> = {
   team_admin: "Admin da Equipa",
@@ -98,7 +100,7 @@ function clearInviteFromUrl() {
 function AuthenticatedApp({ session }: { session: Session }) {
   const [inviteToken, setInviteToken] = useState<string | null>(getInviteTokenFromUrl);
   const club = useCurrentClub(session);
-  const team = useCurrentTeam(session);
+  const userTeams = useUserTeams(session);
   // Roda em segundo plano assim que há sessão — independente de qual tela
   // está aberta, e sobrevive a trocar de tela/clube/equipa.
   const sync = useOutboxSync();
@@ -118,7 +120,7 @@ function AuthenticatedApp({ session }: { session: Session }) {
         token={inviteToken}
         onAccepted={() => {
           dismissInvite();
-          team.refresh();
+          userTeams.refresh();
           club.refresh();
         }}
         onDismiss={dismissInvite}
@@ -126,15 +128,15 @@ function AuthenticatedApp({ session }: { session: Session }) {
     );
   }
 
-  if (club.status === "loading" || team.status === "loading") {
+  if (club.status === "loading" || userTeams.status === "loading") {
     return <p className="empty">A carregar...</p>;
   }
-  if (team.status === "error") {
-    return <p className="banner error">Erro: {team.errorMessage}</p>;
+  if (userTeams.status === "error") {
+    return <p className="banner error">Erro: {userTeams.errorMessage}</p>;
   }
 
-  if (team.status === "has-team") {
-    return <TeamApp session={session} team={team.team!} club={club} sync={sync} />;
+  if (userTeams.status === "has-team") {
+    return <TeamApp session={session} userTeams={userTeams} club={club} sync={sync} />;
   }
 
   // Sem equipa ainda — onboarding normal: clube primeiro, depois equipa.
@@ -144,25 +146,27 @@ function AuthenticatedApp({ session }: { session: Session }) {
   if (club.status === "no-club") {
     return <CreateClub session={session} onCreated={club.refresh} />;
   }
-  return <CreateTeam session={session} clubId={club.club!.clubId} clubName={club.club!.clubName} onCreated={team.refresh} />;
+  return <CreateTeam session={session} clubId={club.club!.clubId} clubName={club.club!.clubName} onCreated={userTeams.refresh} />;
 }
 
 function TeamApp({
   session,
-  team,
+  userTeams,
   club,
   sync,
 }: {
   session: Session;
-  team: CurrentTeam;
+  userTeams: ReturnType<typeof useUserTeams>;
   club: ReturnType<typeof useCurrentClub>;
   sync: ReturnType<typeof useOutboxSync>;
 }) {
+  const team = userTeams.selectedTeam!;
   const [activeMatch, setActiveMatch] = useState<{ id: string; opponent: string | null; formatId: string | null } | null>(null);
   const [correctionMatch, setCorrectionMatch] = useState<{ id: string; opponent: string | null } | null>(null);
   const [planningMatch, setPlanningMatch] = useState<{ id: string; opponent: string | null; formatId: string | null } | null>(null);
   const canTrackLive = team.role === "team_admin" || team.role === "data_entry";
   const ourLabel = useClubLabel(team.teamId);
+  const { activeScreen, setActiveScreen } = useActiveScreen("calendar");
 
   return (
     <div className={activeMatch || correctionMatch || planningMatch ? "page wide" : "page"}>
@@ -204,34 +208,69 @@ function TeamApp({
             <span className="tag">
               {session.user.email} · {ROLE_LABELS[team.role] ?? team.role}
             </span>
+            {/* Só aparece pra quem pertence a 2+ equipas — sem ruído pra quem só
+                tem uma (FR-003, Acceptance Scenario 3). */}
+            {userTeams.teams.length > 1 && (
+              <select
+                className="team-switcher"
+                value={team.teamId}
+                onChange={(e) => userTeams.selectTeam((e.target as HTMLSelectElement).value)}
+              >
+                {userTeams.teams.map((t) => (
+                  <option key={t.teamId} value={t.teamId}>
+                    {t.teamName}
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
+
+          {userTeams.lostAccessWarning && (
+            <div className="banner warn" style={{ marginBottom: 12 }}>
+              Deixaste de ter acesso à equipa anterior — foste levado para outra equipa a que ainda pertences.{" "}
+              <button type="button" className="btn sm ghost" onClick={userTeams.dismissLostAccessWarning}>
+                Entendi
+              </button>
+            </div>
+          )}
 
           {sync.pending > 0 && (
             <p className="hint">{sync.syncing ? "A sincronizar..." : `${sync.pending} evento(s) por sincronizar`}</p>
           )}
-          {/* Configurações de clube só fazem sentido para quem administra o clube — um
-              membro convidado só para esta equipa (ex.: Lançador de dados) nunca terá
-              club.status === "has-club", já que não faz parte de club_members. */}
-          {club.status === "has-club" && (
-            <ClubSettings
-              clubId={club.club!.clubId}
-              clubName={club.club!.clubName}
-              clubShortName={club.club!.clubShortName}
-              onUpdated={club.refresh}
+
+          <Nav role={team.role} activeScreen={activeScreen} onSelect={setActiveScreen} />
+
+          {activeScreen === "calendar" && (
+            <Calendar
+              teamId={team.teamId}
+              canManage={team.role === "team_admin"}
+              canTrackLive={canTrackLive}
+              onStartMatch={(id, opponent, formatId) => setActiveMatch({ id, opponent, formatId })}
+              onCorrectMatch={(id, opponent) => setCorrectionMatch({ id, opponent })}
+              onPlanMatch={(id, opponent, formatId) => setPlanningMatch({ id, opponent, formatId })}
             />
           )}
-
-          <Roster teamId={team.teamId} canManage={team.role === "team_admin"} />
-          <MatchFormats teamId={team.teamId} canManage={team.role === "team_admin"} />
-          <Calendar
-            teamId={team.teamId}
-            canManage={team.role === "team_admin"}
-            canTrackLive={canTrackLive}
-            onStartMatch={(id, opponent, formatId) => setActiveMatch({ id, opponent, formatId })}
-            onCorrectMatch={(id, opponent) => setCorrectionMatch({ id, opponent })}
-            onPlanMatch={(id, opponent, formatId) => setPlanningMatch({ id, opponent, formatId })}
-          />
-          {team.role === "team_admin" && <TeamMembers teamId={team.teamId} />}
+          {activeScreen === "roster" && <Roster teamId={team.teamId} canManage={team.role === "team_admin"} />}
+          {activeScreen === "match-formats" && <MatchFormats teamId={team.teamId} canManage={team.role === "team_admin"} />}
+          {activeScreen === "team-members" && team.role === "team_admin" && (
+            <>
+              {/* Configurações de clube só fazem sentido para quem administra o clube — um
+                  membro convidado só para esta equipa (ex.: Lançador de dados) nunca terá
+                  club.status === "has-club", já que não faz parte de club_members. Fica
+                  aqui (junto de Acesso à Equipa) por serem ambas telas de administração —
+                  não tem tab própria nesta feature, ver docs/ROADMAP.md (hierarquia Club
+                  Admin, adiada). */}
+              {club.status === "has-club" && (
+                <ClubSettings
+                  clubId={club.club!.clubId}
+                  clubName={club.club!.clubName}
+                  clubShortName={club.club!.clubShortName}
+                  onUpdated={club.refresh}
+                />
+              )}
+              <TeamMembers teamId={team.teamId} />
+            </>
+          )}
         </>
       )}
     </div>

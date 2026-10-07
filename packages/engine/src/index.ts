@@ -11,4 +11,5 @@ export * from "./report";
 export * from "./timeline";
 export * from "./rotationPlan";
 export * from "./resourceLock";
+export * from "./navigation";
 
