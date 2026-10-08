@@ -5,10 +5,18 @@
 > [constituição](../.specify/memory/constitution.md), Princípio III) antes de
 > qualquer código — este documento só regista a intenção e a prioridade.
 >
-> Última revisão: 2026-10-07.
+> Última revisão: 2026-10-08.
 
 ## Agora
 
+- **Visão de jogos entre vários escalões** — identificado 2026-10-08,
+  durante o agrupamento Próximos/Anteriores do Calendário: um Admin do
+  Clube que gere várias equipas não pode ficar a trocar de equipa só pra
+  ver os jogos de cada uma — precisa de uma visão combinada. É a parte
+  concreta e já com uso real identificado da "Hierarquia Admin do Clube"
+  (abaixo) — ainda sem spec, próximo passo é `/speckit-specify`. Deve
+  reaproveitar o mesmo agrupamento Próximos/Anteriores já construído por
+  equipa, só juntando jogos de várias equipas na mesma lista.
 - Verificar domínio de envio no Resend (resend.com/domains) — hoje bloqueia
   qualquer convite de chegar por email pra quem não é o dono da conta
   ([docs/SECURITY.md](SECURITY.md)).
@@ -18,6 +26,25 @@
   — exige upgrade maior, avaliar com calma antes de forçar.
 
 ## Feito recentemente
+
+- **Cara nova + correções reais de UX** (2026-10-07/08) — identidade
+  visual real da Académica de Leça (preto/branco/dourado, brasão no lugar
+  do emoji), trabalhada com um subagente `ui-designer` (VoltAgent) e o
+  skill oficial `frontend-design` da Anthropic como referência, ambos
+  agora disponíveis no projeto (`.claude/agents/`, `.claude/skills/`).
+  Achados reais corrigidos no processo: combos sem tema (brancos em cima
+  de fundo escuro), sobreposição de botões no telemóvel (Plantel,
+  Calendário), botão "Registar com vídeo" invisível no placar, botões de
+  zona do golo abaixo do alvo de toque mínimo. Consolidação do ponto de
+  entrada do jogo (5 botões → 1, com abas Jogo/Rotações/Registo —
+  `MatchHub.tsx`) revelou dois bugs reais de permissão/estado:
+  `finish_live_match`/`start_live_match` (migrações `0019`/`0020`)
+  corrigem um Lançador de dados nunca conseguir fechar um jogo, e
+  `matches.status` a virar "live" só por abrir a tela (não por o jogo
+  realmente ter começado). Calendário também passou a abrir direto nos
+  jogos futuros (jogos anteriores escondidos atrás de um botão), em vez
+  de uma lista só que cresce pra sempre. Detalhe completo em
+  [docs/ARCHITECTURE.md](ARCHITECTURE.md) e [docs/SECURITY.md](SECURITY.md).
 
 - **Navegação multi-equipa com segregação de acesso** (2026-10-07) — spec
   completa em [specs/002-multi-team-navigation/spec.md](../specs/002-multi-team-navigation/spec.md).
