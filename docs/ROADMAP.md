@@ -5,7 +5,7 @@
 > [constituição](../.specify/memory/constitution.md), Princípio III) antes de
 > qualquer código — este documento só regista a intenção e a prioridade.
 >
-> Última revisão: 2026-10-08.
+> Última revisão: 2026-10-08 (motor de sugestão de rotação).
 
 ## Agora
 
@@ -26,6 +26,22 @@
   — exige upgrade maior, avaliar com calma antes de forçar.
 
 ## Feito recentemente
+
+- **Motor de Sugestão de Rotação Baseado em Dados** (2026-10-08) — spec
+  completa em [specs/003-data-driven-rotation/spec.md](../specs/003-data-driven-rotation/spec.md).
+  Entregou: estado do atleta (Apto/A retomar/Indisponível, migração `0021`,
+  gerido no Plantel — FR-008); o seletor de atleta do planeador de rotação
+  passou a sugerir a ordem por vaga (aptidão A/B/C como fator dominante,
+  "jogam os melhores" — indisponível sempre por último, a retomar só marcado
+  com ⏳ sem mudar a ordem) e mostra o motivo por extenso de cada sugestão.
+  Minutos dos últimos 5 jogos terminados (`packages/engine/src/recentMinutes.ts`,
+  reaproveitando `replayEvents`) entram só como contexto no motivo, nunca
+  como critério de ordenação — um atleta sem histórico é ordenado só pela
+  aptidão (FR-006/SC-005). "A retomar" reverte sozinho pra "apto" ao guardar
+  um plano que inclui o atleta; "indisponível" só reverte quando o treinador
+  marca "apto" de novo. Validado manualmente com atletas de teste (nunca o
+  plantel real) contra um jogo de teste já existente. Detalhe completo em
+  [docs/ARCHITECTURE.md](ARCHITECTURE.md).
 
 - **Cara nova + correções reais de UX** (2026-10-07/08) — identidade
   visual real da Académica de Leça (preto/branco/dourado, brasão no lugar

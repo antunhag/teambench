@@ -4,7 +4,8 @@ import { toErrorMessage } from "../errorMessage";
 import { useMatchFormats } from "../team/useMatchFormats";
 import { isGoalkeeper, posAbbr } from "../team/positions";
 import { usePlayerAptitudes } from "../team/usePlayerAptitudes";
-import { usePlayers, type PlayerRow } from "../team/usePlayers";
+import { usePlayers, type AvailabilityStatus, type PlayerRow } from "../team/usePlayers";
+import { useRecentMinutes } from "./useRecentMinutes";
 import { useRotationPlan } from "./useRotationPlan";
 
 interface Props {
@@ -92,17 +93,26 @@ interface AddForm {
 }
 
 /** "#10 Martim S — Ala Esquerda (A), Pivô (B)" — só leitura, pro treinador ver a classificação cadastrada (em Plantel) na hora de escolher quem entra em cada vaga. Sem vaga habitual cadastrada, mostra só o nome. */
-function playerOptionLabel(p: engine.Player, aptitude: engine.AptitudeBySlot | undefined): string {
+function playerOptionLabel(
+  p: engine.Player,
+  aptitude: engine.AptitudeBySlot | undefined,
+  availabilityStatus: AvailabilityStatus
+): string {
   const base = `#${p.num} ${p.name}`;
   const slots = engine.sortedAptitudeSlots(aptitude ?? {});
-  return slots.length > 0 ? `${base} — ${slots.map((slot) => engine.aptitudeLabel(slot, aptitude![slot])).join(", ")}` : base;
+  const withAptitude = slots.length > 0 ? `${base} — ${slots.map((slot) => engine.aptitudeLabel(slot, aptitude![slot])).join(", ")}` : base;
+  // Símbolo simples na própria opção — <option> não suporta HTML rico (T013).
+  if (availabilityStatus === "indisponivel") return `🚫 ${withAptitude}`;
+  if (availabilityStatus === "a_retomar") return `⏳ ${withAptitude}`;
+  return withAptitude;
 }
 
 export function RotationPlanner({ teamId, matchId, opponent, formatId, onClose }: Props) {
-  const { players, status: playersStatus } = usePlayers(teamId);
+  const { players, status: playersStatus, refresh: refreshPlayers } = usePlayers(teamId);
   const { formats } = useMatchFormats(teamId);
   const { stints, status: planStatus, errorMessage, saveStints } = useRotationPlan(teamId, matchId);
   const aptitudes = usePlayerAptitudes(teamId);
+  const recentMinutes = useRecentMinutes(teamId, matchId);
 
   const format: engine.MatchFormat =
     formats.find((f) => f.id === formatId) ?? formats.find((f) => f.isDefault) ?? formats[0] ?? FALLBACK_FORMAT;
@@ -110,6 +120,10 @@ export function RotationPlanner({ teamId, matchId, opponent, formatId, onClose }
 
   const activeRoster = players.filter((p) => p.active).map(toEnginePlayer);
   const byId = (id: string) => activeRoster.find((p) => p.id === id);
+  const availabilityByPlayer: Record<string, AvailabilityStatus> = {};
+  players.forEach((p) => {
+    availabilityByPlayer[p.id] = p.availabilityStatus;
+  });
 
   const [included, setIncluded] = useState<Set<string>>(new Set());
   const [localStints, setLocalStints] = useState<engine.RotationStint[]>([]);
@@ -252,6 +266,10 @@ export function RotationPlanner({ teamId, matchId, opponent, formatId, onClose }
     try {
       await saveStints(next);
       setSaveState("saved");
+      // "A retomar" pode ter revertido sozinho pra "apto" dentro de saveStints
+      // (Decisão 1, specs/003-data-driven-rotation/research.md) — recarrega
+      // pra refletir isso no seletor de atleta sem precisar fechar/reabrir.
+      await refreshPlayers();
     } catch (err) {
       setSaveState("error");
       setSaveError(toErrorMessage(err));
@@ -326,6 +344,20 @@ export function RotationPlanner({ teamId, matchId, opponent, formatId, onClose }
               const color = SLOT_COLORS[slotIndex];
               const form = formFor(slotIndex);
               const error = addErrors[slotIndex];
+              // Ordem sugerida pra esta vaga — aptidão como fator principal, estado afasta
+              // o indisponível pro fim, minutos recentes só compõem o motivo (specs/003-data-driven-rotation/).
+              const suggestedOrder = engine.suggestOrder(
+                includedPlayersSorted,
+                aptitudes.byPlayer,
+                availabilityByPlayer,
+                recentMinutes.byPlayer,
+                slotType
+              );
+              const suggestedOptions = suggestedOrder
+                .map((s) => includedPlayersSorted.find((pl) => pl.id === s.playerId))
+                .filter((pl): pl is engine.Player => pl != null);
+              // Motivo por extenso da sugestão (US3) — mesma frase já computada em suggestOrder, só exibida.
+              const reasonFor = (playerId: string) => suggestedOrder.find((s) => s.playerId === playerId)?.reason;
               return (
                 <div key={slotIndex} style={{ marginBottom: 20 }}>
                   <h4 style={{ margin: "0 0 6px", fontSize: 14 }}>{slotType}</h4>
@@ -389,8 +421,10 @@ export function RotationPlanner({ teamId, matchId, opponent, formatId, onClose }
                         return (
                           <div className="hint" style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6, flexWrap: "wrap" }}>
                             <select value={s.playerId} onChange={(e) => changeStintPlayer(s, e.currentTarget.value)}>
-                              {includedPlayersSorted.map((pl) => (
-                                <option key={pl.id} value={pl.id}>{playerOptionLabel(pl, aptitudes.byPlayer[pl.id])}</option>
+                              {suggestedOptions.map((pl) => (
+                                <option key={pl.id} value={pl.id}>
+                                  {playerOptionLabel(pl, aptitudes.byPlayer[pl.id], availabilityByPlayer[pl.id] ?? "apto")}
+                                </option>
                               ))}
                             </select>
                             <span>{engine.fmtMinSec(s.startSec * 1000)} até</span>
@@ -417,6 +451,11 @@ export function RotationPlanner({ teamId, matchId, opponent, formatId, onClose }
                           </div>
                         );
                       })()}
+                      {selectedStint?.slotIndex === slotIndex && (() => {
+                        const i = slotStints.findIndex((s) => s.startSec === selectedStint.startSec);
+                        const reason = i !== -1 ? reasonFor(slotStints[i].playerId) : null;
+                        return reason ? <p className="hint" style={{ marginTop: 0 }}>{reason}</p> : null;
+                      })()}
                     </>
                   )}
 
@@ -427,8 +466,10 @@ export function RotationPlanner({ teamId, matchId, opponent, formatId, onClose }
                       <span className="hint">A partir de {engine.fmtMinSec(nextStart * 1000)}:</span>
                       <select value={form.playerId} onChange={(e) => updateForm(slotIndex, { playerId: e.currentTarget.value })}>
                         <option value="">Escolher atleta...</option>
-                        {includedPlayersSorted.map((p) => (
-                          <option key={p.id} value={p.id}>{playerOptionLabel(p, aptitudes.byPlayer[p.id])}</option>
+                        {suggestedOptions.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {playerOptionLabel(p, aptitudes.byPlayer[p.id], availabilityByPlayer[p.id] ?? "apto")}
+                          </option>
                         ))}
                       </select>
                       <span>até</span>
@@ -440,6 +481,9 @@ export function RotationPlanner({ teamId, matchId, opponent, formatId, onClose }
                       />
                       <button type="button" className="btn sm" onClick={() => handleAddStint(slotIndex)}>+ Adicionar turno</button>
                     </div>
+                  )}
+                  {form.playerId && reasonFor(form.playerId) && (
+                    <p className="hint" style={{ marginTop: 2 }}>{reasonFor(form.playerId)}</p>
                   )}
                   {error && <p className="hint" style={{ color: "#c0392b" }}>{error}</p>}
                 </div>

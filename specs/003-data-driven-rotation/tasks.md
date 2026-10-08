@@ -17,14 +17,14 @@ validação das User Stories é manual, via `quickstart.md`.
 
 ## Phase 1: Setup
 
-- [ ] T001 Confirmar baseline verde antes de começar: `npm test --workspace packages/engine`, `npx tsc --noEmit -p apps/web`, `npm run build --workspace apps/web`
+- [X] T001 Confirmar baseline verde antes de começar: `npm test --workspace packages/engine`, `npx tsc --noEmit -p apps/web`, `npm run build --workspace apps/web` (110/110 testes, typecheck e build limpos)
 
 ---
 
 ## Phase 2: Foundational
 
-- [ ] T002 Escrever `supabase/migrations/0021_player_availability.sql`: 2 colunas novas em `players` — `availability_status` (`text not null default 'apto'`, `check (... in ('apto', 'a_retomar', 'indisponivel'))`) e `availability_note` (`text`, nullable). Sem policy nova — já cobertas por `players_update_coach` (migração 0004). Sem gate do `security-auditor` (Princípio II não exige — ver Constitution Check em `plan.md`)
-- [ ] T003 Aplicar a migração 0021 no SQL Editor do Supabase (ação do utilizador) — depende de T002
+- [X] T002 Escrever `supabase/migrations/0021_player_availability.sql`: 2 colunas novas em `players` — `availability_status` (`text not null default 'apto'`, `check (... in ('apto', 'a_retomar', 'indisponivel'))`) e `availability_note` (`text`, nullable). Sem policy nova — já cobertas por `players_update_coach` (migração 0004). Sem gate do `security-auditor` (Princípio II não exige — ver Constitution Check em `plan.md`)
+- [X] T003 Aplicar a migração 0021 no SQL Editor do Supabase (ação do utilizador) — depende de T002
 
 **Checkpoint**: Fundação pronta — as colunas existem, User Stories 1 e 2 podem começar.
 
@@ -36,10 +36,10 @@ validação das User Stories é manual, via `quickstart.md`.
 
 **Independent Test**: Cenário 2 do [quickstart.md](quickstart.md).
 
-- [ ] T004 [P] [US2] Em `apps/web/src/team/usePlayers.ts`: expor `availabilityStatus`/`availabilityNote` de cada atleta (já vêm da mesma query) e uma função `setAvailability(playerId, status, note)` (`update` direto em `players`, mesma policy já existente) — depende de T003
-- [ ] T005 [US2] Em `apps/web/src/team/Roster.tsx`: campo de estado por atleta (3 opções — Apto/A retomar/Indisponível — mais um campo de motivo opcional quando não-Apto), reaproveitando o padrão de edição inline já existente na tela — depende de T004
-- [ ] T006 [US2] Em `apps/web/src/match/useRotationPlan.ts`: depois de `saveStints` guardar com sucesso, para cada atleta incluído no plano cujo estado seja `a_retomar`, chamar `setAvailability(playerId, 'apto', null)` (Decisão 1 do `research.md` — expira sozinho ao ser usado, nunca por data) — depende de T004
-- [ ] T007 [US2] Validar manualmente com o Cenário 2 do `quickstart.md` — depende de T005, T006
+- [X] T004 [P] [US2] Em `apps/web/src/team/usePlayers.ts`: expor `availabilityStatus`/`availabilityNote` de cada atleta (já vêm da mesma query) e uma função `setAvailability(playerId, status, note)` (`update` direto em `players`, mesma policy já existente) — depende de T003
+- [X] T005 [US2] Em `apps/web/src/team/Roster.tsx`: campo de estado por atleta (3 opções — Apto/A retomar/Indisponível — mais um campo de motivo opcional quando não-Apto), reaproveitando o padrão de edição inline já existente na tela — depende de T004
+- [X] T006 [US2] Em `apps/web/src/match/useRotationPlan.ts`: depois de `saveStints` guardar com sucesso, para cada atleta incluído no plano cujo estado seja `a_retomar`, chamar `setAvailability(playerId, 'apto', null)` (Decisão 1 do `research.md` — expira sozinho ao ser usado, nunca por data) — depende de T004
+- [X] T007 [US2] Validar manualmente com o Cenário 2 do `quickstart.md` — depende de T005, T006
 
 **Checkpoint**: User Story 2 completa e testável sozinha — o estado já pode ser marcado e persiste/expira corretamente, mesmo sem a sugestão da User Story 1 ainda existir.
 
@@ -51,13 +51,13 @@ validação das User Stories é manual, via `quickstart.md`.
 
 **Independent Test**: Cenário 1 do [quickstart.md](quickstart.md).
 
-- [ ] T008 [P] [US1] Criar `packages/engine/src/recentMinutes.ts`: `aggregateRecentMinutes(matches: {events, format}[], ...)` — pura, reaproveita `replayEvents` já existente, soma `clockAcc.onCourtSince` através de vários jogos, devolve `{playerId, totalMs, gamesCounted}[]` (ver `data-model.md`, entidade `RecentMinutes`) — depende de nada
-- [ ] T009 [P] [US1] Testes em `packages/engine/test/recentMinutes.test.ts`: agregação correta através de 2+ jogos, atleta que não jogou nenhum (gamesCounted=0), atleta convocado mas sem minutos num jogo específico — depende de T008
-- [ ] T010 [P] [US1] Criar `packages/engine/src/rotationSuggestion.ts`: `suggestOrder(players, aptitudesBySlot, availabilityByPlayer, recentMinutesByPlayer, slot)` — pura, devolve a lista ordenada (`RotationSuggestion[]`, ver `data-model.md`) por vaga: `indisponivel` sempre por último (FR-002), depois por `quality` (A > B > C > sem classificação, FR-005/FR-006 — minutos NUNCA entram na ordenação, só no campo `reason` computado); inclui também `explainSuggestion`, frase curta em português combinando aptidão + estado + contexto de minutos (usado só a partir da User Story 3, mas computado aqui pra não duplicar a lógica depois) — depende de nada
-- [ ] T011 [P] [US1] Testes em `packages/engine/test/rotationSuggestion.test.ts`: ordenação correta (indisponível por último, A/B/C/sem-classificação), atleta sem histórico ordenado só pela aptidão (FR-006) — depende de T010
-- [ ] T012 [US1] Criar `apps/web/src/match/useRecentMinutes.ts`: busca os 5 jogos mais recentes com `status = 'finished'` desta equipa + os respetivos `match_events`, chama `engine.aggregateRecentMinutes` (Decisão 2/3 do `research.md`) — depende de T008
-- [ ] T013 [US1] Em `apps/web/src/match/RotationPlanner.tsx`: trocar a lista plana dos `<select>` de atleta pela ordem de `engine.suggestOrder`, com uma indicação visual simples pra `a_retomar`/`indisponivel` (ex.: um símbolo no texto da opção — `<option>` não suporta HTML rico) — depende de T010, T012, T004
-- [ ] T014 [US1] Validar manualmente com o Cenário 1 do `quickstart.md` — depende de T013
+- [X] T008 [P] [US1] Criar `packages/engine/src/recentMinutes.ts`: `aggregateRecentMinutes(matches: {events, format}[], ...)` — pura, reaproveita `replayEvents` já existente, soma `clockAcc.onCourtSince` através de vários jogos, devolve `{playerId, totalMs, gamesCounted}[]` (ver `data-model.md`, entidade `RecentMinutes`) — depende de nada
+- [X] T009 [P] [US1] Testes em `packages/engine/test/recentMinutes.test.ts`: agregação correta através de 2+ jogos, atleta que não jogou nenhum (gamesCounted=0), atleta convocado mas sem minutos num jogo específico — depende de T008
+- [X] T010 [P] [US1] Criar `packages/engine/src/rotationSuggestion.ts`: `suggestOrder(players, aptitudesBySlot, availabilityByPlayer, recentMinutesByPlayer, slot)` — pura, devolve a lista ordenada (`RotationSuggestion[]`, ver `data-model.md`) por vaga: `indisponivel` sempre por último (FR-002), depois por `quality` (A > B > C > sem classificação, FR-005/FR-006 — minutos NUNCA entram na ordenação, só no campo `reason` computado); inclui também `explainSuggestion`, frase curta em português combinando aptidão + estado + contexto de minutos (usado só a partir da User Story 3, mas computado aqui pra não duplicar a lógica depois) — depende de nada
+- [X] T011 [P] [US1] Testes em `packages/engine/test/rotationSuggestion.test.ts`: ordenação correta (indisponível por último, A/B/C/sem-classificação), atleta sem histórico ordenado só pela aptidão (FR-006) — depende de T010
+- [X] T012 [US1] Criar `apps/web/src/match/useRecentMinutes.ts`: busca os 5 jogos mais recentes com `status = 'finished'` desta equipa + os respetivos `match_events`, chama `engine.aggregateRecentMinutes` (Decisão 2/3 do `research.md`) — depende de T008
+- [X] T013 [US1] Em `apps/web/src/match/RotationPlanner.tsx`: trocar a lista plana dos `<select>` de atleta pela ordem de `engine.suggestOrder`, com uma indicação visual simples pra `a_retomar`/`indisponivel` (ex.: um símbolo no texto da opção — `<option>` não suporta HTML rico) — depende de T010, T012, T004
+- [X] T014 [US1] Validar manualmente com o Cenário 1 do `quickstart.md` — depende de T013
 
 **Checkpoint**: User Stories 1 e 2 completas — escopo mínimo viável (MVP), já que as duas são P1.
 
@@ -69,9 +69,9 @@ validação das User Stories é manual, via `quickstart.md`.
 
 **Independent Test**: Cenário 3 do [quickstart.md](quickstart.md).
 
-- [ ] T015 [P] [US3] Reforçar `packages/engine/test/rotationSuggestion.test.ts` com casos específicos do conteúdo de `reason`: só aptidão, aptidão + "a retomar", aptidão + contexto de minutos, atleta sem classificação — depende de T010
-- [ ] T016 [US3] Em `apps/web/src/match/RotationPlanner.tsx`: mostrar o `reason` de cada atleta por extenso junto da opção sugerida (ex.: texto de apoio abaixo do `<select>`, atualizado conforme a seleção) — depende de T013
-- [ ] T017 [US3] Validar manualmente com o Cenário 3 do `quickstart.md`, incluindo o caso de um atleta recém-chegado sem jogos anteriores — depende de T016
+- [X] T015 [P] [US3] Reforçar `packages/engine/test/rotationSuggestion.test.ts` com casos específicos do conteúdo de `reason`: só aptidão, aptidão + "a retomar", aptidão + contexto de minutos, atleta sem classificação — depende de T010
+- [X] T016 [US3] Em `apps/web/src/match/RotationPlanner.tsx`: mostrar o `reason` de cada atleta por extenso junto da opção sugerida (ex.: texto de apoio abaixo do `<select>`, atualizado conforme a seleção) — depende de T013
+- [X] T017 [US3] Validar manualmente com o Cenário 3 do `quickstart.md`, incluindo o caso de um atleta recém-chegado sem jogos anteriores — depende de T016
 
 **Checkpoint**: As três User Stories completas e testáveis — spec `003-data-driven-rotation` pronta pro Polish.
 
@@ -79,9 +79,9 @@ validação das User Stories é manual, via `quickstart.md`.
 
 ## Phase 6: Polish & Cross-Cutting Concerns
 
-- [ ] T018 [P] Atualizar `docs/ARCHITECTURE.md` (seção "Planeamento de rotação e aptidão") com estado do atleta + agregação de minutos recentes — Princípio VI da constituição, gate obrigatório antes do push
-- [ ] T019 Atualizar `docs/ROADMAP.md`: marcar "Motor de Sugestão de Rotação Baseado em Dados" como feito
-- [ ] T020 Rodar a secção "Regressão a conferir" do `quickstart.md` (planeador manual continua a funcionar sem a sugestão, Resumo/Timeline de um jogo continua correto, suite Vitest completa) antes do commit final
+- [X] T018 [P] Atualizar `docs/ARCHITECTURE.md` (seção "Planeamento de rotação e aptidão") com estado do atleta + agregação de minutos recentes — Princípio VI da constituição, gate obrigatório antes do push
+- [X] T019 Atualizar `docs/ROADMAP.md`: marcar "Motor de Sugestão de Rotação Baseado em Dados" como feito
+- [X] T020 Rodar a secção "Regressão a conferir" do `quickstart.md` (planeador manual continua a funcionar sem a sugestão, Resumo/Timeline de um jogo continua correto, suite Vitest completa) antes do commit final
 
 ---
 

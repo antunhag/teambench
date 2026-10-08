@@ -177,8 +177,27 @@ mesmos dois triggers sem alterá-los — ambos já disparam em qualquer
 (4 vagas fixas de linha: Fixo, Ala Esquerda, Ala Direita, Pivô — guarda-redes
 nunca entra, por desenho). `player_aptitudes` classifica cada atleta
 independentemente em A/B/C por vaga (não é mais uma lista ordenada única —
-vários atletas podem ser "A" na mesma vaga ao mesmo tempo). Nenhum dos dois
+vários atletas podem ser "A" na mesma vaga ao mesmo tempo). O plano em si
 nunca é gerado automaticamente; o treinador monta à mão.
+
+**Sugestão de escalação por vaga** (`packages/engine/src/rotationSuggestion.ts`,
+`recentMinutes.ts` — specs/003-data-driven-rotation/) ordena o seletor de
+atleta de cada vaga, mas nunca monta o plano sozinha — SUGERE, o treinador
+decide. Mescla 3 fontes, com pesos deliberadamente desiguais:
+
+- **Aptidão A/B/C por vaga** — fator dominante da ordenação ("jogam os
+  melhores").
+- **Estado do atleta** (`players.availability_status` — migração `0021`,
+  `apto`/`a_retomar`/`indisponivel`, gerido no Plantel): só afasta o
+  `indisponivel` pro fim da lista; `a_retomar` nunca muda a ordem, só o
+  motivo exibido. `indisponivel` persiste até o treinador revertê-lo
+  manualmente (lesão longa); `a_retomar` reverte sozinho pra `apto` assim
+  que um plano que inclui o atleta é guardado (`useRotationPlan.saveStints`).
+- **Minutos recentes** (últimos 5 jogos terminados, agregados por
+  `aggregateRecentMinutes` reaproveitando `replayEvents` — nunca recalculado
+  em SQL): NUNCA entra na ordenação, só compõe a frase de motivo
+  (`explainSuggestion`) — um atleta sem histórico é ordenado só pela
+  aptidão, nunca priorizado nem penalizado por falta de jogos.
 
 ## Estrutura de pastas
 
@@ -188,6 +207,8 @@ packages/engine/src/
   events.ts        # criação/idempotência de eventos
   replay.ts         # reconstrói estado a partir do registo cronológico
   rotationPlan.ts    # plano de rotação + aptidão A/B/C
+  recentMinutes.ts         # agrega minutos através de vários jogos (reaproveita replayEvents)
+  rotationSuggestion.ts      # sugestão de escalação por vaga: aptidão + estado + minutos
   timeline.ts         # export visual (HTML) + buildEventsExport (JSON p/ ferramentas externas)
   report.ts            # descrições textuais, exportação pro Excel/Sheets do clube
   navigation.ts          # itens de navegação visíveis por papel (visibleNavItems)

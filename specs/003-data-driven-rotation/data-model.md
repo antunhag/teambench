@@ -35,7 +35,7 @@ Agregação calculada no momento, nunca persistida — ver Decisão 3 do
 | Campo | Tipo | Notas |
 |---|---|---|
 | `playerId` | `string` (uuid) | |
-| `totalMs` | `number` | Soma de `replayEvents(...).clockAcc.onCourtSince` através dos 5 jogos mais recentes terminados (Decisão 2). |
+| `totalMs` | `number` | Soma de `replayEvents(...).clockAcc.secondsPlayed` (× 1000) através dos 5 jogos mais recentes terminados (Decisão 2) — `onCourtSince` só existe enquanto o relógio está a correr; num jogo terminado já está vazio, o tempo assentado fica em `secondsPlayed`. |
 | `gamesCounted` | `number` | Quantos dos 5 jogos recentes esse atleta efetivamente teve algum tempo em quadra (0 a 5) — usado pra distinguir "jogou pouco" de "nem esteve convocado". |
 
 **Fonte**: os 5 jogos mais recentes com `status = 'finished'` desta equipa

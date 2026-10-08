@@ -97,6 +97,21 @@ export function useRotationPlan(teamId: string, matchId: string) {
       if (insertError) throw insertError;
     }
     setStints(newStints);
+
+    // "A retomar" vale só pro próximo jogo planeado — reverte sozinho assim
+    // que um plano que inclui o atleta é de facto guardado (Decisão 1,
+    // specs/003-data-driven-rotation/research.md). Filtrado no servidor por
+    // availability_status='a_retomar': nunca toca quem já está "apto" ou em
+    // "indisponivel" (esse só reverte manualmente, é lesão longa).
+    const playerIds = [...new Set(newStints.map((s) => s.playerId))];
+    if (playerIds.length > 0) {
+      const { error: availabilityError } = await supabase
+        .from("players")
+        .update({ availability_status: "apto", availability_note: null })
+        .in("id", playerIds)
+        .eq("availability_status", "a_retomar");
+      if (availabilityError) throw availabilityError;
+    }
   }
 
   return { hasPlan: planId !== null, stints, status, errorMessage, saveStints, refresh };

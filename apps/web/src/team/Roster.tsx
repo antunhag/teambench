@@ -3,13 +3,19 @@ import { useState } from "preact/hooks";
 import { toErrorMessage } from "../errorMessage";
 import { isLegacyAla, LEGACY_ALA, POSITIONS, posAbbr, type Position } from "./positions";
 import { usePlayerAptitudes } from "./usePlayerAptitudes";
-import { usePlayers, type PlayerRow } from "./usePlayers";
+import { usePlayers, type AvailabilityStatus, type PlayerRow } from "./usePlayers";
 import { useResourceLock } from "./useResourceLock";
 
 interface Props {
   teamId: string;
   canManage: boolean; // só team_admin gerencia o plantel
 }
+
+const AVAILABILITY_LABELS: Record<AvailabilityStatus, string> = {
+  apto: "Apto",
+  a_retomar: "A retomar",
+  indisponivel: "Indisponível",
+};
 
 /** Valor de cada select de classificação: "" = não joga essa vaga, "unclassified" = joga mas ainda sem nota, senão a letra A/B/C. */
 type QualityValue = "" | "unclassified" | engine.AptitudeQuality;
@@ -40,12 +46,18 @@ function EditRow({
   p: PlayerRow;
   aptitude: engine.AptitudeBySlot;
   columnCount: number;
-  onSave: (fields: { num: string; name: string; position: Position }, aptitude: engine.AptitudeBySlot) => void;
+  onSave: (
+    fields: { num: string; name: string; position: Position },
+    aptitude: engine.AptitudeBySlot,
+    availability: { status: AvailabilityStatus; note: string | null }
+  ) => void;
   onCancel: () => void;
 }) {
   const [num, setNum] = useState(p.num ?? "");
   const [name, setName] = useState(p.name);
   const [position, setPosition] = useState<Position>(p.position ?? "Universal");
+  const [availabilityStatus, setAvailabilityStatus] = useState<AvailabilityStatus>(p.availabilityStatus);
+  const [availabilityNote, setAvailabilityNote] = useState(p.availabilityNote ?? "");
   const [quality, setQuality] = useState<Record<engine.RotationSlotType, QualityValue>>(() => {
     const init = {} as Record<engine.RotationSlotType, QualityValue>;
     engine.ROTATION_SLOT_TYPES.forEach((slot) => {
@@ -77,12 +89,48 @@ function EditRow({
             ))}
           </select>
         </td>
+        <td>
+          <select
+            value={availabilityStatus}
+            onChange={(e) => setAvailabilityStatus(e.currentTarget.value as AvailabilityStatus)}
+          >
+            <option value="apto">Apto</option>
+            <option value="a_retomar">A retomar</option>
+            <option value="indisponivel">Indisponível</option>
+          </select>
+        </td>
         <td />
         <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
-          <button type="button" className="btn sm primary" onClick={() => onSave({ num, name, position }, buildAptitudeBySlot(quality))}>Salvar</button>{" "}
+          <button
+            type="button"
+            className="btn sm primary"
+            onClick={() =>
+              onSave({ num, name, position }, buildAptitudeBySlot(quality), {
+                status: availabilityStatus,
+                note: availabilityStatus === "apto" ? null : availabilityNote.trim() || null,
+              })
+            }
+          >
+            Salvar
+          </button>{" "}
           <button type="button" className="btn sm ghost" onClick={onCancel}>Cancelar</button>
         </td>
       </tr>
+      {availabilityStatus !== "apto" && (
+        <tr>
+          <td colSpan={columnCount} style={{ paddingTop: 0 }}>
+            <label className="hint" style={{ display: "flex", gap: 6, alignItems: "center" }}>
+              Motivo ({AVAILABILITY_LABELS[availabilityStatus]}, opcional):
+              <input
+                value={availabilityNote}
+                onInput={(e) => setAvailabilityNote((e.target as HTMLInputElement).value)}
+                placeholder="ex.: Entorse no tornozelo"
+                style={{ flex: 1, maxWidth: 260 }}
+              />
+            </label>
+          </td>
+        </tr>
+      )}
       <tr>
         <td colSpan={columnCount} style={{ paddingTop: 0 }}>
           <div className="hint" style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
@@ -107,11 +155,12 @@ function EditRow({
 }
 
 export function Roster({ teamId, canManage }: Props) {
-  const { players, status, errorMessage, addPlayer, updatePlayer, deactivatePlayer, reactivatePlayer, bulkImport } = usePlayers(teamId);
+  const { players, status, errorMessage, addPlayer, updatePlayer, deactivatePlayer, reactivatePlayer, setAvailability, bulkImport } =
+    usePlayers(teamId);
   const aptitudes = usePlayerAptitudes(teamId);
   const active = players.filter((p) => p.active);
   const inactive = players.filter((p) => !p.active);
-  const columnCount = canManage ? 5 : 4; // Nº, Nome, Posição, Aptidões, (Ações)
+  const columnCount = canManage ? 6 : 5; // Nº, Nome, Posição, Estado, Aptidões, (Ações)
 
   const [num, setNum] = useState("");
   const [name, setName] = useState("");
@@ -181,6 +230,7 @@ export function Roster({ teamId, canManage }: Props) {
                 <th className="num">Nº</th>
                 <th>Nome</th>
                 <th>Posição</th>
+                <th>Estado</th>
                 <th>Aptidões</th>
                 {canManage && <th className="actions-col" />}
               </tr>
@@ -214,8 +264,9 @@ export function Roster({ teamId, canManage }: Props) {
                     aptitude={bySlot}
                     columnCount={columnCount}
                     onCancel={() => setEditingId(null)}
-                    onSave={async (fields, newBySlot) => {
+                    onSave={async (fields, newBySlot, availability) => {
                       await updatePlayer(p.id, fields);
+                      await setAvailability(p.id, availability.status, availability.note);
                       try {
                         await aptitudes.saveAptitudes(p.id, newBySlot);
                         setAptitudeError("");
@@ -234,6 +285,11 @@ export function Roster({ teamId, canManage }: Props) {
                       style={isLegacyAla(p.position) ? { color: "#c0392b", fontWeight: 700 } : undefined}
                     >
                       {posAbbr(p.position)}
+                    </td>
+                    <td className="hint" style={p.availabilityStatus === "indisponivel" ? { color: "#c0392b", fontWeight: 700 } : undefined}>
+                      {p.availabilityStatus === "apto"
+                        ? "—"
+                        : AVAILABILITY_LABELS[p.availabilityStatus] + (p.availabilityNote ? ` — ${p.availabilityNote}` : "")}
                     </td>
                     <td className="hint">
                       {engine.sortedAptitudeSlots(bySlot).map((slot) => engine.aptitudeLabel(slot, bySlot[slot])).join(" › ") || "—"}
