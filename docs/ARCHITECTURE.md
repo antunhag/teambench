@@ -97,6 +97,41 @@ ser verificada — o app assume posse local e só reivindica a trava quando a
 rede volta (decisão consciente: priorizar conseguir registar o jogo sobre
 bloquear por uma trava inconsultável em campo).
 
+### Ciclo de vida de `matches.status`
+
+`matches.status` (`scheduled` → `live` → `finished`) é só de apresentação
+hoje — nenhuma RLS, policy ou outra função depende dele; só decide o rótulo
+do botão de entrada no Calendário ("Iniciar jogo"/"Continuar jogo"/"Ver
+resumo", migração do `MatchHub`). Duas funções `SECURITY DEFINER` (mesmo
+padrão de `claim_live_match`/`release_live_match` acima) fazem as duas
+transições, cada uma a partir de um sinal puro calculado no motor
+(`packages/engine`, nunca lido do banco):
+
+- `start_live_match` (migração `0020`) — `scheduled` → `live`, chamado
+  quando `state.started` fica verdadeiro (só depois de "Iniciar Parte 1"
+  ou "Registar com vídeo" de verdade, nunca só por abrir a tela).
+- `finish_live_match` (migração `0019`) — `live` → `finished`, chamado
+  quando `state.finished` fica verdadeiro (as duas partes terminaram).
+
+Achado real nesta sessão, corrigido na mesma migração 0020:
+`claim_live_match` (migração `0009`) originalmente também marcava
+`status = 'live'` como efeito colateral de reivindicar a trava — ou seja,
+só por ABRIR a tela do jogo, mesmo sem tocar em nada. Isso ficou visível
+quando "Planear rotações" passou a ser uma aba dentro do `MatchHub` (antes
+era um botão próprio, sem tocar na trava do jogo): só espreitar as
+rotações de um jogo agendado já marcava "live" sem o treinador ter
+começado de verdade. Corrigido separando as duas coisas — `claim_live_match`
+volta a só mexer na trava, nunca em `status`.
+
+Achado relacionado, também corrigido na 0019: marcar um jogo como
+terminado exigia UPDATE direto em `matches`, mas a policy
+`matches_update_coach` só permite `team_admin` — um Lançador de dados (o
+papel que mais regista jogos do início ao fim) nunca conseguia fechar um
+jogo, nem pelo botão manual em `MatchSummary.tsx`. As duas funções usam o
+mesmo gate de `claim_live_match`/`release_live_match`
+(`has_team_role(['team_admin', 'data_entry'])`), não a policy de UPDATE
+direto.
+
 ### Trava de edição nas telas de gestão
 
 Generaliza a trava do jogo (acima) pras 3 telas de gestão que podem ter dois

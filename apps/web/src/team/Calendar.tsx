@@ -121,7 +121,7 @@ export function Calendar({ teamId, canManage, canTrackLive, onOpenMatch }: Props
         <p className="empty">Ainda sem jogos.</p>
       ) : (
         <div className="tablewrap">
-          <table>
+          <table className="stack-mobile">
             <thead>
               <tr>
                 <th>Data</th>
@@ -156,10 +156,10 @@ export function Calendar({ teamId, canManage, canTrackLive, onOpenMatch }: Props
                   </tr>
                 ) : (
                   <tr key={m.id}>
-                    <td>{m.matchDate.split("-").reverse().join("/")}</td>
-                    <td>{m.opponent}</td>
-                    <td>{m.competition}</td>
-                    <td>{m.location}</td>
+                    <td data-label="Data">{m.matchDate.split("-").reverse().join("/")}</td>
+                    <td data-label="Adversário">{m.opponent}</td>
+                    <td data-label="Competição">{m.competition}</td>
+                    <td data-label="Local">{m.location}</td>
                     <td className="actions-col" style={{ textAlign: "right", whiteSpace: "nowrap" }}>
                       {canTrackLive && (
                         <button

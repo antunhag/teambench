@@ -702,21 +702,73 @@ th.num {
   overflow-x: auto;
   margin-top: 6px;
 }
-/* Coluna de ações (botões) fixa à direita ao arrastar a tabela — em ecrã
-   estreito, com as outras colunas a empurrar a tabela pra além da largura
-   do ecrã, os botões ficavam só alcançáveis arrastando pro lado, sem
-   nenhuma pista visual de que dava pra arrastar (parecia cortado/partido,
-   não escondido). Usada no Plantel (Editar/Remover) e no Calendário
-   (Iniciar jogo/Corrigir registo/Planear rotações/Editar/Apagar — por
-   isso a coluna fica larga ao arrastar nessas linhas, mas continua melhor
-   que esconder os botões sem pista nenhuma). Escopado a .actions-col de
-   propósito — não um `.tablewrap td:last-child` geral, que pregaria a
-   coluna errada nas outras tabelas da app (MatchSummary, MatchEventEditor,
-   RotationPlanner) sem terem a mesma necessidade. */
+/* Coluna de ações (botões) fixa à direita ao arrastar a tabela — resolve
+   bem no Plantel (só Editar/Remover, cabe) e no Calendário em tablet/
+   desktop. Escopado a .actions-col de propósito — não um
+   `.tablewrap td:last-child` geral, que pregaria a coluna errada nas
+   outras tabelas da app (MatchSummary, MatchEventEditor, RotationPlanner)
+   sem terem a mesma necessidade. */
 .actions-col {
   position: sticky;
   right: 0;
   background: var(--surface);
+}
+
+/* Num telemóvel de verdade (confirmado: num iPhone real, não só no
+   emulador), a coluna fixa do Calendário por si só não chegava — com
+   Adversário/Competição/Local ainda por trás dela, a pessoa via SÓ a
+   data e os botões, sem nenhuma pista de que havia mais colunas pra
+   arrastar; Adversário (saber qual jogo é) ficava completamente invisível.
+   Abaixo de 520px a tabela do Calendário deixa de ser uma tabela visual —
+   cada linha vira um cartão empilhado (Data/Adversário/Competição/Local
+   um por cima do outro, com rótulo via data-label, depois os botões) —
+   sem arrastar nada, tudo sempre à vista. Só .stack-mobile (Calendário);
+   o Plantel continua tabela normal + coluna fixa, que já chegava. */
+@media (max-width: 520px) {
+  .tablewrap table.stack-mobile,
+  .tablewrap table.stack-mobile thead,
+  .tablewrap table.stack-mobile tbody,
+  .tablewrap table.stack-mobile th,
+  .tablewrap table.stack-mobile td,
+  .tablewrap table.stack-mobile tr {
+    display: block;
+    width: auto;
+  }
+  .tablewrap table.stack-mobile thead {
+    display: none;
+  }
+  .tablewrap table.stack-mobile tbody tr {
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 10px 12px;
+    margin-bottom: 10px;
+  }
+  .tablewrap table.stack-mobile tbody tr:last-child {
+    margin-bottom: 0;
+  }
+  .tablewrap table.stack-mobile td {
+    border-bottom: none;
+    padding: 3px 0;
+  }
+  .tablewrap table.stack-mobile td[data-label]:not(:empty)::before {
+    content: attr(data-label) ": ";
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--ink-dim);
+  }
+  .tablewrap table.stack-mobile td.actions-col {
+    position: static;
+    background: none;
+    text-align: left !important;
+    white-space: normal !important;
+    margin-top: 8px;
+    padding-top: 0;
+  }
+  .tablewrap table.stack-mobile td.actions-col .btn {
+    margin-bottom: 6px;
+  }
 }
 
 textarea.exportbox {

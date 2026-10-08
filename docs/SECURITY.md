@@ -188,6 +188,32 @@ remoção manual feita direto no painel; promover outra pessoa a Admin
 primeiro resolve. Revisitar se/quando existir um fluxo de self-service de
 apagar conta.
 
+## Estado do jogo (`matches.status`) — migrações 0019–0020
+
+Dois achados reais, cada um revisto pelo `security-auditor` antes de
+aplicar (Princípio II), ver `docs/ARCHITECTURE.md` ("Ciclo de vida de
+`matches.status`") pro detalhe técnico completo:
+
+- **`finish_live_match` (0019)** — marcar um jogo como terminado exigia
+  UPDATE direto em `matches`, mas `matches_update_coach` (migração 0004)
+  só permite `team_admin`. Um Lançador de dados nunca conseguia fechar um
+  jogo, nem pelo botão manual — a RLS bloqueava em silêncio (o botão até
+  mostrava mensagem de erro, mas tentar de novo nunca resolvia, porque o
+  problema era permissão, não rede). Corrigido com `SECURITY DEFINER`,
+  mesmo gate de `claim_live_match`/`release_live_match`
+  (`has_team_role(['team_admin', 'data_entry'])`). Revisão: sem achados.
+- **`start_live_match` (0020)** — `claim_live_match` (0009) marcava
+  `status = 'live'` como efeito colateral de reivindicar a trava de
+  edição, ou seja, só por ABRIR a tela do jogo. Ficou visível quando
+  "Planear rotações" virou uma aba dentro do `MatchHub` (antes era um
+  botão próprio, sem tocar na trava): só espreitar as rotações de um jogo
+  agendado já marcava "live" sem o treinador ter começado de verdade — 2
+  jogos de teste reais ficaram com esse estado incorreto antes de
+  percebermos. Corrigido separando as duas coisas: `claim_live_match`
+  volta a só mexer na trava; `start_live_match`, função nova, mesmo
+  padrão de autorização, marca `status` só a partir de `state.started`
+  (motor puro, nunca só por abrir a tela). Revisão: sem achados.
+
 ## O que ainda não está endurecido (próximos candidatos a `security-auditor`)
 
 - **`match_events` confia que o cliente só reenvia dados idênticos num

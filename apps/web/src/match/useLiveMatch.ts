@@ -184,6 +184,20 @@ export function useLiveMatch(matchId: string, teamId: string, format: engine.Mat
     supabase.rpc("finish_live_match", { p_match_id: matchId });
   }, [state.finished, matchId]);
 
+  // Assim que o jogo realmente começa (state.started, puro — fica true só
+  // depois de "Iniciar Parte 1"/registar com vídeo, nunca só por abrir a
+  // tela), marca matches.status = 'live'. Antes isto acontecia como efeito
+  // colateral de reivindicar a trava de edição (claim_live_match) — ou
+  // seja, só por ABRIR a tela do jogo, mesmo sem tocar em nada. Isso ficou
+  // visível com o MatchHub (ver migração 0020): "Rotações" virou uma aba
+  // dentro do mesmo ecrã, que já monta "Jogo" primeiro por omissão — então
+  // só espreitar as rotações de um jogo agendado já marcava "live" sem
+  // ninguém ter começado de verdade.
+  useEffect(() => {
+    if (!state.started) return;
+    supabase.rpc("start_live_match", { p_match_id: matchId });
+  }, [state.started, matchId]);
+
   const now = () => (manual ? manualElapsedMs : Date.now());
   const elapsedMs = engine.matchElapsedMs(state, now());
   void tick; // usado só para disparar o re-render acima
