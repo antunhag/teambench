@@ -19,6 +19,14 @@ function enterLabel(status: string): string {
   return "Iniciar jogo";
 }
 
+/** Data de hoje no mesmo formato YYYY-MM-DD de match_date — hora LOCAL do
+    aparelho (não UTC), pra "hoje" bater com o que o treinador vê no
+    relógio dele, não com o fuso do servidor. */
+function todayISO(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 const emptyForm: MatchFields = { matchDate: "", opponent: "", competition: null, location: null, kickoffTime: null, formatId: null };
 
 function MatchForm({
@@ -85,6 +93,99 @@ function MatchForm({
   );
 }
 
+/** Tabela de uma lista de jogos já filtrada/ordenada (Próximos OU
+    Anteriores) — reaproveitada duas vezes em Calendar, pra não duplicar a
+    lógica de linha (edição inline, rótulo por estado, ações). */
+function MatchTable({
+  matches,
+  editingMatch,
+  setEditingMatch,
+  formats,
+  updateMatch,
+  onOpenMatch,
+  canTrackLive,
+  canManage,
+  deleteMatch,
+}: {
+  matches: MatchRow[];
+  editingMatch: MatchRow | null;
+  setEditingMatch: (m: MatchRow | null) => void;
+  formats: { id: string; name: string; isDefault: boolean }[];
+  updateMatch: (id: string, fields: MatchFields) => Promise<void>;
+  onOpenMatch: Props["onOpenMatch"];
+  canTrackLive: boolean;
+  canManage: boolean;
+  deleteMatch: (id: string) => Promise<void>;
+}) {
+  return (
+    <div className="tablewrap">
+      <table className="stack-mobile">
+        <thead>
+          <tr>
+            <th>Data</th>
+            <th>Adversário</th>
+            <th>Competição</th>
+            <th>Local</th>
+            <th className="actions-col" />
+          </tr>
+        </thead>
+        <tbody>
+          {matches.map((m) =>
+            editingMatch?.id === m.id ? (
+              <tr key={m.id}>
+                <td colSpan={5}>
+                  <MatchForm
+                    initial={{
+                      matchDate: m.matchDate,
+                      opponent: m.opponent ?? "",
+                      competition: m.competition,
+                      location: m.location,
+                      kickoffTime: m.kickoffTime,
+                      formatId: m.formatId,
+                    }}
+                    formats={formats}
+                    onCancel={() => setEditingMatch(null)}
+                    onSave={async (fields) => {
+                      await updateMatch(m.id, fields);
+                      setEditingMatch(null);
+                    }}
+                  />
+                </td>
+              </tr>
+            ) : (
+              <tr key={m.id}>
+                <td data-label="Data">{m.matchDate.split("-").reverse().join("/")}</td>
+                <td data-label="Adversário">{m.opponent}</td>
+                <td data-label="Competição">{m.competition}</td>
+                <td data-label="Local">{m.location}</td>
+                <td className="actions-col" style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                  {canTrackLive && (
+                    <button
+                      type="button"
+                      className="btn sm primary"
+                      onClick={() => onOpenMatch(m.id, m.opponent, m.formatId, m.status)}
+                    >
+                      {enterLabel(m.status)}
+                    </button>
+                  )}{" "}
+                  {canManage && (
+                    <>
+                      <button type="button" className="btn sm ghost" onClick={() => setEditingMatch(m)}>Editar</button>{" "}
+                      <button type="button" className="btn sm danger" onClick={() => confirm(`Apagar o jogo vs ${m.opponent}?`) && deleteMatch(m.id)}>
+                        Apagar
+                      </button>
+                    </>
+                  )}
+                </td>
+              </tr>
+            )
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 export function Calendar({ teamId, canManage, canTrackLive, onOpenMatch }: Props) {
   const { matches, status, errorMessage, createMatch, updateMatch, deleteMatch, bulkImport } = useMatches(teamId);
   const { formats } = useMatchFormats(teamId);
@@ -92,6 +193,7 @@ export function Calendar({ teamId, canManage, canTrackLive, onOpenMatch }: Props
 
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingMatch, setEditingMatch] = useState<MatchRow | null>(null);
+  const [showPast, setShowPast] = useState(false);
 
   const [importText, setImportText] = useState("");
   const [importSummary, setImportSummary] = useState("");
@@ -114,77 +216,43 @@ export function Calendar({ teamId, canManage, canTrackLive, onOpenMatch }: Props
   if (status === "loading") return <p className="empty">A carregar calendário...</p>;
   if (status === "error") return <p className="banner error">Erro: {errorMessage}</p>;
 
+  // matches já vem ordenado por data ascendente (useMatches.ts) — Próximos
+  // mantém essa ordem (mais próximo primeiro); Anteriores inverte (mais
+  // recente primeiro). Separado por DATA, não por status: um jogo
+  // "scheduled" cuja data já passou (ninguém abriu) cai em Anteriores
+  // também, em vez de ficar preso no topo de Próximos pra sempre.
+  const today = todayISO();
+  const upcoming = matches.filter((m) => m.matchDate >= today);
+  const past = matches.filter((m) => m.matchDate < today).slice().reverse();
+
+  const tableProps = { editingMatch, setEditingMatch, formats, updateMatch, onOpenMatch, canTrackLive, canManage, deleteMatch };
+
   return (
     <div className="card">
       <h2 className="section-title">Calendário de jogos ({matches.length})</h2>
       {matches.length === 0 ? (
         <p className="empty">Ainda sem jogos.</p>
       ) : (
-        <div className="tablewrap">
-          <table className="stack-mobile">
-            <thead>
-              <tr>
-                <th>Data</th>
-                <th>Adversário</th>
-                <th>Competição</th>
-                <th>Local</th>
-                <th className="actions-col" />
-              </tr>
-            </thead>
-            <tbody>
-              {matches.map((m) =>
-                editingMatch?.id === m.id ? (
-                  <tr key={m.id}>
-                    <td colSpan={5}>
-                      <MatchForm
-                        initial={{
-                          matchDate: m.matchDate,
-                          opponent: m.opponent ?? "",
-                          competition: m.competition,
-                          location: m.location,
-                          kickoffTime: m.kickoffTime,
-                          formatId: m.formatId,
-                        }}
-                        formats={formats}
-                        onCancel={() => setEditingMatch(null)}
-                        onSave={async (fields) => {
-                          await updateMatch(m.id, fields);
-                          setEditingMatch(null);
-                        }}
-                      />
-                    </td>
-                  </tr>
-                ) : (
-                  <tr key={m.id}>
-                    <td data-label="Data">{m.matchDate.split("-").reverse().join("/")}</td>
-                    <td data-label="Adversário">{m.opponent}</td>
-                    <td data-label="Competição">{m.competition}</td>
-                    <td data-label="Local">{m.location}</td>
-                    <td className="actions-col" style={{ textAlign: "right", whiteSpace: "nowrap" }}>
-                      {canTrackLive && (
-                        <button
-                          type="button"
-                          className="btn sm primary"
-                          onClick={() => onOpenMatch(m.id, m.opponent, m.formatId, m.status)}
-                        >
-                          {enterLabel(m.status)}
-                        </button>
-                      )}{" "}
-                      {canManage && (
-                        <>
-                          <button type="button" className="btn sm ghost" onClick={() => setEditingMatch(m)}>Editar</button>{" "}
-                          <button type="button" className="btn sm danger" onClick={() => confirm(`Apagar o jogo vs ${m.opponent}?`) && deleteMatch(m.id)}>
-                            Apagar
-                          </button>
-                        </>
-                      )}
-                    </td>
-                  </tr>
-                )
+        <>
+          {upcoming.length > 0 ? (
+            <MatchTable matches={upcoming} {...tableProps} />
+          ) : (
+            <p className="empty">Sem jogos agendados.</p>
+          )}
+
+          {past.length > 0 && (
+            <div style={{ marginTop: 12 }}>
+              <button type="button" className="btn sm ghost" onClick={() => setShowPast((v) => !v)}>
+                {showPast ? "Esconder" : "Mostrar"} jogos anteriores ({past.length})
+              </button>
+              {showPast && (
+                <div style={{ marginTop: 8 }}>
+                  <MatchTable matches={past} {...tableProps} />
+                </div>
               )}
-            </tbody>
-          </table>
-        </div>
+            </div>
+          )}
+        </>
       )}
 
       {canManage && (

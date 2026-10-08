@@ -79,7 +79,11 @@
   papéis atuais, só por equipa. Hoje não existe nenhum papel ao nível do
   clube (só `club_members`/admin do clube pra configurações básicas, ver
   `docs/ARCHITECTURE.md`) — precisa de `/speckit-specify` próprio quando
-  entrar em foco.
+  entrar em foco. Nota de 2026-10-08: quando isso acontecer, uma visão
+  combinada de jogos de vários escalões deve reaproveitar o mesmo
+  agrupamento "Próximos/Anteriores" do Calendário por equipa (ver
+  `docs/ARCHITECTURE.md`), só juntando jogos de várias equipas na mesma
+  lista em vez de uma — não precisa de um desenho novo.
 
 ## Não planeado (de propósito)
 
