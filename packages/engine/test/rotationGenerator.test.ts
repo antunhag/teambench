@@ -9,6 +9,7 @@ function player(id: string): Player {
 
 const ONE_PERIOD: MatchFormat = { periodCount: 1, periodMinutes: 20, overtimePeriodCount: 0, overtimeMinutes: 0 };
 const PERIOD_SEC = 20 * 60;
+const MAX_STINT_SEC = 5 * 60;
 
 const p1 = player("p1");
 const p2 = player("p2");
@@ -29,9 +30,18 @@ describe("generateRotationOptions", () => {
     p5: { "Pivô": 2 },
   };
 
-  it("devolve 3 opções nomeadas", () => {
+  it("devolve 3 opções nomeadas pelo limite de minutos por turno", () => {
     const options = generateRotationOptions([p1, p2, p3, p4, p5], weights, noAvailability(), ONE_PERIOD);
-    expect(options.map((o) => o.label)).toEqual(["Turnos longos", "Equilibrada", "Mais rotativa"]);
+    expect(options.map((o) => o.label)).toEqual(["Até 5 minutos por turno", "Até 3 minutos por turno", "Até 2 minutos por turno"]);
+  });
+
+  it("nenhum turno, em nenhuma opção, passa de 5 minutos", () => {
+    const options = generateRotationOptions([p1, p2, p3, p4, p5], weights, noAvailability(), ONE_PERIOD);
+    for (const option of options) {
+      for (const stint of option.stints) {
+        expect(stint.endSec - stint.startSec).toBeLessThanOrEqual(MAX_STINT_SEC);
+      }
+    }
   });
 
   it("cada vaga com atletas fica preenchida do início ao fim da parte, sem buraco nem sobreposição", () => {
@@ -51,51 +61,53 @@ describe("generateRotationOptions", () => {
     }
   });
 
+  it("nenhum atleta aparece em duas vagas ao mesmo tempo", () => {
+    const options = generateRotationOptions([p1, p2, p3, p4, p5], weights, noAvailability(), ONE_PERIOD);
+    for (const option of options) {
+      const byPlayer = new Map<string, typeof option.stints>();
+      option.stints.forEach((s) => {
+        const list = byPlayer.get(s.playerId) ?? [];
+        list.push(s);
+        byPlayer.set(s.playerId, list);
+      });
+      byPlayer.forEach((stints) => {
+        const sorted = [...stints].sort((a, b) => a.startSec - b.startSec);
+        for (let i = 1; i < sorted.length; i++) {
+          expect(sorted[i].startSec).toBeGreaterThanOrEqual(sorted[i - 1].endSec);
+        }
+      });
+    }
+  });
+
   it("atleta indisponível nunca aparece em nenhuma opção", () => {
-    const options = generateRotationOptions(
-      [p1, p2, p3, p4, p5],
-      weights,
-      { p2: "indisponivel" },
-      ONE_PERIOD
-    );
+    const options = generateRotationOptions([p1, p2, p3, p4, p5], weights, { p2: "indisponivel" }, ONE_PERIOD);
     for (const option of options) {
       expect(option.stints.some((s) => s.playerId === "p2")).toBe(false);
     }
   });
 
-  it("atleta com peso em 2 vagas aparece só numa — a de maior peso", () => {
-    const twoSlotWeights: PlayerSlotWeights = { ...weights, p1: { Fixo: 3, "Ala Esquerda": 5 } };
+  it("atleta com peso em 2 vagas roda entre as duas (não fica preso numa só)", () => {
+    const twoSlotWeights: PlayerSlotWeights = { ...weights, p1: { Fixo: 4, "Ala Direita": 4 } };
     const options = generateRotationOptions([p1, p2, p3, p4, p5], twoSlotWeights, noAvailability(), ONE_PERIOD);
-    for (const option of options) {
-      const p1Slots = new Set(option.stints.filter((s) => s.playerId === "p1").map((s) => s.slotIndex));
-      expect(p1Slots.size).toBe(1);
-      expect(p1Slots.has(1)).toBe(true); // Ala Esquerda = índice 1
-    }
-  });
-
-  it("tempo total por atleta não varia entre as 3 opções — só o número de turnos muda", () => {
-    const options = generateRotationOptions([p1, p2, p3, p4, p5], weights, noAvailability(), ONE_PERIOD);
-    const [longos, equilibrada, rotativa] = options;
-    for (const playerId of ["p1", "p2", "p3", "p4", "p5"]) {
-      expect(equilibrada.totalSecondsByPlayer[playerId]).toBe(longos.totalSecondsByPlayer[playerId]);
-      expect(rotativa.totalSecondsByPlayer[playerId]).toBe(longos.totalSecondsByPlayer[playerId]);
-    }
-  });
-
-  it("'Turnos longos' dá um turno contínuo por atleta quando só há um atleta na vaga", () => {
-    const options = generateRotationOptions([p1, p2, p3, p4, p5], weights, noAvailability(), ONE_PERIOD);
     const longos = options[0];
-    const fixoStints = longos.stints.filter((s) => s.slotIndex === 0);
-    expect(fixoStints).toHaveLength(1);
-    expect(fixoStints[0].playerId).toBe("p1");
+    const p1Slots = new Set(longos.stints.filter((s) => s.playerId === "p1").map((s) => s.slotIndex));
+    expect(p1Slots.size).toBeGreaterThan(1);
   });
 
-  it("'Mais rotativa' fragmenta mais turnos que 'Turnos longos' quando há disputa na vaga", () => {
+  it("janela menor (opção mais rotativa) produz mais turnos que a janela maior", () => {
     const options = generateRotationOptions([p1, p2, p3, p4, p5], weights, noAvailability(), ONE_PERIOD);
     const [longos, , rotativa] = options;
-    const aeStintsLongos = longos.stints.filter((s) => s.slotIndex === 1).length;
-    const aeStintsRotativa = rotativa.stints.filter((s) => s.slotIndex === 1).length;
-    expect(aeStintsRotativa).toBeGreaterThan(aeStintsLongos);
+    expect(rotativa.stints.length).toBeGreaterThan(longos.stints.length);
+  });
+
+  it("o tempo total por atleta não varia significativamente entre as 3 opções", () => {
+    const options = generateRotationOptions([p1, p2, p3, p4, p5], weights, noAvailability(), ONE_PERIOD);
+    const [longos, , rotativa] = options;
+    for (const playerId of ["p1", "p2", "p3", "p4", "p5"]) {
+      const a = longos.totalSecondsByPlayer[playerId] ?? 0;
+      const b = rotativa.totalSecondsByPlayer[playerId] ?? 0;
+      expect(Math.abs(a - b)).toBeLessThanOrEqual(MAX_STINT_SEC * 2);
+    }
   });
 
   it("vaga sem nenhum atleta com peso cadastrado ainda é preenchida (fallback)", () => {

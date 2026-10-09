@@ -51,52 +51,59 @@ treinador na aptidão cadastrada, que é estável e não reflete a leitura da se
 gerar trabalho repetitivo desnecessário (a aptidão já existe, é um bom ponto de
 partida na maioria dos casos).
 
-## Decisão 4: As 3 opções variam o número de turnos por atleta, não o total de tempo
+## Decisão 4 (revista 2026-10-09): Escalonamento por janelas de tempo, com teto de 5 minutos e rodízio de posição
 
-**Decisão**: Pra cada vaga e parte, o tempo disponível é dividido entre os atletas
-elegíveis proporcionalmente ao peso (`tempo_atleta = tempo_total × peso_atleta /
-soma_pesos`), igual nas 3 opções (sem variação significativa, só arredondamento de
-encaixe). O que muda entre as opções é em QUANTOS turnos esse tempo total de cada
-atleta se divide:
+**Histórico**: a primeira versão desta feature (Decisões 4/5 originais, abaixo)
+prendia cada atleta a UMA vaga só por geração, com turnos podendo chegar a ocupar a
+parte inteira sem troca ("Turnos longos"). Feedback direto do treinador depois de
+usar em produção: "Os planos deixam muito tempo na quadra. Temos que ter jogadores
+rodando 5 minutos no máximo, jogadores que podem rodar de posição dentro da quadra."
+Isso invalidou as duas decisões originais — revisadas aqui.
 
-- **Opção 1 ("Turnos longos")**: cada atleta recebe, sempre que possível, 1 turno
-  contínuo com seu tempo total — menos substituições, menos desgaste de trocar.
-- **Opção 2 ("Equilibrada")**: atletas com tempo total acima de um limiar (ex.: mais
-  da metade da parte) têm seu tempo dividido em 2 turnos com uma pausa no meio
-  (descanso); atletas com tempo menor continuam num turno só.
-- **Opção 3 ("Mais rotativa")**: todo atleta com tempo total relevante é dividido em
-  2+ turnos menores espalhados pela parte — mais trocas, descanso mais distribuído.
+**Decisão**: Cada parte é dividida em janelas de tempo fixas (nunca mais que 5
+minutos — teto rígido, nunca ultrapassado em nenhuma das 3 opções). A cada janela, o
+sistema decide de uma vez só quem entra em cada uma das 4 vagas: entre os pares
+(vaga, atleta) ainda válidos — atleta com peso cadastrado pra aquela vaga — fecha
+primeiro o par de maior pontuação (`peso / (1 + tempo já acumulado pelo atleta)`),
+numa correspondência gulosa determinística (nunca sorteio). Um atleta com peso
+cadastrado em mais de uma vaga pode ser escolhido numa janela pra uma vaga e na
+janela seguinte pra outra — ele RODA DE POSIÇÃO dentro do próprio jogo, não fica mais
+preso a uma vaga só (Decisão 5 original, abaixo, foi revogada). As 3 opções variam só
+o tamanho da janela — "Até 5 minutos" / "Até 3" / "Até 2" por turno — dando mais ou
+menos frequência de troca; o tempo total por atleta fica próximo entre as 3 (não mais
+exatamente igual como na versão anterior, já que a correspondência é gulosa, não uma
+divisão proporcional fechada — ainda assim dentro da margem já prevista em FR-006/
+SC-003, "sem variação significativa").
 
-Dentro de cada opção, a ORDEM de entrada entre atletas de peso igual segue a ordem já
-estabelecida por `suggestOrder` (specs/003-data-driven-rotation/) — nunca aleatória.
+**Rationale**: Atende o pedido literal do treinador (teto de 5 min, nunca mais) e
+reaproveita o mesmo peso por vaga já existente pra permitir rodízio de posição sem
+precisar de nenhum dado novo — um atleta com peso alto em 2 vagas naturalmente
+alterna entre elas conforme o "custo" de mantê-lo tempo demais numa só vaga sobe
+(`1 + acumulado` no denominador). Resolve ao mesmo tempo o problema de conflito de
+horário (um atleta nunca pode estar em 2 vagas na mesma janela, já que cada janela
+marca quem já foi escolhido antes de processar a próxima vaga) sem precisar de um
+solver de otimização completo — a correspondência gulosa por janela é simples de
+implementar, testar e explicar ("quem está escalado em cada vaga nos próximos X
+minutos").
 
-**Rationale**: Atende FR-006/SC-003 (mesmo total por atleta, variação no padrão) com
-um critério concreto e explicável ao treinador (cada opção tem uma "personalidade"
-reconhecível: mais contínua, equilibrada, ou mais rotativa) — nunca 3 resultados
-aleatórios sem motivo aparente, o que seria confuso de explicar numa UI simples
-(Princípio V).
+**Alternatives considered**: Resolver a alocação inteira do jogo como um problema de
+otimização global (ex.: programação linear) pra maximizar aderência exata ao peso —
+rejeitado por complexidade desproporcional a uma ferramenta pro treinador usar em
+campo; a correspondência gulosa por janela já entrega resultado bom o suficiente,
+sempre determinístico, e muito mais fácil de auditar/explicar numa mensagem de erro
+ou revisão de código.
 
-**Alternatives considered**: 3 variações puramente aleatórias respeitando os pesos —
-rejeitado por ser mais difícil de explicar ao treinador porque uma opção é diferente
-da outra ("por que a opção 2 tem esse padrão e não outro?"); o critério por número de
-turnos é determinístico e fácil de nomear/entender.
+---
 
-## Decisão 5: Um atleta ocupa só uma vaga por jogo gerado automaticamente
+### Decisões originais (2026-10-09, revogadas pela revisão acima — mantidas por histórico)
 
-**Decisão**: Mesmo que um atleta tenha peso > 0 em mais de uma vaga pro mesmo jogo
-(ex.: peso em Ala Esquerda E em Fixo), a geração automática aloca esse atleta numa
-ÚNICA vaga — a de maior peso ajustado (empate resolvido pela ordem de `suggestOrder`).
-Ele nunca é dividido entre duas vagas diferentes em horários diferentes dentro da
-mesma geração automática.
+**Decisão 4 original**: As 3 opções variavam o NÚMERO DE TURNOS por atleta (via
+`chunksFor`/`buildStints`, com `maxStintSec` = período inteiro / metade / um terço),
+nomeadas "Turnos longos" / "Equilibrada" / "Mais rotativa" — mas "Turnos longos"
+podia dar até a parte inteira num turno só, exatamente o que o treinador reportou
+como problema.
 
-**Rationale**: Evita o problema de conflito de horário entre vagas (um atleta não
-pode estar em duas vagas ao mesmo tempo — já existe `playerOverlapsOtherSlot` no
-motor manual pra evitar isso) sem precisar resolver isso automaticamente numa
-primeira versão. Cobre exatamente o caso de uso citado no spec (treinador sobe o peso
-do atleta no Fixo pra ele jogar ALI neste jogo) sem precisar que o sistema decida
-também QUANDO trocar esse atleta de vaga no meio do jogo — essa decisão mais fina
-continua manual (User Story 3, edição livre depois).
-
-**Alternatives considered**: Permitir um atleta dividido entre 2 vagas na mesma
-geração — rejeitado por complexidade desproporcional ao pedido original; o treinador
-sempre pode fazer isso manualmente depois editando o plano gerado.
+**Decisão 5 original**: Um atleta ocupava só UMA vaga por geração (a de maior peso,
+via `assignSlots`), nunca dividido entre vagas na mesma geração — trocado de vaga só
+manualmente depois. Revogada porque o pedido do treinador foi explicitamente permitir
+rodízio de posição dentro do próprio jogo gerado.

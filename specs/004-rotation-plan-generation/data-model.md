@@ -47,7 +47,7 @@ de um turno montado à mão.
 
 | Campo | Tipo | Notas |
 |---|---|---|
-| `label` | `string` | "Turnos longos" / "Equilibrada" / "Mais rotativa" (Decisão 4, `research.md`) — nome em português, nunca "Opção 1/2/3" sem contexto. |
+| `label` | `string` | "Até 5 minutos por turno" / "Até 3 minutos por turno" / "Até 2 minutos por turno" (Decisão 4, `research.md`, revista 2026-10-09) — nome em português, nunca "Opção 1/2/3" sem contexto. |
 | `stints` | `RotationStint[]` | Mesmo tipo já existente em `packages/engine/src/rotationPlan.ts` — a opção É uma lista de turnos, pronta pra virar o plano salvo sem transformação. |
 | `totalSecondsByPlayer` | `Record<string, number>` | Derivado de `plannedSecondsByPlayer(stints)` já existente — usado só pra mostrar ao treinador o resumo antes de escolher, não é um dado novo guardado. |
 

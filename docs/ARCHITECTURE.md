@@ -214,13 +214,18 @@ partes) de uma vez, sempre por ação explícita do treinador (nunca sozinha).
   treinador pra aquele jogo específico — inclusive numa vaga onde o atleta
   não tem aptidão cadastrada (ex.: alguém "A" na Ala Esquerda que precisa
   jogar de Fixo nesse jogo). Nunca escreve de volta em `player_aptitudes`.
-- **3 opções por geração** (`generateRotationOptions`): cada atleta vai pra
-  UMA só vaga (a de maior peso ajustado — nunca dividido entre vagas numa
-  mesma geração); o tempo de cada vaga/parte é repartido entre os atletas
-  elegíveis proporcionalmente ao peso, igual nas 3 opções — o que muda é em
-  quantos turnos esse tempo se fragmenta ("Turnos longos" / "Equilibrada" /
-  "Mais rotativa"), dando padrões diferentes de substituição/descanso sem
-  mudar quanto tempo total cada atleta recebe.
+- **3 opções por geração** (`generateRotationOptions`): cada parte é dividida
+  em janelas de tempo (no máximo 5 minutos — nunca mais, pedido direto do
+  treinador pra forçar rodízio real) e, janela por janela, decide de uma vez
+  quem entra em cada uma das 4 vagas — peso alto entra mais, mas quem já
+  acumulou mais tempo cede espaço (correspondência gulosa, determinística,
+  sem sorteio). Um atleta com peso em mais de uma vaga RODA DE POSIÇÃO entre
+  elas ao longo do jogo (nunca preso numa só, diferente da primeira versão
+  desta feature). As 3 opções variam só o tamanho da janela ("Até 5
+  minutos" / "Até 3" / "Até 2" por turno — todas sob o teto de 5 min),
+  dando mais ou menos frequência de troca, com o tempo total por atleta
+  próximo entre as 3 (não exatamente igual, já que a correspondência é
+  gulosa, não uma divisão proporcional exata).
 - O treinador escolhe uma das 3 — vira os turnos reais do jogo
   (`saveStints`, mesmo caminho de sempre) e continua 100% editável depois,
   sem nenhuma restrição adicional por ter vindo de uma geração.
