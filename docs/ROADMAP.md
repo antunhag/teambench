@@ -5,7 +5,7 @@
 > [constituição](../.specify/memory/constitution.md), Princípio III) antes de
 > qualquer código — este documento só regista a intenção e a prioridade.
 >
-> Última revisão: 2026-10-08 (motor de sugestão de rotação).
+> Última revisão: 2026-10-09 (geração automática de plano de rotação).
 
 ## Agora
 
@@ -24,8 +24,34 @@
   (achado da auditoria, adiado por exigir desenho cuidadoso de trigger).
 - Resolver a vulnerabilidade crítica em dependências de dev (`vitest`/`vite`)
   — exige upgrade maior, avaliar com calma antes de forçar.
+- **Trigger de consistência de `team_id` denormalizado** — achado do
+  `security-auditor` ao revisar a migração `0022` (2026-10-09): nenhuma
+  tabela que denormaliza `team_id` (`player_aptitudes`, `rotation_plan_stints`,
+  `rotation_plan_weights`) valida que esse `team_id` bate com o time real do
+  registo pai (`match_id`/`player_id`), nem as policies de UPDATE impedem
+  reatribuir `team_id` pra outra equipa do mesmo admin (mesma classe de bug
+  já corrigida pra `teams.club_id` na migração `0015`). Risco baixo hoje
+  (mono-admin por equipa), mas vale uma migração dedicada com trigger
+  compartilhado pras três tabelas, revisada pelo `security-auditor`.
 
 ## Feito recentemente
+
+- **Geração automática de plano de rotação completo** (2026-10-09) — spec
+  completa em [specs/004-rotation-plan-generation/spec.md](../specs/004-rotation-plan-generation/spec.md).
+  Vai além da sugestão por vaga (abaixo): o treinador ajusta um peso de
+  confiança (escala 1-5) por atleta e por vaga, pra um jogo específico, sem
+  mexer na aptidão permanente do Plantel — cobre inclusive o caso de um
+  atleta precisar jogar numa vaga diferente da sua classificação cadastrada
+  nesse jogo. Com um clique, gera 3 opções de plano completo ("Turnos
+  longos" / "Equilibrada" / "Mais rotativa") — mesmo tempo total por atleta
+  nas 3, variando só o padrão de substituição/descanso. O treinador escolhe
+  uma, que vira os turnos reais do jogo, editável depois sem nenhuma
+  restrição extra. Tabela nova (`rotation_plan_weights`, migração `0022`,
+  RLS nova) revisada e aprovada pelo `security-auditor` antes de aplicar —
+  achou 2 gaps sistêmicos pré-existentes (ver item em "Agora"), não
+  bloqueantes. Resolve de vez o antigo item de roadmap "Prioridade de uso /
+  desembate na rotação" (R02). Detalhe completo em
+  [docs/ARCHITECTURE.md](ARCHITECTURE.md).
 
 - **Motor de Sugestão de Rotação Baseado em Dados** (2026-10-08) — spec
   completa em [specs/003-data-driven-rotation/spec.md](../specs/003-data-driven-rotation/spec.md).
@@ -111,10 +137,6 @@
   repositório só pela exportação de dados — nunca embutido em `apps/web`. Falta
   decidir formato (script vs. app com interface) e então passar por
   `/speckit-specify` antes de começar.
-- **Prioridade de uso / desembate na rotação** (R02 do documento de requisitos
-  de rotação) — hoje a classificação A/B/C por vaga permite empates (vários
-  atletas "A" na mesma vaga); decidir QUEM joga primeiro num empate ainda é
-  manual. Adiado explicitamente até o resto da rotação provar que precisa disso.
 - **Hierarquia "Admin do Clube"** — discutido 2026-10-07: um Admin do Clube
   poder gerir todas as equipas do clube (não só uma), com um Admin de Equipa
   só podendo gerir atribuições dentro da sua própria equipa. Deliberadamente

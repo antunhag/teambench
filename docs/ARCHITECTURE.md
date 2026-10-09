@@ -177,8 +177,10 @@ mesmos dois triggers sem alterá-los — ambos já disparam em qualquer
 (4 vagas fixas de linha: Fixo, Ala Esquerda, Ala Direita, Pivô — guarda-redes
 nunca entra, por desenho). `player_aptitudes` classifica cada atleta
 independentemente em A/B/C por vaga (não é mais uma lista ordenada única —
-vários atletas podem ser "A" na mesma vaga ao mesmo tempo). O plano em si
-nunca é gerado automaticamente; o treinador monta à mão.
+vários atletas podem ser "A" na mesma vaga ao mesmo tempo). O plano pode ser
+montado à mão, turno a turno, ou gerado automaticamente (ver abaixo) — nos
+dois casos vira os mesmos `rotation_plan_stints`, sem diferença depois de
+salvo.
 
 **Sugestão de escalação por vaga** (`packages/engine/src/rotationSuggestion.ts`,
 `recentMinutes.ts` — specs/003-data-driven-rotation/) ordena o seletor de
@@ -199,6 +201,30 @@ decide. Mescla 3 fontes, com pesos deliberadamente desiguais:
   (`explainSuggestion`) — um atleta sem histórico é ordenado só pela
   aptidão, nunca priorizado nem penalizado por falta de jogos.
 
+**Geração automática de plano completo**
+(`packages/engine/src/rotationWeights.ts`, `rotationGenerator.ts` —
+specs/004-rotation-plan-generation/) dá um passo além da sugestão: em vez de
+só ordenar o seletor, preenche o plano inteiro (todas as vagas, todas as
+partes) de uma vez, sempre por ação explícita do treinador (nunca sozinha).
+
+- **Peso por atleta, por vaga, por jogo** (`rotation_plan_weights`, migração
+  `0022` — tabela nova com RLS nova, revisada pelo `security-auditor` antes
+  de aplicar). Escala curta de 1 a 5, começando num valor sugerido a partir
+  da aptidão + estado (`defaultWeight`), mas livremente ajustável pelo
+  treinador pra aquele jogo específico — inclusive numa vaga onde o atleta
+  não tem aptidão cadastrada (ex.: alguém "A" na Ala Esquerda que precisa
+  jogar de Fixo nesse jogo). Nunca escreve de volta em `player_aptitudes`.
+- **3 opções por geração** (`generateRotationOptions`): cada atleta vai pra
+  UMA só vaga (a de maior peso ajustado — nunca dividido entre vagas numa
+  mesma geração); o tempo de cada vaga/parte é repartido entre os atletas
+  elegíveis proporcionalmente ao peso, igual nas 3 opções — o que muda é em
+  quantos turnos esse tempo se fragmenta ("Turnos longos" / "Equilibrada" /
+  "Mais rotativa"), dando padrões diferentes de substituição/descanso sem
+  mudar quanto tempo total cada atleta recebe.
+- O treinador escolhe uma das 3 — vira os turnos reais do jogo
+  (`saveStints`, mesmo caminho de sempre) e continua 100% editável depois,
+  sem nenhuma restrição adicional por ter vindo de uma geração.
+
 ## Estrutura de pastas
 
 ```
@@ -209,6 +235,8 @@ packages/engine/src/
   rotationPlan.ts    # plano de rotação + aptidão A/B/C
   recentMinutes.ts         # agrega minutos através de vários jogos (reaproveita replayEvents)
   rotationSuggestion.ts      # sugestão de escalação por vaga: aptidão + estado + minutos
+  rotationWeights.ts            # peso padrão sugerido por vaga (aptidão + estado → 1-5)
+  rotationGenerator.ts            # gera 3 opções de plano completo a partir dos pesos
   timeline.ts         # export visual (HTML) + buildEventsExport (JSON p/ ferramentas externas)
   report.ts            # descrições textuais, exportação pro Excel/Sheets do clube
   navigation.ts          # itens de navegação visíveis por papel (visibleNavItems)

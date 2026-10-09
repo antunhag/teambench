@@ -41,7 +41,7 @@ manual, via `quickstart.md`.
 - [X] T006 [P] [US1] Testes em `packages/engine/test/rotationWeights.test.ts`: cada combinação de aptidão × estado, confirma que a_retomar nunca derruba o peso abaixo de 1 — depende de T005
 - [X] T007 [US1] Criar `apps/web/src/match/useRotationWeights.ts`: `refresh()` lê `rotation_plan_weights` do jogo; `setWeight(playerId, slot, weight)` faz upsert (`onConflict: "match_id,player_id,slot_type"`); `byPlayerSlot` devolve o peso salvo ou, se ainda não ajustado, `engine.defaultWeight(...)` pra cada atleta incluído × 4 vagas — depende de T004, T005
 - [X] T008 [US1] Em `apps/web/src/match/RotationPlanner.tsx`: UI de ajuste de peso — por atleta incluído, um stepper de 1 a 5 (rotulado "pouca confiança" → "muita confiança") por vaga, incluindo vagas fora da aptidão cadastrada do atleta (caso do exemplo Ala Esquerda-A/Fixo-B da spec) — depende de T007
-- [ ] T009 [US1] Validar manualmente com o Cenário 1 do `quickstart.md` — depende de T008
+- [X] T009 [US1] Validar manualmente com o Cenário 1 do `quickstart.md` — depende de T008
 
 **Checkpoint**: User Story 1 completa e testável sozinha — pesos ajustáveis e persistidos, mesmo sem a geração ainda existir.
 
@@ -56,7 +56,7 @@ manual, via `quickstart.md`.
 - [X] T010 [P] [US2] Criar `packages/engine/src/rotationGenerator.ts`: `generateRotationOptions(players, weightsBySlot, availabilityByPlayer, format): RotationPlanOption[]` — pura. Resolve 1 vaga por atleta (maior peso ajustado, empate por `suggestOrder` — Decisão 5); distribui o tempo de cada vaga/parte proporcional ao peso dos atletas elegíveis; gera 3 variações (turnos longos / equilibrada / mais rotativa — Decisão 4) que mantêm o tempo total por atleta próximo entre si, variando o número de turnos — depende de nada
 - [X] T011 [P] [US2] Testes em `packages/engine/test/rotationGenerator.test.ts`: as 3 opções preenchem todas as vagas/partes sem buraco nem sobreposição; indisponível nunca aparece; atleta com peso em 2 vagas aparece só numa; tempo total por atleta não varia significativamente entre as 3 opções; vaga sem nenhum atleta com peso ainda é preenchida (fallback) — depende de T010
 - [X] T012 [US2] Em `apps/web/src/match/RotationPlanner.tsx`: botão "Gerar opções" (usa `useRotationWeights`), mostra as 3 opções nomeadas com resumo de minutos por atleta; escolher uma chama `saveStints` já existente com os turnos dela — depende de T007, T010
-- [ ] T013 [US2] Validar manualmente com o Cenário 2 do `quickstart.md` — depende de T012
+- [X] T013 [US2] Validar manualmente com o Cenário 2 do `quickstart.md` — depende de T012
 
 **Checkpoint**: User Stories 1 e 2 completas — MVP (ajustar pesos, gerar, escolher um plano).
 
@@ -68,8 +68,8 @@ manual, via `quickstart.md`.
 
 **Independent Test**: Cenário 3 do [quickstart.md](quickstart.md).
 
-- [ ] T014 [US3] Confirmar que trocar atleta, mover fim de turno, remover e adicionar turno funcionam sobre os turnos de uma opção escolhida sem nenhuma mudança de código adicional (já esperado — a opção escolhida vira `rotation_plan_stints` normal via `saveStints`); corrigir se algo quebrar — depende de T012
-- [ ] T015 [US3] Validar manualmente com o Cenário 3 do `quickstart.md` — depende de T014
+- [X] T014 [US3] Confirmar que trocar atleta, mover fim de turno, remover e adicionar turno funcionam sobre os turnos de uma opção escolhida sem nenhuma mudança de código adicional (já esperado — a opção escolhida vira `rotation_plan_stints` normal via `saveStints`); corrigir se algo quebrar — depende de T012. Confirmado ao vivo: trocar o atleta de um turno gerado (TESTE X4 → TESTE X5) salvou normalmente, os totais em "Minutos previstos" recalcularam e o aviso "✅ Guardado" apareceu.
+- [X] T015 [US3] Validar manualmente com o Cenário 3 do `quickstart.md` — depende de T014
 
 **Checkpoint**: User Stories 1, 2 e 3 completas e testáveis.
 
@@ -82,7 +82,7 @@ manual, via `quickstart.md`.
 **Independent Test**: Cenário 4 do [quickstart.md](quickstart.md).
 
 - [X] T016 [US4] Em `apps/web/src/match/RotationPlanner.tsx`: ao acionar "Gerar opções" quando já existe um plano salvo (escolhido antes e/ou editado), mostrar aviso explícito pedindo confirmação antes de prosseguir pra tela das 3 novas opções — depende de T012
-- [ ] T017 [US4] Validar manualmente com o Cenário 4 do `quickstart.md` — depende de T016
+- [X] T017 [US4] Validar manualmente com o Cenário 4 do `quickstart.md` — depende de T016
 
 **Checkpoint**: As quatro User Stories completas e testáveis — spec `004-rotation-plan-generation` pronta pro Polish.
 
@@ -90,9 +90,9 @@ manual, via `quickstart.md`.
 
 ## Phase 7: Polish & Cross-Cutting Concerns
 
-- [ ] T018 [P] Atualizar `docs/ARCHITECTURE.md` (seção "Planeamento de rotação e aptidão") com o conceito de peso por jogo/vaga e o motor de geração — Princípio VI da constituição, gate obrigatório antes do push
-- [ ] T019 Atualizar `docs/ROADMAP.md`: marcar "Geração automática de plano de rotação completo" como feito; atualizar a nota do item "Prioridade de uso / desembate na rotação" (R02) — esta feature resolve isso pelo conceito de peso, não mais um desembate binário
-- [ ] T020 Rodar a secção "Regressão a conferir" do `quickstart.md` (planeador manual continua a funcionar sem a geração, sugestão da feature 003 continua intacta, suite Vitest completa) antes do commit final
+- [X] T018 [P] Atualizar `docs/ARCHITECTURE.md` (seção "Planeamento de rotação e aptidão") com o conceito de peso por jogo/vaga e o motor de geração — Princípio VI da constituição, gate obrigatório antes do push
+- [X] T019 Atualizar `docs/ROADMAP.md`: marcar "Geração automática de plano de rotação completo" como feito; atualizar a nota do item "Prioridade de uso / desembate na rotação" (R02) — esta feature resolve isso pelo conceito de peso, não mais um desembate binário
+- [X] T020 Rodar a secção "Regressão a conferir" do `quickstart.md` (planeador manual continua a funcionar sem a geração, sugestão da feature 003 continua intacta, suite Vitest completa) antes do commit final
 
 ---
 
