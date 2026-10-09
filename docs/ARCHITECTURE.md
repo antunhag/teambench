@@ -215,7 +215,7 @@ partes) de uma vez, sempre por ação explícita do treinador (nunca sozinha).
   não tem aptidão cadastrada (ex.: alguém "A" na Ala Esquerda que precisa
   jogar de Fixo nesse jogo). Nunca escreve de volta em `player_aptitudes`.
 - **3 opções por geração** (`generateRotationOptions`): cada parte é dividida
-  em janelas de tempo (no máximo 5 minutos — nunca mais, pedido direto do
+  em janelas fixas de 5 minutos (teto rígido, nunca mais, pedido direto do
   treinador pra forçar rodízio real) e, janela por janela, decide de uma vez
   quem entra em cada uma das 4 vagas — correspondência gulosa, determinística
   (nunca sorteio), onde o PESO manda de verdade: um atleta claramente melhor
@@ -226,11 +226,16 @@ partes) de uma vez, sempre por ação explícita do treinador (nunca sozinha).
   deixava um atleta sem aptidão nenhuma acabar entrando numa vaga que não é
   dele). Um atleta com peso em mais de uma vaga RODA DE POSIÇÃO entre elas ao
   longo do jogo (nunca preso numa só), podendo somar mais de 5 min "em quadra"
-  dividido entre as duas. As 3 opções variam só o tamanho da janela ("Até 5
-  minutos" / "Até 3" / "Até 2" por turno — todas sob o teto de 5 min), dando
-  mais ou menos frequência de troca, com o tempo total por atleta próximo
-  entre as 3 (não exatamente igual, já que a correspondência é gulosa, não
-  uma divisão proporcional exata).
+  dividido entre duas ou três. As 3 opções agora são 3 **filosofias de
+  rotação** (Decisão 7), não 3 tamanhos de turno: variam quantas janelas
+  SEGUIDAS (streak) um atleta pode segurar a mesma vaga antes da pressão pra
+  trocar ficar grande o bastante pra vencer qualquer vantagem de peso
+  (`FORCE_OUT_PENALTY`, maior que qualquer diferença possível numa escala
+  1-5) — "Foco nos mais aptos" (até 15 min seguidos), "Equilibrada" (até 10) e
+  "Dá minutos a todos" (nunca mais que 5 min seguidos, nem pro melhor). Mesmo
+  na opção mais favorável ao peso, ninguém trava uma vaga o jogo inteiro —
+  evita o caso visto ao vivo de um especialista segurando 100% do tempo numa
+  vaga com zero rotação real.
 - O treinador escolhe uma das 3 — vira os turnos reais do jogo
   (`saveStints`, mesmo caminho de sempre) e continua 100% editável depois,
   sem nenhuma restrição adicional por ter vindo de uma geração.

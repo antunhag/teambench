@@ -30,9 +30,9 @@ describe("generateRotationOptions", () => {
     p5: { "Pivô": 2 },
   };
 
-  it("devolve 3 opções nomeadas pelo limite de minutos por turno", () => {
+  it("devolve 3 opções nomeadas por filosofia de rotação, não por tamanho de turno", () => {
     const options = generateRotationOptions([p1, p2, p3, p4, p5], weights, noAvailability(), ONE_PERIOD);
-    expect(options.map((o) => o.label)).toEqual(["Até 5 minutos por turno", "Até 3 minutos por turno", "Até 2 minutos por turno"]);
+    expect(options.map((o) => o.label)).toEqual(["Foco nos mais aptos", "Equilibrada", "Dá minutos a todos"]);
   });
 
   it("nenhum turno, em nenhuma opção, passa de 5 minutos", () => {
@@ -89,30 +89,28 @@ describe("generateRotationOptions", () => {
   it("atleta com peso em 2 vagas roda entre as duas (não fica preso numa só)", () => {
     const twoSlotWeights: PlayerSlotWeights = { ...weights, p1: { Fixo: 4, "Ala Direita": 4 } };
     const options = generateRotationOptions([p1, p2, p3, p4, p5], twoSlotWeights, noAvailability(), ONE_PERIOD);
-    const longos = options[0];
-    const p1Slots = new Set(longos.stints.filter((s) => s.playerId === "p1").map((s) => s.slotIndex));
+    const focoNosMaisAptos = options[0];
+    const p1Slots = new Set(focoNosMaisAptos.stints.filter((s) => s.playerId === "p1").map((s) => s.slotIndex));
     expect(p1Slots.size).toBeGreaterThan(1);
   });
 
-  it("janela menor (opção mais rotativa) produz mais turnos que a janela maior", () => {
-    const options = generateRotationOptions([p1, p2, p3, p4, p5], weights, noAvailability(), ONE_PERIOD);
-    const [longos, , rotativa] = options;
-    expect(rotativa.stints.length).toBeGreaterThan(longos.stints.length);
+  it("'Dá minutos a todos' dá mais tempo real ao substituto que 'Foco nos mais aptos' pra um atleta dominante numa vaga", () => {
+    const longPeriod: MatchFormat = { periodCount: 1, periodMinutes: 30, overtimePeriodCount: 0, overtimeMinutes: 0 };
+    const soloSpecialistWeights: PlayerSlotWeights = { p1: { Fixo: 5 }, p2: { "Ala Esquerda": 5 }, p4: { "Ala Direita": 4 }, p5: { Pivô: 5 } };
+    const options = generateRotationOptions([p1, p2, p4, p5], soloSpecialistWeights, noAvailability(), longPeriod);
+    const [focoNosMaisAptos, , daMinutosATodos] = options;
+
+    // p5 é o único com peso de verdade no Pivô — em ambas as opções ele segue dominando o tempo,
+    // mas a pressão de troca mais forte de "Dá minutos a todos" deve abrir mais tempo real pra
+    // quem assume o Pivô quando ele é forçado a sair (aqui, p4 — o fallback determinístico).
+    const secondsAt = (stints: typeof focoNosMaisAptos.stints, slotIndex: number, playerId: string) =>
+      stints.filter((s) => s.slotIndex === slotIndex && s.playerId === playerId).reduce((sum, s) => sum + (s.endSec - s.startSec), 0);
+
+    expect(secondsAt(daMinutosATodos.stints, 3, "p4")).toBeGreaterThan(secondsAt(focoNosMaisAptos.stints, 3, "p4"));
+    expect(secondsAt(focoNosMaisAptos.stints, 3, "p5")).toBeGreaterThan(secondsAt(daMinutosATodos.stints, 3, "p5"));
   });
 
-  it("o tempo total por atleta não varia significativamente entre as 3 opções", () => {
-    const options = generateRotationOptions([p1, p2, p3, p4, p5], weights, noAvailability(), ONE_PERIOD);
-    const [longos, , rotativa] = options;
-    for (const playerId of ["p1", "p2", "p3", "p4", "p5"]) {
-      const a = longos.totalSecondsByPlayer[playerId] ?? 0;
-      const b = rotativa.totalSecondsByPlayer[playerId] ?? 0;
-      expect(Math.abs(a - b)).toBeLessThanOrEqual(MAX_STINT_SEC * 2);
-    }
-  });
-
-  it("um atleta sem peso cadastrado na vaga (peso 1 padrão) não toma minutos relevantes de quem tem peso claramente maior", () => {
-    // Caso real reportado: um atleta sem aptidão em Pivô (peso 1, só o padrão) não deveria
-    // acumular minutos lá só porque "chegou a vez" de trocar — o peso tem que mandar de verdade.
+  it("mesmo em 'Foco nos mais aptos', o peso domina — o melhor numa vaga joga bem mais que uma alternativa sem aptidão ali", () => {
     const dinis = player("dinis"); // sem nenhum peso explícito em lugar nenhum — cai no padrão 1 em toda vaga.
     const longPeriod: MatchFormat = { periodCount: 1, periodMinutes: 30, overtimePeriodCount: 0, overtimeMinutes: 0 };
     const soloSpecialistWeights: PlayerSlotWeights = {
@@ -122,12 +120,12 @@ describe("generateRotationOptions", () => {
       p5: { "Pivô": 5 }, // único com peso de verdade no Pivô
       // dinis fica sem nenhuma entrada — peso 1 (padrão) em todas as vagas
     };
-    const options = generateRotationOptions([p1, p2, p4, p5, dinis], soloSpecialistWeights, noAvailability(), longPeriod);
-    for (const option of options) {
-      const pivoSecondsFor = (playerId: string) =>
-        option.stints.filter((s) => s.slotIndex === 3 && s.playerId === playerId).reduce((sum, s) => sum + (s.endSec - s.startSec), 0);
-      expect(pivoSecondsFor("p5")).toBeGreaterThan(pivoSecondsFor("dinis") * 3);
-    }
+    const [focoNosMaisAptos] = generateRotationOptions([p1, p2, p4, p5, dinis], soloSpecialistWeights, noAvailability(), longPeriod);
+    const pivoSecondsFor = (playerId: string) =>
+      focoNosMaisAptos.stints
+        .filter((s) => s.slotIndex === 3 && s.playerId === playerId)
+        .reduce((sum, s) => sum + (s.endSec - s.startSec), 0);
+    expect(pivoSecondsFor("p5")).toBeGreaterThan(pivoSecondsFor("dinis") * 2);
   });
 
   it("vaga sem nenhum atleta com peso cadastrado ainda é preenchida (fallback)", () => {

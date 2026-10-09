@@ -423,7 +423,10 @@ export function RotationPlanner({ teamId, matchId, opponent, formatId, onClose }
             <div style={{ marginTop: 16 }}>
               <h3 className="section-title">Escolha uma opção</h3>
               <p className="hint">
-                As 3 opções dão o mesmo tempo total pra cada atleta — o que muda é o número de turnos/substituições.
+                As 3 opções são 3 filosofias de rotação, não só turnos mais curtos: variam quanto tempo seguido um
+                atleta pode segurar a mesma vaga antes de ser forçado a ceder, mesmo tendo mais confiança registada —
+                de "Foco nos mais aptos" (o melhor joga a maior parte do tempo) a "Dá minutos a todos" (ninguém segura
+                uma vaga por mais que 5 minutos seguidos).
               </p>
               <div className="pgrid">
                 {rotationOptions.map((option) => (

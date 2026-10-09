@@ -146,6 +146,77 @@ rejeitado por ainda ter o mesmo problema de fundo (eventualmente qualquer decaim
 contínuo sem teto permite um peso baixo "alcançar" um peso alto dado tempo
 suficiente); o desconto fixo por repetição nunca tem esse problema, porque não cresce.
 
+## Decisão 7 (2026-10-09, mesmo dia): Pressão de troca escalona por sequência — e as 3 opções são filosofias de rotação, não tamanhos de turno
+
+**Histórico**: a Decisão 6 corrigiu o caso relatado (Dinis não rouba mais minutos do
+Pivô), mas foi longe demais na direção oposta — testado ao vivo, um atleta de peso 5
+cadastrado só no Pivô passou a ocupar a vaga **o jogo inteiro**, zero rotação real
+mesmo tendo tempo de sobra pra ceder. Feedback do treinador, em duas mensagens da
+mesma conversa:
+
+> "Outro ponto, não precisamos e não é saudável termos os 4 girando o tempo todo,
+> pode ser uma das opções, mas não regra. Precisamos também ter sempre 3 jogadores
+> mais 'capacitados' com jogadores com menos experiência. Em alguns casos, se for
+> para otimizar o processo, algum atleta pode ficar 3 min em uma posição e 3 em
+> outra totalizando 6 min. Outra questão, quando o desequilibrio entre as opções
+> forem grandes, pode esticar o tempo do 'melhor'"
+
+> "Ainda não está legal, precisamos equilibrar os tempo, fazer atletas que jogam em
+> 2 ou 3 posições poderem rodar. Até 6 minutos em quadra, ok. Não acho que as opções
+> deveriam ser somente por tempos diferentes, mas sim rotações diferentes baseado nas
+> opções."
+
+Essa segunda mensagem invalida a leitura que eu tinha dado à primeira (eu havia
+assumido que o "desconto pequeno e fixo" da Decisão 6 já resolvia o ponto por
+consequência, sem mudança de código) — o comportamento de "quem tem peso nunca sai"
+é explicitamente chamado de "não legal" depois de visto ao vivo. Fica claro também
+que o eixo das 3 opções estava errado desde a Decisão 4: variar só o TAMANHO da
+janela (5/3/2 min) nunca mexe em QUEM joga, só na granularidade — não são 3
+estratégias diferentes, são a mesma estratégia em 3 resoluções.
+
+**Decisão**: A janela fica FIXA em 5 minutos pras 3 opções (teto rígido, igual antes
+— nenhuma vaga reavalia depois de mais que isso). O que varia entre as 3 opções agora
+é **quantas janelas SEGUIDAS (streak) um atleta pode segurar a mesma vaga antes da
+pressão pra trocar virar grande o bastante pra vencer qualquer vantagem de peso**
+(`FORCE_OUT_PENALTY = 10`, maior que qualquer diferença possível numa escala 1-5):
+
+- **"Foco nos mais aptos"** (`streakLimit = 3`, até 15 min seguidos): o peso manda
+  quase sempre; só cede depois de um streak longo.
+- **"Equilibrada"** (`streakLimit = 2`, até 10 min seguidos): meio-termo.
+- **"Dá minutos a todos"** (`streakLimit = 1`, nunca mais que 5 min seguidos): até o
+  atleta claramente melhor cede a cada janela.
+
+Enquanto o streak não estourou o limite, o desconto continua pequeno e fixo
+(`REPEAT_PENALTY = 2`, Decisão 6, inalterado) — só decide entre pesos próximos, nunca
+derruba uma vantagem grande. O resto do mecanismo (janela fixa de 5 min, rodízio de
+posição pra quem tem peso em mais de uma vaga, `lastSlot` reconstruído do zero a cada
+janela) continua exatamente como a Decisão 6 deixou.
+
+**Rationale**: Resolve o caso ao vivo (nenhuma opção segura uma vaga o jogo inteiro
+mais — mesmo "Foco nos mais aptos" força uma saída periódica) sem reintroduzir o
+problema que a Decisão 6 corrigiu (o desconto por streak-estourado só vence peso
+porque é deliberadamente maior que qualquer gap possível — nunca um decaimento
+contínuo que qualquer peso baixo eventualmente "alcança"). Atende aos pontos da
+primeira mensagem como consequência direta do rodízio de posição já existente (um
+atleta com peso em 2-3 vagas naturalmente soma mais que 5 min TOTAL girando entre
+elas, sem nenhuma trava explícita de "6 minutos" — basta ele continuar tendo peso
+relevante em mais de uma vaga) e do próprio streak-limit (ninguém mais trava uma vaga
+o jogo inteiro, logo sempre sobra espaço pra quem tem menos experiência entrar). O
+ponto mais importante da segunda mensagem — as 3 opções precisam ser 3 filosofias de
+rotação, não 3 tamanhos de turno — é atendido trocando o eixo de variação de "duração
+da janela" pra "tolerância a sequência", que de fato produz escalações diferentes
+entre as opções (não só turnos mais curtos do mesmo padrão).
+
+**Alternatives considered**: Manter as 3 opções variando o tamanho da janela, só
+ajustando o desconto por janela maior — rejeitado por ser exatamente o que a segunda
+mensagem do treinador pede pra não fazer ("não acho que as opções deveriam ser
+somente por tempos diferentes"). Limitar o tempo TOTAL acumulado por atleta por vaga
+(um teto de minutos, não de janelas seguidas) — rejeitado por reintroduzir uma forma
+de equilíbrio de minutos que a Decisão 6 já rejeitou explicitamente (o objetivo não é
+"todo mundo com tempo parecido", é "ninguém trava uma vaga pra sempre"); um limite de
+streak (janelas seguidas) ataca exatamente esse sintoma sem impor igualdade de tempo
+total.
+
 ---
 
 ### Decisões originais (2026-10-09, revogadas pela revisão acima — mantidas por histórico)
