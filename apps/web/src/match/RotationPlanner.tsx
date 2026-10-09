@@ -481,6 +481,13 @@ export function RotationPlanner({ teamId, matchId, opponent, formatId, onClose }
             </div>
           )}
 
+          {rotationOptions ? (
+            <p className="hint" style={{ marginTop: 16 }}>
+              O plano abaixo ainda é o anterior — escolha uma das 3 opções acima (ou "Cancelar") pra ver e aplicar o
+              novo.
+            </p>
+          ) : (
+          <>
           <div className="btn-row" style={{ marginTop: 16 }}>
             {Array.from({ length: format.periodCount }, (_, i) => i + 1).map((p) => (
               <button
@@ -688,6 +695,8 @@ export function RotationPlanner({ teamId, matchId, opponent, formatId, onClose }
               Não consegui guardar — {saveError}{" "}
               <button type="button" className="btn sm" onClick={() => persistStints(localStints)}>Tentar de novo</button>
             </p>
+          )}
+          </>
           )}
         </>
       )}
