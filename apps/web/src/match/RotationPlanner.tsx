@@ -7,6 +7,7 @@ import { usePlayerAptitudes } from "../team/usePlayerAptitudes";
 import { usePlayers, type AvailabilityStatus, type PlayerRow } from "../team/usePlayers";
 import { useRecentMinutes } from "./useRecentMinutes";
 import { useRotationPlan } from "./useRotationPlan";
+import { useRotationWeights } from "./useRotationWeights";
 
 interface Props {
   teamId: string;
@@ -30,6 +31,15 @@ function parseMinSecToSeconds(text: string): number | null {
 }
 
 const SLOT_COLORS = ["#2a78d6", "#0ca30c", "#c98500", "#8b5cf6"];
+
+const WEIGHT_OPTIONS = [1, 2, 3, 4, 5] as const;
+const WEIGHT_LABELS: Record<number, string> = {
+  1: "1 — pouca confiança",
+  2: "2",
+  3: "3 — normal",
+  4: "4",
+  5: "5 — muita confiança",
+};
 
 const GRID_STEP_MIN = 5;
 
@@ -113,6 +123,7 @@ export function RotationPlanner({ teamId, matchId, opponent, formatId, onClose }
   const { stints, status: planStatus, errorMessage, saveStints } = useRotationPlan(teamId, matchId);
   const aptitudes = usePlayerAptitudes(teamId);
   const recentMinutes = useRecentMinutes(teamId, matchId);
+  const weights = useRotationWeights(teamId, matchId);
 
   const format: engine.MatchFormat =
     formats.find((f) => f.id === formatId) ?? formats.find((f) => f.isDefault) ?? formats[0] ?? FALLBACK_FORMAT;
@@ -135,6 +146,12 @@ export function RotationPlanner({ teamId, matchId, opponent, formatId, onClose }
   // Qual turno está "aberto" pra edição — em vez de uma linha de texto fixa por turno embaixo da
   // barra, só mostra os controles (editar fim / remover) do turno que o treinador clicou na barra.
   const [selectedStint, setSelectedStint] = useState<{ slotIndex: number; startSec: number } | null>(null);
+  // Opções de plano geradas automaticamente, aguardando o treinador escolher uma — null = nenhuma gerada ainda.
+  const [rotationOptions, setRotationOptions] = useState<engine.RotationPlanOption[] | null>(null);
+  // Precisa de um segundo toque pra gerar por cima de um plano já existente (US4) — mesmo padrão de
+  // confirmação "toca 2x" já usado no MatchEventEditor, nunca window.confirm() (falha silenciosa em PWA).
+  const [confirmingGenerate, setConfirmingGenerate] = useState(false);
+  const [generateError, setGenerateError] = useState("");
 
   // Carrega o plano já salvo (se houver) uma única vez, assim que a leitura
   // termina — depois disso, quem manda é a edição local até "Guardar".
@@ -283,6 +300,41 @@ export function RotationPlanner({ teamId, matchId, opponent, formatId, onClose }
     .filter((p) => included.has(p.id))
     .sort((a, b) => (parseInt(a.num, 10) || 999) - (parseInt(b.num, 10) || 999));
 
+  /** Peso salvo pra este jogo, ou o padrão sugerido (aptidão + estado) se o treinador ainda não ajustou (FR-003). */
+  function effectiveWeight(playerId: string, slot: engine.RotationSlotType): number {
+    const saved = weights.weightsByPlayerSlot[playerId]?.[slot];
+    if (saved != null) return saved;
+    return engine.defaultWeight(aptitudes.byPlayer[playerId]?.[slot] ?? null, availabilityByPlayer[playerId] ?? "apto");
+  }
+
+  /** Acionada pelo treinador (FR-001, nunca sozinha) — pede confirmação (toca 2x) se já existe um plano salvo (US4). */
+  function handleGenerate() {
+    setGenerateError("");
+    if (localStints.length > 0 && !confirmingGenerate) {
+      setConfirmingGenerate(true);
+      return;
+    }
+    setConfirmingGenerate(false);
+    if (includedPlayersSorted.length === 0) {
+      setGenerateError("Inclua pelo menos um atleta no plano antes de gerar.");
+      return;
+    }
+    const weightsBySlot: engine.PlayerSlotWeights = {};
+    includedPlayersSorted.forEach((p) => {
+      const bySlot: Partial<Record<engine.RotationSlotType, number>> = {};
+      engine.ROTATION_SLOT_TYPES.forEach((slot) => {
+        bySlot[slot] = effectiveWeight(p.id, slot);
+      });
+      weightsBySlot[p.id] = bySlot;
+    });
+    setRotationOptions(engine.generateRotationOptions(includedPlayersSorted, weightsBySlot, availabilityByPlayer, format));
+  }
+
+  async function chooseOption(option: engine.RotationPlanOption) {
+    setRotationOptions(null);
+    await persistStints(option.stints);
+  }
+
   return (
     <div>
       <button type="button" className="btn sm ghost" onClick={onClose} style={{ marginBottom: 12 }}>
@@ -320,6 +372,82 @@ export function RotationPlanner({ teamId, matchId, opponent, formatId, onClose }
 
       {includedPlayersSorted.length > 0 && (
         <>
+          <h3 className="section-title" style={{ marginTop: 16 }}>Confiança por vaga, pra este jogo</h3>
+          <p className="hint">
+            Começa com a aptidão de cada atleta (ver Plantel) — ajuste aqui só vale pra este jogo, nunca muda o
+            cadastro permanente. Quanto mais confiança, mais tempo o atleta recebe ao gerar.
+          </p>
+          <div className="tablewrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Atleta</th>
+                  {engine.ROTATION_SLOT_TYPES.map((slot) => (
+                    <th key={slot}>{slot}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {includedPlayersSorted.map((p) => (
+                  <tr key={p.id}>
+                    <td>#{p.num} {p.name}</td>
+                    {engine.ROTATION_SLOT_TYPES.map((slot) => (
+                      <td key={slot}>
+                        <select
+                          value={effectiveWeight(p.id, slot)}
+                          onChange={(e) => weights.setWeight(p.id, slot, Number(e.currentTarget.value))}
+                        >
+                          {WEIGHT_OPTIONS.map((w) => (
+                            <option key={w} value={w}>{WEIGHT_LABELS[w]}</option>
+                          ))}
+                        </select>
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div style={{ marginTop: 12, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            <button type="button" className={`btn${confirmingGenerate ? " danger" : " primary"}`} onClick={handleGenerate}>
+              {confirmingGenerate ? "Confirmar — substitui o plano atual" : "Gerar opções de plano"}
+            </button>
+            {confirmingGenerate && (
+              <button type="button" className="btn ghost" onClick={() => setConfirmingGenerate(false)}>Cancelar</button>
+            )}
+          </div>
+          {generateError && <p className="banner error" style={{ marginTop: 8 }}>{generateError}</p>}
+
+          {rotationOptions && (
+            <div style={{ marginTop: 16 }}>
+              <h3 className="section-title">Escolha uma opção</h3>
+              <p className="hint">
+                As 3 opções dão o mesmo tempo total pra cada atleta — o que muda é o número de turnos/substituições.
+              </p>
+              <div className="pgrid">
+                {rotationOptions.map((option) => (
+                  <div key={option.label} className="card" style={{ padding: 10 }}>
+                    <h4 style={{ margin: "0 0 6px", fontSize: 14 }}>{option.label}</h4>
+                    <ul className="hint" style={{ margin: "0 0 8px", paddingLeft: 16 }}>
+                      {includedPlayersSorted.map((p) => (
+                        <li key={p.id}>
+                          #{p.num} {p.name}: {engine.fmtMinSec((option.totalSecondsByPlayer[p.id] ?? 0) * 1000)}
+                        </li>
+                      ))}
+                    </ul>
+                    <button type="button" className="btn sm primary" onClick={() => chooseOption(option)}>
+                      Escolher esta
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <button type="button" className="btn sm ghost" style={{ marginTop: 8 }} onClick={() => setRotationOptions(null)}>
+                Cancelar
+              </button>
+            </div>
+          )}
+
           <div className="btn-row" style={{ marginTop: 16 }}>
             {Array.from({ length: format.periodCount }, (_, i) => i + 1).map((p) => (
               <button

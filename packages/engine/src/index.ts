@@ -14,4 +14,6 @@ export * from "./resourceLock";
 export * from "./navigation";
 export * from "./recentMinutes";
 export * from "./rotationSuggestion";
+export * from "./rotationWeights";
+export * from "./rotationGenerator";
 
