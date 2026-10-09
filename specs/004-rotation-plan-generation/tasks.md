@@ -17,14 +17,14 @@ manual, via `quickstart.md`.
 
 ## Phase 1: Setup
 
-- [ ] T001 Confirmar baseline verde antes de começar: `npm test --workspace packages/engine`, `npx tsc --noEmit -p apps/web`, `npm run build --workspace apps/web`
+- [X] T001 Confirmar baseline verde antes de começar: `npm test --workspace packages/engine`, `npx tsc --noEmit -p apps/web`, `npm run build --workspace apps/web`
 
 ---
 
 ## Phase 2: Foundational
 
-- [ ] T002 Escrever `supabase/migrations/0022_rotation_plan_weights.sql`: tabela `rotation_plan_weights` (`match_id`, `team_id` denormalizado, `player_id`, `slot_type`, `weight` 1-5, `unique (match_id, player_id, slot_type)`) + RLS (select por equipa, insert/update/delete só `team_admin`) — mesmo padrão de `rotation_plan_stints` (migração 0012, ver `data-model.md`)
-- [ ] T003 **Invocar o subagente `security-auditor`** pra revisar a migração 0022 — Princípio II da constituição exige isso aqui (tabela nova + RLS nova, diferente da feature 003 que não precisou). Corrigir qualquer achado antes de seguir — depende de T002
+- [X] T002 Escrever `supabase/migrations/0022_rotation_plan_weights.sql`: tabela `rotation_plan_weights` (`match_id`, `team_id` denormalizado, `player_id`, `slot_type`, `weight` 1-5, `unique (match_id, player_id, slot_type)`) + RLS (select por equipa, insert/update/delete só `team_admin`) — mesmo padrão de `rotation_plan_stints` (migração 0012, ver `data-model.md`)
+- [X] T003 **Invocar o subagente `security-auditor`** pra revisar a migração 0022 — Princípio II da constituição exige isso aqui (tabela nova + RLS nova, diferente da feature 003 que não precisou). Corrigir qualquer achado antes de seguir — depende de T002
 - [ ] T004 Aplicar a migração 0022 no SQL Editor do Supabase (ação do utilizador) — só depois da revisão em T003 estar aprovada, nunca antes — depende de T003
 
 **Checkpoint**: Fundação pronta — a tabela existe e foi revisada, User Stories podem começar.
@@ -37,8 +37,8 @@ manual, via `quickstart.md`.
 
 **Independent Test**: Cenário 1 do [quickstart.md](quickstart.md).
 
-- [ ] T005 [P] [US1] Criar `packages/engine/src/rotationWeights.ts`: `defaultWeight(quality: AptitudeQuality | null, availabilityStatus: AvailabilityStatus): number` — pura, devolve 1-5 combinando aptidão (A=5, B=3, C=1, sem classificação=1) e estado (a_retomar reduz pela metade, arredondado pra baixo, mínimo 1 — ver Decisão 3 do `research.md`) — depende de nada
-- [ ] T006 [P] [US1] Testes em `packages/engine/test/rotationWeights.test.ts`: cada combinação de aptidão × estado, confirma que a_retomar nunca derruba o peso abaixo de 1 — depende de T005
+- [X] T005 [P] [US1] Criar `packages/engine/src/rotationWeights.ts`: `defaultWeight(quality: AptitudeQuality | null, availabilityStatus: AvailabilityStatus): number` — pura, devolve 1-5 combinando aptidão (A=5, B=3, C=1, sem classificação=1) e estado (a_retomar reduz pela metade, arredondado pra baixo, mínimo 1 — ver Decisão 3 do `research.md`) — depende de nada
+- [X] T006 [P] [US1] Testes em `packages/engine/test/rotationWeights.test.ts`: cada combinação de aptidão × estado, confirma que a_retomar nunca derruba o peso abaixo de 1 — depende de T005
 - [ ] T007 [US1] Criar `apps/web/src/match/useRotationWeights.ts`: `refresh()` lê `rotation_plan_weights` do jogo; `setWeight(playerId, slot, weight)` faz upsert (`onConflict: "match_id,player_id,slot_type"`); `byPlayerSlot` devolve o peso salvo ou, se ainda não ajustado, `engine.defaultWeight(...)` pra cada atleta incluído × 4 vagas — depende de T004, T005
 - [ ] T008 [US1] Em `apps/web/src/match/RotationPlanner.tsx`: UI de ajuste de peso — por atleta incluído, um stepper de 1 a 5 (rotulado "pouca confiança" → "muita confiança") por vaga, incluindo vagas fora da aptidão cadastrada do atleta (caso do exemplo Ala Esquerda-A/Fixo-B da spec) — depende de T007
 - [ ] T009 [US1] Validar manualmente com o Cenário 1 do `quickstart.md` — depende de T008
@@ -53,8 +53,8 @@ manual, via `quickstart.md`.
 
 **Independent Test**: Cenário 2 do [quickstart.md](quickstart.md).
 
-- [ ] T010 [P] [US2] Criar `packages/engine/src/rotationGenerator.ts`: `generateRotationOptions(players, weightsBySlot, availabilityByPlayer, format): RotationPlanOption[]` — pura. Resolve 1 vaga por atleta (maior peso ajustado, empate por `suggestOrder` — Decisão 5); distribui o tempo de cada vaga/parte proporcional ao peso dos atletas elegíveis; gera 3 variações (turnos longos / equilibrada / mais rotativa — Decisão 4) que mantêm o tempo total por atleta próximo entre si, variando o número de turnos — depende de nada
-- [ ] T011 [P] [US2] Testes em `packages/engine/test/rotationGenerator.test.ts`: as 3 opções preenchem todas as vagas/partes sem buraco nem sobreposição; indisponível nunca aparece; atleta com peso em 2 vagas aparece só numa; tempo total por atleta não varia significativamente entre as 3 opções; vaga sem nenhum atleta com peso ainda é preenchida (fallback) — depende de T010
+- [X] T010 [P] [US2] Criar `packages/engine/src/rotationGenerator.ts`: `generateRotationOptions(players, weightsBySlot, availabilityByPlayer, format): RotationPlanOption[]` — pura. Resolve 1 vaga por atleta (maior peso ajustado, empate por `suggestOrder` — Decisão 5); distribui o tempo de cada vaga/parte proporcional ao peso dos atletas elegíveis; gera 3 variações (turnos longos / equilibrada / mais rotativa — Decisão 4) que mantêm o tempo total por atleta próximo entre si, variando o número de turnos — depende de nada
+- [X] T011 [P] [US2] Testes em `packages/engine/test/rotationGenerator.test.ts`: as 3 opções preenchem todas as vagas/partes sem buraco nem sobreposição; indisponível nunca aparece; atleta com peso em 2 vagas aparece só numa; tempo total por atleta não varia significativamente entre as 3 opções; vaga sem nenhum atleta com peso ainda é preenchida (fallback) — depende de T010
 - [ ] T012 [US2] Em `apps/web/src/match/RotationPlanner.tsx`: botão "Gerar opções" (usa `useRotationWeights`), mostra as 3 opções nomeadas com resumo de minutos por atleta; escolher uma chama `saveStints` já existente com os turnos dela — depende de T007, T010
 - [ ] T013 [US2] Validar manualmente com o Cenário 2 do `quickstart.md` — depende de T012
 
