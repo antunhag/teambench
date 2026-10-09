@@ -214,6 +214,38 @@ aplicar (Princípio II), ver `docs/ARCHITECTURE.md` ("Ciclo de vida de
   padrão de autorização, marca `status` só a partir de `state.started`
   (motor puro, nunca só por abrir a tela). Revisão: sem achados.
 
+## Denormalização de `team_id` em linhas filhas — migração 0023
+
+Achado pelo `security-auditor` ao revisar `rotation_plan_weights` (0022), mas
+já existente desde 0012 (`rotation_plan_stints`) e 0013 (`player_aptitudes`):
+estas três tabelas denormalizam `team_id` na linha filha (mesmo padrão de
+`match_events`), mas nunca tinham o mesmo endurecimento que `teams.club_id`
+ganhou em 0015.
+
+- **`team_id` não era validado contra a FK "de raiz".** Nada impedia um
+  `team_admin` de mais de uma equipa inserir `team_id=EquipaA` com
+  `player_id`/`plan_id`/`match_id` apontando pra dado de EquipaB
+  (`player_aptitudes.player_id` -> `players.team_id`;
+  `rotation_plan_stints.plan_id` -> `rotation_plans.team_id` e `.player_id`
+  -> `players.team_id`; `rotation_plan_weights.match_id` ->
+  `matches.team_id` e `.player_id` -> `players.team_id`).
+- **UPDATE sem `with check`.** Mesmo problema já corrigido pra
+  `teams.club_id`: `using` sozinho não impede trocar `team_id` pra outra
+  equipa que o mesmo admin administra, porque o Postgres reavalia o `using`
+  contra a linha NOVA.
+
+Corrigido com um único trigger reaproveitado nas três tabelas
+(`guard_denormalized_team_id`, `before insert or update`) que recalcula o
+`team_id` esperado a partir da(s) FK(s) de cada tabela e rejeita
+divergência, e que proíbe mudar `team_id`/`player_id`/`plan_id`/`match_id`
+depois de inserido — mesma razão do `teams_club_reassignment_guard` (0015) e
+do `prevent_team_member_identity_change` (0018). Nenhum código da aplicação
+muda esses campos depois de criar a linha (`usePlayerAptitudes.ts` e
+`useRotationPlan.ts` só fazem delete+reinsert; `useRotationWeights.ts` só
+faz upsert pela própria chave `(match_id, player_id, slot_type)` com os
+mesmos valores de FK), então o trigger não quebra nenhum fluxo existente.
+Revisão: sem achados.
+
 ## O que ainda não está endurecido (próximos candidatos a `security-auditor`)
 
 - **`match_events` confia que o cliente só reenvia dados idênticos num
