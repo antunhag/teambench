@@ -110,6 +110,26 @@ describe("generateRotationOptions", () => {
     }
   });
 
+  it("um atleta sem peso cadastrado na vaga (peso 1 padrão) não toma minutos relevantes de quem tem peso claramente maior", () => {
+    // Caso real reportado: um atleta sem aptidão em Pivô (peso 1, só o padrão) não deveria
+    // acumular minutos lá só porque "chegou a vez" de trocar — o peso tem que mandar de verdade.
+    const dinis = player("dinis"); // sem nenhum peso explícito em lugar nenhum — cai no padrão 1 em toda vaga.
+    const longPeriod: MatchFormat = { periodCount: 1, periodMinutes: 30, overtimePeriodCount: 0, overtimeMinutes: 0 };
+    const soloSpecialistWeights: PlayerSlotWeights = {
+      p1: { Fixo: 5 },
+      p2: { "Ala Esquerda": 5 },
+      p4: { "Ala Direita": 4 },
+      p5: { "Pivô": 5 }, // único com peso de verdade no Pivô
+      // dinis fica sem nenhuma entrada — peso 1 (padrão) em todas as vagas
+    };
+    const options = generateRotationOptions([p1, p2, p4, p5, dinis], soloSpecialistWeights, noAvailability(), longPeriod);
+    for (const option of options) {
+      const pivoSecondsFor = (playerId: string) =>
+        option.stints.filter((s) => s.slotIndex === 3 && s.playerId === playerId).reduce((sum, s) => sum + (s.endSec - s.startSec), 0);
+      expect(pivoSecondsFor("p5")).toBeGreaterThan(pivoSecondsFor("dinis") * 3);
+    }
+  });
+
   it("vaga sem nenhum atleta com peso cadastrado ainda é preenchida (fallback)", () => {
     const noWeightForPivo: PlayerSlotWeights = {
       p1: { Fixo: 5 },

@@ -217,15 +217,20 @@ partes) de uma vez, sempre por ação explícita do treinador (nunca sozinha).
 - **3 opções por geração** (`generateRotationOptions`): cada parte é dividida
   em janelas de tempo (no máximo 5 minutos — nunca mais, pedido direto do
   treinador pra forçar rodízio real) e, janela por janela, decide de uma vez
-  quem entra em cada uma das 4 vagas — peso alto entra mais, mas quem já
-  acumulou mais tempo cede espaço (correspondência gulosa, determinística,
-  sem sorteio). Um atleta com peso em mais de uma vaga RODA DE POSIÇÃO entre
-  elas ao longo do jogo (nunca preso numa só, diferente da primeira versão
-  desta feature). As 3 opções variam só o tamanho da janela ("Até 5
-  minutos" / "Até 3" / "Até 2" por turno — todas sob o teto de 5 min),
-  dando mais ou menos frequência de troca, com o tempo total por atleta
-  próximo entre as 3 (não exatamente igual, já que a correspondência é
-  gulosa, não uma divisão proporcional exata).
+  quem entra em cada uma das 4 vagas — correspondência gulosa, determinística
+  (nunca sorteio), onde o PESO manda de verdade: um atleta claramente melhor
+  (peso 5) nunca perde pra um sem aptidão na vaga (peso 1, o padrão) só porque
+  "já jogou bastante" — só pesos PRÓXIMOS (ex.: 5 vs. 4) alternam entre si
+  (`REPEAT_PENALTY`, Decisão 6 em specs/004-rotation-plan-generation/research.md
+  — substitui um decaimento contínuo por tempo acumulado que, na prática,
+  deixava um atleta sem aptidão nenhuma acabar entrando numa vaga que não é
+  dele). Um atleta com peso em mais de uma vaga RODA DE POSIÇÃO entre elas ao
+  longo do jogo (nunca preso numa só), podendo somar mais de 5 min "em quadra"
+  dividido entre as duas. As 3 opções variam só o tamanho da janela ("Até 5
+  minutos" / "Até 3" / "Até 2" por turno — todas sob o teto de 5 min), dando
+  mais ou menos frequência de troca, com o tempo total por atleta próximo
+  entre as 3 (não exatamente igual, já que a correspondência é gulosa, não
+  uma divisão proporcional exata).
 - O treinador escolhe uma das 3 — vira os turnos reais do jogo
   (`saveStints`, mesmo caminho de sempre) e continua 100% editável depois,
   sem nenhuma restrição adicional por ter vindo de uma geração.

@@ -59,7 +59,10 @@ function scheduleWindowed(
   period: number
 ): RotationStint[] {
   const accumulated: Record<string, number> = {};
-  const lastSlot: Record<string, RotationSlotType | null> = {};
+  // Vaga que o atleta ocupou na janela IMEDIATAMENTE anterior — null se ficou de fora.
+  // Reconstruído do zero a cada janela (nunca "última vez que jogou alguma coisa"): quem
+  // fica de fora de uma janela não pode continuar bloqueado pra sempre na janela seguinte.
+  let lastSlot: Record<string, RotationSlotType | null> = {};
   players.forEach((p) => {
     accumulated[p.id] = 0;
     lastSlot[p.id] = null;
@@ -71,11 +74,16 @@ function scheduleWindowed(
     const windowEnd = Math.min(periodSec, cursor + windowSec);
     const assignments = assignWindow(players, weightsBySlot, lastSlot, accumulated);
 
+    const nextLastSlot: Record<string, RotationSlotType | null> = {};
+    players.forEach((p) => {
+      nextLastSlot[p.id] = null;
+    });
     assignments.forEach(({ slotIndex, playerId }) => {
-      lastSlot[playerId] = ROTATION_SLOT_TYPES[slotIndex];
+      nextLastSlot[playerId] = ROTATION_SLOT_TYPES[slotIndex];
       accumulated[playerId] += windowEnd - cursor;
       stints.push({ playerId, slotIndex, period, startSec: cursor, endSec: windowEnd });
     });
+    lastSlot = nextLastSlot;
 
     cursor = windowEnd;
   }
@@ -86,20 +94,25 @@ function scheduleWindowed(
 interface SlotPlayerPair {
   slotIndex: number;
   player: Player;
-  score: number;
+  effectiveWeight: number;
+  accumulated: number;
 }
+
+/** Só pesa na hora de decidir ENTRE pesos parecidos (ex.: 4 vs. 5) — nunca derruba um peso claramente maior (ex.: 5 vs. 1). */
+const REPEAT_PENALTY = 2;
 
 /**
  * Decide, pra UMA janela, quem entra em cada uma das 4 vagas — uma
  * correspondência gulosa só, olhando todas as vagas de uma vez (nunca vaga
- * por vaga isolada): entre os pares (vaga, atleta) ainda válidos, sempre
- * fecha primeiro o de maior pontuação (peso alto entra mais, quem já
- * acumulou mais tempo cede espaço — justiça proporcional, sem sorteio,
- * sempre determinístico pro mesmo conjunto de pesos). Três rodadas, da mais
- * exigente à mais permissiva, pra nunca deixar uma vaga vazia:
- * 1. Tem peso cadastrado pra essa vaga E não veio dela na janela anterior.
- * 2. Tem peso cadastrado pra essa vaga (aceita repetir, só pras vagas que sobrarem).
- * 3. Qualquer atleta ainda disponível nesta janela.
+ * por vaga isolada): entre os pares (vaga, atleta), sempre fecha primeiro o
+ * de maior peso efetivo — peso cadastrado pra essa vaga, com um desconto
+ * pequeno se o atleta acabou de vir dessa mesma vaga na janela anterior
+ * (gera rodízio entre atletas de peso PARECIDO, sem nunca tirar quem é
+ * claramente o melhor pra pôr alguém de peso bem menor só por pôr — ver
+ * feedback real do treinador em specs/004-rotation-plan-generation/research.md,
+ * Decisão 4). Empate de peso efetivo é desfeito por quem acumulou menos
+ * tempo até agora (justiça entre pesos iguais) — nunca sorteio, sempre
+ * determinístico pro mesmo conjunto de pesos.
  */
 function assignWindow(
   players: Player[],
@@ -110,36 +123,23 @@ function assignWindow(
   const filledSlot = new Array(ROTATION_SLOT_TYPES.length).fill(false);
   const usedPlayer = new Set<string>();
   const result: { slotIndex: number; playerId: string }[] = [];
-  const score = (p: Player, slot: RotationSlotType) => (weightsBySlot[p.id]?.[slot] ?? 1) / (1 + accumulated[p.id]);
 
-  function closeBestPairsFirst(pairs: SlotPlayerPair[]) {
-    [...pairs]
-      .sort((a, b) => b.score - a.score)
-      .forEach(({ slotIndex, player }) => {
-        if (filledSlot[slotIndex] || usedPlayer.has(player.id)) return;
-        filledSlot[slotIndex] = true;
-        usedPlayer.add(player.id);
-        result.push({ slotIndex, playerId: player.id });
-      });
-  }
+  const pairs: SlotPlayerPair[] = ROTATION_SLOT_TYPES.flatMap((slot, slotIndex) =>
+    players.map((player) => {
+      const rawWeight = weightsBySlot[player.id]?.[slot] ?? 1;
+      const effectiveWeight = lastSlot[player.id] === slot ? rawWeight - REPEAT_PENALTY : rawWeight;
+      return { slotIndex, player, effectiveWeight, accumulated: accumulated[player.id] };
+    })
+  );
 
-  closeBestPairsFirst(
-    ROTATION_SLOT_TYPES.flatMap((slot, slotIndex) =>
-      players
-        .filter((p) => (weightsBySlot[p.id]?.[slot] ?? 0) > 0 && lastSlot[p.id] !== slot)
-        .map((player) => ({ slotIndex, player, score: score(player, slot) }))
-    )
-  );
-  closeBestPairsFirst(
-    ROTATION_SLOT_TYPES.flatMap((slot, slotIndex) =>
-      players
-        .filter((p) => (weightsBySlot[p.id]?.[slot] ?? 0) > 0)
-        .map((player) => ({ slotIndex, player, score: score(player, slot) }))
-    )
-  );
-  closeBestPairsFirst(
-    ROTATION_SLOT_TYPES.flatMap((slot, slotIndex) => players.map((player) => ({ slotIndex, player, score: score(player, slot) })))
-  );
+  pairs
+    .sort((a, b) => b.effectiveWeight - a.effectiveWeight || a.accumulated - b.accumulated)
+    .forEach(({ slotIndex, player }) => {
+      if (filledSlot[slotIndex] || usedPlayer.has(player.id)) return;
+      filledSlot[slotIndex] = true;
+      usedPlayer.add(player.id);
+      result.push({ slotIndex, playerId: player.id });
+    });
 
   return result;
 }

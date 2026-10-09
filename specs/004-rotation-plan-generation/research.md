@@ -93,6 +93,59 @@ campo; a correspondência gulosa por janela já entrega resultado bom o suficien
 sempre determinístico, e muito mais fácil de auditar/explicar numa mensagem de erro
 ou revisão de código.
 
+## Decisão 6 (2026-10-09, mesmo dia): Peso domina de verdade — sem decaimento contínuo por tempo acumulado
+
+**Histórico**: a primeira implementação da Decisão 4 usava `peso / (1 + tempo
+acumulado)` como pontuação — isso parecia justiça proporcional, mas na prática fazia
+o peso perder força ao longo do jogo: um atleta sem nenhuma aptidão numa vaga (peso 1,
+o padrão de qualquer atleta sem classificação lá) podia acabar entrando porque quem
+tinha peso 5 já tinha "acumulado demais" e seu score decaía abaixo do score do atleta
+de peso 1 (que começa em 0 acumulado). Feedback real do treinador, com um caso
+concreto: "Dinis que tem 1 na posição de Pivô, está tendo minutos lá" — Dinis nunca
+deveria pegar minutos no Pivô se existe alguém com peso de verdade pra essa vaga.
+
+Essa mesma conversa trouxe mais 3 pontos a atender: (1) não é saudável ter as 4 vagas
+trocando sincronizadas o tempo todo — pode ser UMA das opções, nunca a regra; (2)
+geralmente deve haver uns 3 atletas "mais capacitados" em quadra, misturados com quem
+tem menos experiência — não um rodízio raso entre todo mundo; (3) um atleta pode
+somar mais de 5 min "em quadra" rodando entre 2 vagas (ex.: 3 min numa + 3 min noutra
+= 6 min), o que é preferível a tirá-lo de quadra só pra cumprir uma regra de tempo;
+(4) quando o desequilíbrio de peso entre o melhor e as alternativas é grande, o tempo
+do melhor deve esticar — não forçar troca só porque "já passou 5 minutos".
+
+**Decisão**: Trocar a pontuação contínua por peso + um desconto pequeno e fixo
+(`REPEAT_PENALTY = 2`, numa escala de 1-5) só quando o atleta acabou de vir da MESMA
+vaga na janela anterior — nunca um decaimento que cresce sem limite com o tempo. Isso
+faz o peso realmente mandar: uma diferença grande (ex.: 5 vs. 1) nunca é superada pelo
+desconto; só diferenças pequenas (ex.: 5 vs. 4, ou empates) fazem o rodízio valer a
+pena. Corrigido junto um bug real descoberto na mesma revisão: a vaga "de onde o
+atleta veio" (`lastSlot`) não estava sendo resetada quando ele ficava de fora de uma
+janela inteira — podia ficar bloqueado de voltar pra sua vaga favorita por várias
+janelas seguidas sem nunca ter sido realocado em lugar nenhum nesse meio tempo.
+Reconstruído do zero a cada janela: só conta como "veio dessa vaga" quem foi
+efetivamente escalado nela na janela IMEDIATAMENTE anterior.
+
+**Rationale**: Resolve o caso concreto relatado (confirmado ao vivo: um atleta de
+peso 5 cadastrado só no Pivô passou a ocupar o Pivô o jogo inteiro, zero minutos pro
+atleta de peso 1 lá) e, como efeito direto do mesmo mecanismo, atende os pontos (2) e
+(4) acima: o "desconto pequeno e fixo" é exatamente o que faz o rodízio só acontecer
+entre pesos PRÓXIMOS (nunca força uma troca pra um claramente pior) — nunca todas as
+vagas mudam juntas por regra, só quando a disputa de peso daquela vaga especificamente
+justifica. O ponto (3) já é consequência do rodízio de posição (Decisão 4 acima): um
+atleta com peso em 2 vagas é escalado ora numa ora noutra, acumulando mais tempo total
+que se estivesse travado numa vaga só. O ponto (1) ("não sincronizar as 4 vagas") fica
+parcialmente em aberto — na prática, quando VÁRIAS vagas têm disputa de peso parecida
+ao mesmo tempo na escalação, é esperado que várias troquem perto do mesmo momento
+(nenhum motor "esconde" trocas que genuinamente deveriam acontecer); se isso ainda
+incomodar depois de usar com dados reais, precisa de um caso concreto pra investigar
+se é desenho ou um efeito colateral a corrigir.
+
+**Alternatives considered**: Manter o decaimento contínuo mas com um fator de
+suavização menor (ex.: `peso / (1 + acumulado/60)`, em minutos em vez de segundos) —
+rejeitado por ainda ter o mesmo problema de fundo (eventualmente qualquer decaimento
+contínuo sem teto permite um peso baixo "alcançar" um peso alto dado tempo
+suficiente); o desconto fixo por repetição nunca tem esse problema, porque não cresce.
+
 ---
 
 ### Decisões originais (2026-10-09, revogadas pela revisão acima — mantidas por histórico)
