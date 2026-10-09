@@ -94,20 +94,44 @@ describe("generateRotationOptions", () => {
     expect(p1Slots.size).toBeGreaterThan(1);
   });
 
-  it("'Dá minutos a todos' dá mais tempo real ao substituto que 'Foco nos mais aptos' pra um atleta dominante numa vaga", () => {
+  it("nenhuma opção deixa um atleta segurar a mesma vaga por 2 janelas seguidas — nem o mais apto", () => {
     const longPeriod: MatchFormat = { periodCount: 1, periodMinutes: 30, overtimePeriodCount: 0, overtimeMinutes: 0 };
-    const soloSpecialistWeights: PlayerSlotWeights = { p1: { Fixo: 5 }, p2: { "Ala Esquerda": 5 }, p4: { "Ala Direita": 4 }, p5: { Pivô: 5 } };
-    const options = generateRotationOptions([p1, p2, p4, p5], soloSpecialistWeights, noAvailability(), longPeriod);
+    const soloSpecialistWeights: PlayerSlotWeights = { p1: { Fixo: 5 }, p2: { "Ala Esquerda": 5 }, p3: { "Ala Direita": 4 }, p5: { Pivô: 5 } };
+    const options = generateRotationOptions([p1, p2, p3, p5], soloSpecialistWeights, noAvailability(), longPeriod);
+    for (const option of options) {
+      for (let slotIndex = 0; slotIndex < 4; slotIndex++) {
+        const slotStints = option.stints.filter((s) => s.slotIndex === slotIndex).sort((a, b) => a.startSec - b.startSec);
+        for (let i = 1; i < slotStints.length; i++) {
+          expect(slotStints[i].playerId).not.toBe(slotStints[i - 1].playerId);
+        }
+      }
+    }
+  });
+
+  it("'Dá minutos a todos' espalha uma vaga disputada entre mais atletas distintos que 'Foco nos mais aptos', sem derrubar o domínio de quem tem o peso real", () => {
+    const longPeriod: MatchFormat = { periodCount: 1, periodMinutes: 30, overtimePeriodCount: 0, overtimeMinutes: 0 };
+    // p6 é o único substituto real no Pivô (peso 2) — p1/p2/p3 só concorrem lá no piso (1), quando sobram de folga nas próprias vagas.
+    const p6 = player("p6");
+    const soloSpecialistWeights: PlayerSlotWeights = {
+      p1: { Fixo: 5 },
+      p2: { "Ala Esquerda": 5 },
+      p3: { "Ala Direita": 4 },
+      p5: { Pivô: 5 },
+      p6: { Pivô: 2 },
+    };
+    const options = generateRotationOptions([p1, p2, p3, p5, p6], soloSpecialistWeights, noAvailability(), longPeriod);
     const [focoNosMaisAptos, , daMinutosATodos] = options;
 
-    // p5 é o único com peso de verdade no Pivô — em ambas as opções ele segue dominando o tempo,
-    // mas a pressão de troca mais forte de "Dá minutos a todos" deve abrir mais tempo real pra
-    // quem assume o Pivô quando ele é forçado a sair (aqui, p4 — o fallback determinístico).
-    const secondsAt = (stints: typeof focoNosMaisAptos.stints, slotIndex: number, playerId: string) =>
-      stints.filter((s) => s.slotIndex === slotIndex && s.playerId === playerId).reduce((sum, s) => sum + (s.endSec - s.startSec), 0);
+    const pivoPlayers = (stints: typeof focoNosMaisAptos.stints) => new Set(stints.filter((s) => s.slotIndex === 3).map((s) => s.playerId));
+    const secondsAt = (stints: typeof focoNosMaisAptos.stints, playerId: string) =>
+      stints.filter((s) => s.slotIndex === 3 && s.playerId === playerId).reduce((sum, s) => sum + (s.endSec - s.startSec), 0);
 
-    expect(secondsAt(daMinutosATodos.stints, 3, "p4")).toBeGreaterThan(secondsAt(focoNosMaisAptos.stints, 3, "p4"));
-    expect(secondsAt(focoNosMaisAptos.stints, 3, "p5")).toBeGreaterThan(secondsAt(daMinutosATodos.stints, 3, "p5"));
+    // Mais gente passa pelo Pivô na opção mais generosa — o domínio de p5 (peso real mais alto) não muda
+    // (ele só pode ser forçado a sair a cada janela, igual nas 3 opções), mas quem ocupa o resto varia mais.
+    expect(pivoPlayers(daMinutosATodos.stints).size).toBeGreaterThan(pivoPlayers(focoNosMaisAptos.stints).size);
+    expect(secondsAt(focoNosMaisAptos.stints, "p5")).toBe(secondsAt(daMinutosATodos.stints, "p5"));
+    // p6 tem peso real (2) no Pivô — nunca fica de fora completamente, nem na opção mais concentrada.
+    expect(secondsAt(focoNosMaisAptos.stints, "p6")).toBeGreaterThan(0);
   });
 
   it("mesmo em 'Foco nos mais aptos', o peso domina — o melhor numa vaga joga bem mais que uma alternativa sem aptidão ali", () => {

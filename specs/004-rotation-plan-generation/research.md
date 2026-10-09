@@ -217,6 +217,66 @@ de equilíbrio de minutos que a Decisão 6 já rejeitou explicitamente (o objeti
 streak (janelas seguidas) ataca exatamente esse sintoma sem impor igualdade de tempo
 total.
 
+**Revogada pela Decisão 8, abaixo, no mesmo dia** — o `streakLimit` de até 3 janelas
+(15 min seguidos) na opção "Foco nos mais aptos" ainda deixava um atleta segurar a
+mesma vaga tempo demais, contrariando o teto que o próprio treinador já tinha pedido
+na Decisão 4.
+
+## Decisão 8 (2026-10-09, mesmo dia): Teto de 5 min por permanência contínua é absoluto nas 3 opções — o que varia é um "esfriamento" pra voltar à vaga, não quanto tempo seguido se pode ficar
+
+**Histórico**: mostrando um plano real (montado à mão, usado no último jogo) com
+turnos de 7-8 minutos numa vaga só, o treinador apontou exatamente o padrão a evitar
+— mesmo a opção mais favorável ao peso (Decisão 7, `streakLimit: 3`, até 15 min
+seguidos) ainda permitia isso:
+
+> "O que queremos evitar é o tempo muito longo 7-8 minutos, mas o fluxo de trocas pode
+> ter, como disse antes, 3 minutos do Martim, por exemplo, a Ala esquerda e mais 3
+> minutos na sequencia de pivô, se isso for necessário."
+
+Perguntado diretamente se o teto de 5 min deveria valer nas 3 opções sem exceção
+(inclusive a mais favorável ao peso), a resposta foi direta: **"Sim — 5 min é o teto
+em todas as opções"**.
+
+**Decisão**: O teto de 5 min por permanência CONTÍNUA numa vaga passa a ser absoluto e
+IGUAL nas 3 opções — nenhuma, nem a mais favorável ao peso, deixa um atleta segurar a
+mesma vaga por 2 janelas seguidas (`FORCE_OUT_PENALTY`, incondicional sempre que o
+atleta ocupou aquela MESMA vaga na janela imediatamente anterior, independente da
+opção). O que passa a variar entre as 3 opções é um "esfriamento" (`cooldownWindows`):
+quantas janelas depois de SAIR de uma vaga até poder voltar a competir por ela em pé
+de igualdade — "Foco nos mais aptos" (`cooldownWindows: 1`) deixa o atleta voltar com
+força total assim que passa 1 janela fora (na prática, ele e o 2º melhor se alternam);
+"Equilibrada" (2) e "Dá minutos a todos" (4) ficam mais tempo com um desconto pequeno
+(`COOLDOWN_PENALTY`) depois de sair, abrindo espaço de verdade pra mais gente (não só
+o 2º melhor) ocupar a vaga enquanto o 1º está fora.
+
+`COOLDOWN_PENALTY` teve que ficar em **1**, não 2 (valor usado antes pro desconto por
+repetição imediata) — um desconto de 2 derrubava um peso real de 2 ("alguma
+confiança") pra ABAIXO do padrão de quem não tem peso nenhum ali (1), o que violaria a
+garantia da Decisão 6 de que peso real nunca perde pro padrão. Com desconto 1, o pior
+caso é um empate (2-1=1, igual ao padrão), desfeito pelo mesmo desempate por tempo
+acumulado já usado em todo o resto do algoritmo — nunca uma derrota direta.
+
+**Rationale**: Atende o pedido literal e repetido do treinador — nenhuma vaga segura o
+mesmo atleta por mais de 5 min seguidos, em NENHUMA opção, sem exceção pro mais apto
+("mesmo o mais capacitado troca de vaga, ou sai, a cada 5 min"). O rodízio entre vagas
+diferentes (Decisão 4) não é afetado — um atleta ainda pode somar mais de 5 min "em
+quadra" trocando de posição (ex.: 3 min Ala Esquerda + 3 min Pivô), já que o teto é só
+sobre a MESMA vaga, não sobre o tempo total em quadra. Com o teto virando absoluto e
+igual nas 3 opções, elas deixam de poder variar "quanto tempo seguido" (não há mais
+variação possível aí) e passam a variar genuinamente outra coisa — quão rápido o peso
+reafirma domínio depois de uma pausa forçada — mantendo o espírito da Decisão 7 (3
+filosofias de rotação, não 3 tamanhos de turno) mas de um jeito que não reabre a
+brecha do turno de 15 min.
+
+**Alternatives considered**: Manter o `streakLimit` da Decisão 7 mas reduzir o valor
+máximo (ex.: de 3 pra 2 janelas = 10 min) — rejeitado por ainda permitir mais que os 5
+min que o treinador pediu explicitamente como teto absoluto; só eliminar a
+possibilidade de qualquer streak > 1 janela atende o pedido ao pé da letra.
+`COOLDOWN_PENALTY` maior que 1 (ex.: manter em 2) — rejeitado por quebrar a garantia
+"peso real nunca perde pro padrão" da Decisão 6 pra pesos baixos (2), confirmado com um
+cenário de teste onde um atleta com peso real 2 numa vaga perdia pra um atleta sem
+nenhuma aptidão ali (peso padrão 1) só por causa do esfriamento — nunca aceitável.
+
 ---
 
 ### Decisões originais (2026-10-09, revogadas pela revisão acima — mantidas por histórico)

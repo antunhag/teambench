@@ -1,18 +1,20 @@
 // Gera 3 opções de plano de rotação completo a partir de pesos por
 // atleta/vaga (specs/004-rotation-plan-generation/) — pura, sem rede. O jogo
-// é dividido em janelas fixas de 5 minutos (teto pedido pelo treinador — uma
-// vaga nunca segura o mesmo atleta por mais que isso SEM reavaliar); a cada
-// janela, decide de uma vez quem entra em cada uma das 4 vagas. Um atleta
-// com peso em mais de uma vaga pode ser escolhido ora numa, ora noutra — ele
-// RODA DE POSIÇÃO dentro do próprio jogo, não fica preso a uma vaga só.
+// é dividido em janelas fixas de 5 minutos (teto pedido pelo treinador); a
+// cada janela, decide de uma vez quem entra em cada uma das 4 vagas. Um
+// atleta com peso em mais de uma vaga pode ser escolhido ora numa, ora
+// noutra — ele RODA DE POSIÇÃO dentro do próprio jogo, não fica preso a uma
+// vaga só, podendo somar mais de 5 min "em quadra" trocando entre vagas.
 //
-// As 3 opções NÃO são 3 tamanhos de turno — são 3 FILOSOFIAS de rotação
-// (Decisão 7, specs/004-rotation-plan-generation/research.md): quanto tempo
-// SEGUIDO um atleta pode segurar a mesma vaga antes da pressão pra trocar
-// ficar grande o bastante pra vencer qualquer vantagem de peso. Isso garante
-// que mesmo o atleta claramente melhor numa vaga segura a maior parte do
-// tempo (peso ainda manda), mas ninguém trava um lugar o jogo inteiro —
-// todo mundo que tem alguma aptidão ali acaba entrando de verdade.
+// Nenhuma vaga segura o MESMO atleta por mais de uma janela seguida, em
+// NENHUMA das 3 opções (Decisão 8, specs/004-rotation-plan-generation/
+// research.md) — teto de 5 min por permanência contínua numa vaga é
+// absoluto, nunca negociável. O que varia entre as 3 opções é quanto tempo
+// (em janelas) um atleta que acabou de sair de uma vaga fica "esfriando"
+// antes de poder voltar a competir por ela em pé de igualdade: um esfriamento
+// curto deixa os 2-3 mais aptos ali alternando quase só entre eles; um
+// esfriamento longo abre espaço de verdade pra quem tem menos aptidão também
+// jogar ali, não só nos minutos que sobram.
 import { ROTATION_SLOT_TYPES, plannedSecondsByPlayer, type RotationSlotType, type RotationStint } from "./rotationPlan";
 import type { AvailabilityStatus } from "./rotationSuggestion";
 import type { MatchFormat, Player } from "./types";
@@ -28,16 +30,21 @@ export interface RotationPlanOption {
 
 /** Janela fixa pras 3 opções — nunca mais que isso sem reavaliar quem está na vaga. */
 const WINDOW_SEC = 5 * 60;
-/** Só pesa pra decidir ENTRE pesos parecidos (ex.: 4 vs. 5) — nunca derruba um peso claramente maior sozinho. */
-const REPEAT_PENALTY = 2;
-/** Maior que qualquer diferença de peso possível (escala 1-5) — garante a troca quando o limite de janelas seguidas estoura. */
+/**
+ * Só pesa pra decidir ENTRE pesos parecidos (ex.: 4 vs. 5, empata e desfaz por tempo acumulado) —
+ * tem que ficar em 1: qualquer coisa maior derrubaria um peso real (ex.: 2, "alguma confiança")
+ * pra ABAIXO do padrão de quem não tem peso nenhum ali (1), violando a garantia de que peso real
+ * nunca perde pro padrão só por causa do mecanismo de repetição (mesmo princípio da Decisão 6).
+ */
+const COOLDOWN_PENALTY = 1;
+/** Maior que qualquer diferença de peso possível (escala 1-5) — garante a troca na janela logo seguinte, sempre. */
 const FORCE_OUT_PENALTY = 10;
 
-/** Quantas janelas SEGUIDAS um atleta pode segurar a mesma vaga antes de ser forçado a sair, mesmo tendo o maior peso. */
-const OPTION_CONFIGS: { label: string; streakLimit: number }[] = [
-  { label: "Foco nos mais aptos", streakLimit: 3 }, // até 15 min seguidos antes de ceder
-  { label: "Equilibrada", streakLimit: 2 }, // até 10 min seguidos
-  { label: "Dá minutos a todos", streakLimit: 1 }, // nunca mais que 5 min seguidos, nem pro melhor
+/** Quantas janelas de "esfriamento" depois de sair de uma vaga até poder voltar a competir por ela em pé de igualdade. */
+const OPTION_CONFIGS: { label: string; cooldownWindows: number }[] = [
+  { label: "Foco nos mais aptos", cooldownWindows: 1 }, // volta em força assim que passa 1 janela fora
+  { label: "Equilibrada", cooldownWindows: 2 },
+  { label: "Dá minutos a todos", cooldownWindows: 4 }, // fica mais tempo "esfriando", abre espaço pra mais gente
 ];
 
 export function generateRotationOptions(
@@ -48,11 +55,11 @@ export function generateRotationOptions(
 ): RotationPlanOption[] {
   const available = players.filter((p) => availabilityByPlayer[p.id] !== "indisponivel");
 
-  return OPTION_CONFIGS.map(({ label, streakLimit }) => {
+  return OPTION_CONFIGS.map(({ label, cooldownWindows }) => {
     const stints: RotationStint[] = [];
     const periodSec = format.periodMinutes * 60;
     for (let period = 1; period <= format.periodCount; period++) {
-      stints.push(...scheduleWindowed(available, weightsBySlot, periodSec, streakLimit, period));
+      stints.push(...scheduleWindowed(available, weightsBySlot, periodSec, cooldownWindows, period));
     }
     return { label, stints, totalSecondsByPlayer: plannedSecondsByPlayer(stints) };
   });
@@ -67,43 +74,33 @@ function scheduleWindowed(
   players: Player[],
   weightsBySlot: PlayerSlotWeights,
   periodSec: number,
-  streakLimit: number,
+  cooldownWindows: number,
   period: number
 ): RotationStint[] {
   const accumulated: Record<string, number> = {};
-  // Vaga que o atleta ocupou na janela IMEDIATAMENTE anterior — null se ficou de fora.
-  let lastSlot: Record<string, RotationSlotType | null> = {};
-  // Quantas janelas SEGUIDAS (sem interrupção) o atleta já está nessa mesma vaga.
-  let streak: Record<string, number> = {};
+  // Por atleta, por vaga: índice da ÚLTIMA janela em que ele ocupou aquela vaga — ausente se nunca ocupou.
+  const lastHeldWindow: Record<string, Partial<Record<RotationSlotType, number>>> = {};
   players.forEach((p) => {
     accumulated[p.id] = 0;
-    lastSlot[p.id] = null;
-    streak[p.id] = 0;
+    lastHeldWindow[p.id] = {};
   });
 
   const stints: RotationStint[] = [];
   let cursor = 0;
+  let windowIndex = 0;
   while (cursor < periodSec) {
     const windowEnd = Math.min(periodSec, cursor + WINDOW_SEC);
-    const assignments = assignWindow(players, weightsBySlot, lastSlot, streak, accumulated, streakLimit);
+    const assignments = assignWindow(players, weightsBySlot, lastHeldWindow, windowIndex, accumulated, cooldownWindows);
 
-    const nextLastSlot: Record<string, RotationSlotType | null> = {};
-    const nextStreak: Record<string, number> = {};
-    players.forEach((p) => {
-      nextLastSlot[p.id] = null;
-      nextStreak[p.id] = 0;
-    });
     assignments.forEach(({ slotIndex, playerId }) => {
       const slot = ROTATION_SLOT_TYPES[slotIndex];
-      nextLastSlot[playerId] = slot;
-      nextStreak[playerId] = lastSlot[playerId] === slot ? streak[playerId] + 1 : 1;
+      lastHeldWindow[playerId][slot] = windowIndex;
       accumulated[playerId] += windowEnd - cursor;
       stints.push({ playerId, slotIndex, period, startSec: cursor, endSec: windowEnd });
     });
-    lastSlot = nextLastSlot;
-    streak = nextStreak;
 
     cursor = windowEnd;
+    windowIndex++;
   }
 
   return stints;
@@ -121,20 +118,23 @@ interface SlotPlayerPair {
  * correspondência gulosa só, olhando todas as vagas de uma vez: entre os
  * pares (vaga, atleta), sempre fecha primeiro o de maior peso efetivo. Peso
  * efetivo = peso cadastrado pra essa vaga, com um desconto se o atleta
- * acabou de vir dela — pequeno enquanto ele não estourou o limite de janelas
- * seguidas (só decide entre pesos parecidos), grande o bastante pra forçar a
- * troca assim que estoura (nunca derrotado por peso nenhum, dado que a
- * escala de peso vai só até 5). Empate de peso efetivo é desfeito por quem
- * acumulou menos tempo até agora — nunca sorteio, sempre determinístico pro
- * mesmo conjunto de pesos.
+ * ocupou essa MESMA vaga recentemente: se foi na janela IMEDIATAMENTE
+ * anterior, o desconto é grande o bastante pra forçar a troca sempre (nunca
+ * vencido por peso nenhum, dado que a escala vai só até 5) — é o que garante
+ * o teto de 5 min seguidos, igual nas 3 opções. Se foi há mais de 1 janela
+ * mas ainda dentro do "esfriamento" da opção, o desconto é pequeno (só
+ * decide entre pesos parecidos). Fora da janela de esfriamento, volta ao
+ * peso cheio. Empate de peso efetivo é desfeito por quem acumulou menos
+ * tempo até agora — nunca sorteio, sempre determinístico pro mesmo conjunto
+ * de pesos.
  */
 function assignWindow(
   players: Player[],
   weightsBySlot: PlayerSlotWeights,
-  lastSlot: Record<string, RotationSlotType | null>,
-  streak: Record<string, number>,
+  lastHeldWindow: Record<string, Partial<Record<RotationSlotType, number>>>,
+  windowIndex: number,
   accumulated: Record<string, number>,
-  streakLimit: number
+  cooldownWindows: number
 ): { slotIndex: number; playerId: string }[] {
   const filledSlot = new Array(ROTATION_SLOT_TYPES.length).fill(false);
   const usedPlayer = new Set<string>();
@@ -143,9 +143,13 @@ function assignWindow(
   const pairs: SlotPlayerPair[] = ROTATION_SLOT_TYPES.flatMap((slot, slotIndex) =>
     players.map((player) => {
       const rawWeight = weightsBySlot[player.id]?.[slot] ?? 1;
+      const lastWindow = lastHeldWindow[player.id]?.[slot];
+      const windowsSince = lastWindow === undefined ? Infinity : windowIndex - lastWindow;
       let effectiveWeight = rawWeight;
-      if (lastSlot[player.id] === slot) {
-        effectiveWeight -= streak[player.id] >= streakLimit ? FORCE_OUT_PENALTY : REPEAT_PENALTY;
+      if (windowsSince === 1) {
+        effectiveWeight -= FORCE_OUT_PENALTY;
+      } else if (windowsSince > 1 && windowsSince <= cooldownWindows) {
+        effectiveWeight -= COOLDOWN_PENALTY;
       }
       return { slotIndex, player, effectiveWeight, accumulated: accumulated[player.id] };
     })

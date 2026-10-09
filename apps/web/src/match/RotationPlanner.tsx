@@ -152,6 +152,11 @@ export function RotationPlanner({ teamId, matchId, opponent, formatId, onClose }
   // confirmação "toca 2x" já usado no MatchEventEditor, nunca window.confirm() (falha silenciosa em PWA).
   const [confirmingGenerate, setConfirmingGenerate] = useState(false);
   const [generateError, setGenerateError] = useState("");
+  // Confiança: guarda sozinha ao trocar o <select>, mas o onChange original não aguardava a escrita
+  // nem tratava falha — uma rejeição silenciosa (rede instável, sessão expirada) deixava o valor
+  // mostrado reverter no próximo render, sem nenhum aviso, e qualquer geração seguinte usava o peso
+  // antigo. Guarda aqui o que falhou pra poder avisar e deixar tentar de novo.
+  const [weightSaveError, setWeightSaveError] = useState<{ playerId: string; slot: engine.RotationSlotType; weight: number; message: string } | null>(null);
 
   // Carrega o plano já salvo (se houver) uma única vez, assim que a leitura
   // termina — depois disso, quem manda é a edição local até "Guardar".
@@ -307,6 +312,19 @@ export function RotationPlanner({ teamId, matchId, opponent, formatId, onClose }
     return engine.defaultWeight(aptitudes.byPlayer[playerId]?.[slot] ?? null, availabilityByPlayer[playerId] ?? "apto");
   }
 
+  async function handleWeightChange(playerId: string, slot: engine.RotationSlotType, weight: number) {
+    setWeightSaveError(null);
+    try {
+      await weights.setWeight(playerId, slot, weight);
+      // As opções já geradas (se houver) são uma foto de um momento — ficam desatualizadas assim que
+      // a confiança muda, então força gerar de novo em vez de deixar o treinador escolher algo que já
+      // não reflete o ajuste que ele acabou de fazer.
+      setRotationOptions(null);
+    } catch (err) {
+      setWeightSaveError({ playerId, slot, weight, message: toErrorMessage(err) });
+    }
+  }
+
   /** Acionada pelo treinador (FR-001, nunca sozinha) — pede confirmação (toca 2x) se já existe um plano salvo (US4). */
   function handleGenerate() {
     setGenerateError("");
@@ -395,7 +413,7 @@ export function RotationPlanner({ teamId, matchId, opponent, formatId, onClose }
                       <td key={slot}>
                         <select
                           value={effectiveWeight(p.id, slot)}
-                          onChange={(e) => weights.setWeight(p.id, slot, Number(e.currentTarget.value))}
+                          onChange={(e) => handleWeightChange(p.id, slot, Number(e.currentTarget.value))}
                         >
                           {WEIGHT_OPTIONS.map((w) => (
                             <option key={w} value={w}>{WEIGHT_LABELS[w]}</option>
@@ -408,6 +426,18 @@ export function RotationPlanner({ teamId, matchId, opponent, formatId, onClose }
               </tbody>
             </table>
           </div>
+          {weightSaveError && (
+            <p className="banner error" style={{ marginTop: 8 }}>
+              Não consegui guardar a confiança — {weightSaveError.message}{" "}
+              <button
+                type="button"
+                className="btn sm"
+                onClick={() => handleWeightChange(weightSaveError.playerId, weightSaveError.slot, weightSaveError.weight)}
+              >
+                Tentar de novo
+              </button>
+            </p>
+          )}
 
           <div style={{ marginTop: 12, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
             <button type="button" className={`btn${confirmingGenerate ? " danger" : " primary"}`} onClick={handleGenerate}>

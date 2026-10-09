@@ -226,16 +226,22 @@ partes) de uma vez, sempre por ação explícita do treinador (nunca sozinha).
   deixava um atleta sem aptidão nenhuma acabar entrando numa vaga que não é
   dele). Um atleta com peso em mais de uma vaga RODA DE POSIÇÃO entre elas ao
   longo do jogo (nunca preso numa só), podendo somar mais de 5 min "em quadra"
-  dividido entre duas ou três. As 3 opções agora são 3 **filosofias de
-  rotação** (Decisão 7), não 3 tamanhos de turno: variam quantas janelas
-  SEGUIDAS (streak) um atleta pode segurar a mesma vaga antes da pressão pra
-  trocar ficar grande o bastante pra vencer qualquer vantagem de peso
-  (`FORCE_OUT_PENALTY`, maior que qualquer diferença possível numa escala
-  1-5) — "Foco nos mais aptos" (até 15 min seguidos), "Equilibrada" (até 10) e
-  "Dá minutos a todos" (nunca mais que 5 min seguidos, nem pro melhor). Mesmo
-  na opção mais favorável ao peso, ninguém trava uma vaga o jogo inteiro —
-  evita o caso visto ao vivo de um especialista segurando 100% do tempo numa
-  vaga com zero rotação real.
+  dividido entre duas ou três. O teto de 5 min por permanência CONTÍNUA numa
+  MESMA vaga é absoluto e IGUAL nas 3 opções (Decisão 8) — nenhuma, nem a mais
+  favorável ao peso, deixa um atleta segurar a mesma vaga por 2 janelas
+  seguidas (`FORCE_OUT_PENALTY`, incondicional). As 3 opções são 3
+  **filosofias de rotação**, não 3 tamanhos de turno: variam um
+  "esfriamento" (`cooldownWindows`) — quantas janelas depois de SAIR de uma
+  vaga até poder voltar a competir por ela em pé de igualdade — "Foco nos
+  mais aptos" (volta em força já na próxima janela livre, na prática
+  alternando só entre o 1º e o 2º melhor), "Equilibrada" e "Dá minutos a
+  todos" (esfriamento mais longo, abrindo espaço de verdade pra mais gente
+  além do 2º melhor). `COOLDOWN_PENALTY` fica em 1 (nunca 2) — maior
+  derrubaria um peso real baixo (ex.: 2) pra abaixo do padrão de quem não tem
+  nenhuma aptidão ali, violando a garantia da Decisão 6. Mesmo na opção mais
+  favorável ao peso, ninguém trava uma vaga o jogo inteiro nem por mais de 5
+  min seguidos — evita o caso visto ao vivo de um especialista segurando
+  100% do tempo numa vaga com zero rotação real.
 - O treinador escolhe uma das 3 — vira os turnos reais do jogo
   (`saveStints`, mesmo caminho de sempre) e continua 100% editável depois,
   sem nenhuma restrição adicional por ter vindo de uma geração.
