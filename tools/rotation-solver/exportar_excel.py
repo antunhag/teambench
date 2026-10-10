@@ -11,8 +11,10 @@ from __future__ import annotations
 
 import argparse
 import json
+import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 from openpyxl import Workbook
@@ -40,12 +42,28 @@ BORDA_FINA = Side(style="thin", color=COR_BORDA_FINA)
 BORDA_GROSSA = Side(style="medium", color=COR_BORDA_GROSSA)
 
 
+def _ajustar_pagina(ws: Worksheet, paisagem: bool = False) -> None:
+    """Sem isto, uma folha com colunas largadas (ex.: `column_dimensions` pra
+    mais colunas do que as que têm conteúdo de verdade) imprime/exporta pra
+    PDF com páginas extra em branco à direita — `fitToWidth=1` força tudo a
+    caber na largura real do conteúdo, nunca sobra página vazia."""
+    ws.sheet_properties.pageSetUpPr.fitToPage = True
+    if paisagem:
+        ws.page_setup.orientation = "landscape"
+    ws.page_setup.fitToWidth = 1
+    ws.page_setup.fitToHeight = 0
+
+
 def _cabecalho(ws: Worksheet, linha: int, col_ini: int, titulos: list[str]) -> None:
+    # wrap_text pra títulos longos (ex.: "<cenário> — máx. seguido") nunca cortarem
+    # visualmente — melhor quebrar em 2 linhas que truncar sem aviso nenhum.
     for i, titulo in enumerate(titulos):
         c = ws.cell(row=linha, column=col_ini + i, value=titulo)
         c.font = FONTE_CABECALHO
         c.fill = PREENCH_CABECALHO
-        c.alignment = Alignment(horizontal="center")
+        c.alignment = Alignment(horizontal="center", wrap_text=True, vertical="center")
+    if ws.row_dimensions[linha].height is None or ws.row_dimensions[linha].height < 30:
+        ws.row_dimensions[linha].height = 30
 
 
 def _linha_zebra(ws: Worksheet, linha: int, col_ini: int, col_fim: int) -> None:
@@ -60,6 +78,7 @@ def _linha_zebra(ws: Worksheet, linha: int, col_ini: int, col_fim: int) -> None:
 def escrever_registos(ws: Worksheet, cenarios: dict[str, tuple[dict, dict]]) -> dict:
     """Devolve linha_de[(cenario, parte, vaga, inicio_parte)] = numero da linha."""
     ws.title = "Registos"
+    _ajustar_pagina(ws)
     ws.cell(row=1, column=1, value="Registos").font = Font(bold=True, size=14, color=COR_TEXTO)
     titulos = ["Cenário", "Parte", "Posição", "Atleta", "Início parte", "Fim parte", "Duração", "Início jogo", "Fim jogo"]
     _cabecalho(ws, 3, 1, titulos)
@@ -103,10 +122,7 @@ def _linha_ativa_em(linha_de: dict, cenario: str, parte: int, vaga: str, plano_p
 
 
 def escrever_cenario(ws: Worksheet, nome_cenario: str, descricao: str, cfg: dict, plano: dict, linha_de: dict) -> None:
-    ws.sheet_properties.pageSetUpPr.fitToPage = True
-    ws.page_setup.orientation = "landscape"
-    ws.page_setup.fitToWidth = 1
-    ws.page_setup.fitToHeight = 0
+    _ajustar_pagina(ws, paisagem=True)
 
     titulo = f"{nome_cenario}: {descricao}" if descricao and descricao != nome_cenario else nome_cenario
     ws.cell(row=1, column=1, value=titulo).font = Font(bold=True, size=14, color=COR_TEXTO)
@@ -213,6 +229,7 @@ def _escrever_tabela_quartetos(ws: Worksheet, linha_ini: int, nome_cenario: str,
 
 def escrever_resumo(ws: Worksheet, cenarios: dict[str, tuple[dict, dict]]) -> None:
     ws.title = "Resumo"
+    _ajustar_pagina(ws, paisagem=True)
     ws.cell(row=1, column=1, value="Resumo").font = Font(bold=True, size=14, color=COR_TEXTO)
 
     nomes_cenarios = list(cenarios.keys())
@@ -297,7 +314,7 @@ def escrever_resumo(ws: Worksheet, cenarios: dict[str, tuple[dict, dict]]) -> No
             linha += 1
         linha += 2
 
-    for col, largura in zip("ABCDEFGHIJ", [16] + [14] * 9):
+    for col, largura in zip("ABCDEFGHIJ", [16] + [15] * 9):
         ws.column_dimensions[col].width = largura
 
 
@@ -306,6 +323,7 @@ def escrever_resumo(ws: Worksheet, cenarios: dict[str, tuple[dict, dict]]) -> No
 
 def escrever_atletas(ws: Worksheet, cenarios: dict[str, tuple[dict, dict]]) -> None:
     ws.title = "Atletas"
+    _ajustar_pagina(ws)
     ws.cell(row=1, column=1, value="Atletas").font = Font(bold=True, size=14, color=COR_TEXTO)
 
     nomes_cenarios = list(cenarios.keys())
@@ -381,18 +399,32 @@ def exportar(cenarios: dict[str, tuple[dict, dict]], descricoes: dict[str, str],
 
 def recalcular_com_libreoffice(caminho: Path) -> None:
     """Recalcula fórmulas gravando os valores (secção 7/8 da SPEC.md) — exige
-    LibreOffice instalado (`soffice`); se não encontrar, avisa e segue sem recalcular."""
-    try:
-        subprocess.run(
-            ["soffice", "--headless", "--convert-to", "xlsx", "--outdir", str(caminho.parent), str(caminho)],
-            check=True,
-            capture_output=True,
-            timeout=120,
-        )
-    except FileNotFoundError:
-        print("⚠️  LibreOffice (soffice) não encontrado — fórmulas não foram recalculadas. Abra o Excel manualmente pra ver os valores.", file=sys.stderr)
-    except subprocess.CalledProcessError as e:
-        print(f"⚠️  LibreOffice falhou ao recalcular: {e.stderr.decode(errors='replace')}", file=sys.stderr)
+    LibreOffice instalado (`soffice`); se não encontrar, avisa e segue sem recalcular.
+
+    `--convert-to` pro MESMO diretório do ficheiro de origem falha (LibreOffice tenta
+    gravar por cima de um ficheiro que ainda está "em uso" pela própria conversão) —
+    converte pra um diretório temporário e move o resultado de volta por cima do
+    original, só depois da conversão terminar com sucesso.
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        try:
+            subprocess.run(
+                ["soffice", "--headless", "--convert-to", "xlsx", "--outdir", tmp, str(caminho)],
+                check=True,
+                capture_output=True,
+                timeout=120,
+            )
+        except FileNotFoundError:
+            print("⚠️  LibreOffice (soffice) não encontrado — fórmulas não foram recalculadas. Abra o Excel manualmente pra ver os valores.", file=sys.stderr)
+            return
+        except subprocess.CalledProcessError as e:
+            print(f"⚠️  LibreOffice falhou ao recalcular: {e.stderr.decode(errors='replace')}", file=sys.stderr)
+            return
+        recalculado = Path(tmp) / caminho.name
+        if recalculado.exists():
+            shutil.move(str(recalculado), str(caminho))
+        else:
+            print(f"⚠️  LibreOffice não gerou {recalculado.name} — fórmulas não foram recalculadas.", file=sys.stderr)
 
 
 def main():
