@@ -27,7 +27,7 @@ implementável e testável de forma independente.
 **Purpose**: Nenhuma inicialização de projeto nova — feature inteira dentro do
 monorepo já existente, reaproveitando o toolchain já configurado.
 
-- [ ] T001 Confirmar branch `006-live-rotation-replan` criada/checked out. Nenhuma
+- [X] T001 Confirmar branch `006-live-rotation-replan` criada/checked out. Nenhuma
       dependência nova, nenhuma configuração de build nova — `packages/engine` e
       `apps/web` continuam exatamente como estão.
 
@@ -40,10 +40,10 @@ ser implementada sem isto.
 
 **⚠️ CRITICAL**: Nenhuma User Story começa antes desta fase.
 
-- [ ] T002 Adicionar o tipo `RotationStartPoint` (`{ period: number; elapsedSec:
+- [X] T002 Adicionar o tipo `RotationStartPoint` (`{ period: number; elapsedSec:
       number }`) em `packages/engine/src/rotationPlan.ts`, exportado (ver
       `data-model.md`).
-- [ ] T003 [P] Adicionar função pura auxiliar em `packages/engine/src/rotationPlan.ts`
+- [X] T003 [P] Adicionar função pura auxiliar em `packages/engine/src/rotationPlan.ts`
       que decide se um `RotationStint` é "futuro" em relação a um `RotationStartPoint`
       (`stint.period > startPoint.period`, ou `stint.period === startPoint.period` e
       `stint.startSec >= startPoint.elapsedSec`) — vai ser reaproveitada pela detecção
@@ -67,7 +67,7 @@ só aparece em turnos já passados e confirmar que NÃO aparece aviso nenhum.
 
 > Escrever estes testes PRIMEIRO, confirmar que falham antes de implementar.
 
-- [ ] T004 [P] [US1] Testes em `packages/engine/test/rotationPlan.test.ts` pra
+- [X] T004 [P] [US1] Testes em `packages/engine/test/rotationPlan.test.ts` pra
       `stintsAfetadosPorIndisponibilidade`: devolve os stints futuros de um atleta
       indisponível, agrupados por atleta; devolve vazio quando o atleta só aparece em
       stints passados; devolve vazio quando o atleta indisponível não aparece em
@@ -75,20 +75,32 @@ só aparece em turnos já passados e confirmar que NÃO aparece aviso nenhum.
 
 ### Implementation for User Story 1
 
-- [ ] T005 [US1] Implementar `stintsAfetadosPorIndisponibilidade(stints,
+- [X] T005 [US1] Implementar `stintsAfetadosPorIndisponibilidade(stints,
       availabilityByPlayer, startPoint)` em `packages/engine/src/rotationPlan.ts`,
       usando o utilitário de T003 (depende de T002, T003; T004 deve falhar antes,
       passar depois).
-- [ ] T006 [US1] Em `apps/web/src/match/RotationPlanner.tsx`, detectar quando o jogo
-      está ao vivo (reaproveitar o status já exposto por `MatchHub.tsx`/
-      `useLiveMatch.ts`) e calcular o `RotationStartPoint` atual via
-      `matchElapsedMs`/`state.period` já existentes — nenhuma lógica de cronómetro
-      nova.
-- [ ] T007 [US1] Em `RotationPlanner.tsx`, chamar `stintsAfetadosPorIndisponibilidade`
-      com os stints já carregados + `availabilityByPlayer` + o `RotationStartPoint` de
-      T006, e mostrar um aviso claro (português simples, Princípio V) listando os
-      turnos/vagas afetados quando não-vazio; nada é mostrado quando vazio.
-- [ ] T008 [US1] Verificação manual: Cenário 1 de `quickstart.md`.
+- [X] T006 [US1] **Desvio do plano original, por segurança**: investigação encontrou
+      que `useLiveMatch.ts` só é montado por quem detém a trava do jogo
+      (`useMatchLock`) — reaproveitá-lo direto em `RotationPlanner.tsx` montaria uma
+      2ª cópia do relógio/localStorage/outbox do jogo a partir de um contexto que não
+      tem a trava, exatamente o tipo de edição concorrente sem aviso que o Princípio I
+      da constituição pede pra nunca assumir como exceção. Criado
+      `apps/web/src/match/useLiveMatchPoint.ts` — hook novo, só leitura, no mesmo
+      padrão já seguro de `ReadOnlyMatch.tsx` (poll de `match_events` já
+      sincronizados, nunca toca localStorage/outbox/trava), reconstruindo
+      `RotationStartPoint` via `engine.replayEvents`/`engine.matchElapsedMs` já
+      existentes. `status` passado de `MatchHub.tsx` pra `RotationPlanner.tsx` como
+      prop nova.
+- [X] T007 [US1] Em `RotationPlanner.tsx`, chamar `stintsAfetadosPorIndisponibilidade`
+      com `localStints` (estado mais recente do plano, incluindo edições locais ainda
+      não salvas) + `availabilityByPlayer` + o `RotationStartPoint` de T006, e mostrar
+      um aviso claro (português simples, Princípio V) listando os turnos/vagas
+      afetados quando não-vazio; nada é mostrado quando vazio.
+- [X] T008 [US1] Verificação manual: Cenário 1 de `quickstart.md` — confirmado ao vivo
+      no jogo de teste `teste4` (ver sessão): marcar TESTE Z1 indisponível mostrou o
+      aviso listando exatamente os turnos futuros de Pivô (excluindo corretamente o
+      turno em andamento no momento atual); revertido pra "Apto" depois, nenhum aviso
+      com ninguém indisponível.
 
 **Checkpoint**: User Story 1 funciona de forma independente — aviso aparece/some
 corretamente, nada mais muda no plano.

@@ -113,9 +113,12 @@ apps/web/src/match/
   useRotationPlan.ts        # já existente — saveStints reaproveitado sem mudar
                               assinatura; quem chama monta o array completo (turnos
                               passados inalterados + novos turnos futuros)
-  useLiveMatch.ts           # já existente — já expõe elapsedMs/period; reaproveitado
-                              pra calcular "ponto atual do jogo" sem lógica nova de
-                              cronómetro
+  useLiveMatchPoint.ts      # NOVO — ponto atual do jogo (período + segundo decorrido),
+                              só leitura, mesmo padrão seguro de ReadOnlyMatch.tsx (poll
+                              de match_events já sincronizados). NÃO reaproveita
+                              useLiveMatch.ts direto — ele só é montado por quem detém a
+                              trava do jogo (useMatchLock), e RotationPlanner.tsx não é
+                              gated por essa trava (ver Decisão 5, research.md)
   RotationPlanner.tsx         # alterado — fica "ciente do jogo ao vivo" quando o status
                               do jogo é "live": mostra o aviso de turnos afetados, e o
                               botão "Gerar opções" passa a gerar só a partir do momento

@@ -5,6 +5,7 @@ import { useMatchFormats } from "../team/useMatchFormats";
 import { isGoalkeeper, posAbbr } from "../team/positions";
 import { usePlayerAptitudes } from "../team/usePlayerAptitudes";
 import { usePlayers, type AvailabilityStatus, type PlayerRow } from "../team/usePlayers";
+import { useLiveMatchPoint } from "./useLiveMatchPoint";
 import { useRecentMinutes } from "./useRecentMinutes";
 import { useRotationPlan } from "./useRotationPlan";
 import { useRotationWeights } from "./useRotationWeights";
@@ -14,6 +15,9 @@ interface Props {
   matchId: string;
   opponent: string | null;
   formatId: string | null;
+  /** 'scheduled' | 'live' | 'finished' (matches.status) — só 'live' ativa o aviso de plano
+      desatualizado (specs/006-live-rotation-replan/); fora disso, comportamento igual a sempre. */
+  status: string;
   onClose: () => void;
 }
 
@@ -117,7 +121,7 @@ function playerOptionLabel(
   return withAptitude;
 }
 
-export function RotationPlanner({ teamId, matchId, opponent, formatId, onClose }: Props) {
+export function RotationPlanner({ teamId, matchId, opponent, formatId, status, onClose }: Props) {
   const { players, status: playersStatus, refresh: refreshPlayers } = usePlayers(teamId);
   const { formats } = useMatchFormats(teamId);
   const { stints, status: planStatus, errorMessage, saveStints } = useRotationPlan(teamId, matchId);
@@ -128,6 +132,9 @@ export function RotationPlanner({ teamId, matchId, opponent, formatId, onClose }
   const format: engine.MatchFormat =
     formats.find((f) => f.id === formatId) ?? formats.find((f) => f.isDefault) ?? formats[0] ?? FALLBACK_FORMAT;
   const durSec = format.periodMinutes * 60;
+
+  // Ponto atual do jogo, só leitura — null fora de um jogo ao vivo, ou enquanto ainda carrega.
+  const livePoint = useLiveMatchPoint(matchId, format, status === "live");
 
   const activeRoster = players.filter((p) => p.active).map(toEnginePlayer);
   const byId = (id: string) => activeRoster.find((p) => p.id === id);
@@ -172,6 +179,11 @@ export function RotationPlanner({ teamId, matchId, opponent, formatId, onClose }
   if (playersStatus === "loading" || planStatus === "loading") {
     return <p className="empty">A carregar...</p>;
   }
+
+  // Turnos futuros afetados por alguma indisponibilidade — só calculado com o jogo ao vivo
+  // (livePoint null fora disso) e a partir do estado mais recente do plano, incluindo edições
+  // locais ainda não salvas (specs/006-live-rotation-replan/, User Story 1).
+  const stintsAfetados = livePoint ? engine.stintsAfetadosPorIndisponibilidade(localStints, availabilityByPlayer, livePoint) : [];
 
   function toggleIncluded(id: string) {
     setIncluded((prev) => {
@@ -364,6 +376,28 @@ export function RotationPlanner({ teamId, matchId, opponent, formatId, onClose }
         previsto de alguém está acabando. As aptidões de cada atleta (vagas que sabe jogar) aparecem ao escolher
         quem entra em cada vaga abaixo — para editá-las, use o Plantel.
       </p>
+
+      {stintsAfetados.length > 0 && (
+        <p className="banner warn">
+          <strong>Plano desatualizado</strong> — o jogo está ao vivo e {stintsAfetados.length === 1 ? "um atleta marcado indisponível ainda" : "atletas marcados indisponíveis ainda"} {stintsAfetados.length === 1 ? "aparece" : "aparecem"} em turnos futuros deste plano:
+          <ul style={{ margin: "6px 0 0", paddingLeft: 20 }}>
+            {stintsAfetados.map(({ playerId, stints: afetados }) => {
+              const player = byId(playerId);
+              return (
+                <li key={playerId}>
+                  {player ? `#${player.num} ${player.name}` : "Atleta"}:{" "}
+                  {afetados
+                    .map(
+                      (s) =>
+                        `${engine.periodLabel(s.period, format)} ${engine.ROTATION_SLOT_TYPES[s.slotIndex]} ${engine.fmtMinSec(s.startSec * 1000)}–${engine.fmtMinSec(s.endSec * 1000)}`
+                    )
+                    .join(", ")}
+                </li>
+              );
+            })}
+          </ul>
+        </p>
+      )}
 
       <h3 className="section-title" style={{ marginTop: 16 }}>Incluídos no plano</h3>
       <div className="pgrid">

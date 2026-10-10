@@ -10,6 +10,7 @@
 // jogo a jogo). O que resta neste módulo são só os blocos que qualquer
 // forma de montar o plano precisa: validar que dois turnos da mesma vaga
 // não se sobrepõem, e agregar os segundos previstos por atleta.
+import type { AvailabilityStatus } from "./rotationSuggestion";
 
 export interface RotationStint {
   playerId: string;
@@ -18,6 +19,60 @@ export interface RotationStint {
   period: number;
   startSec: number;
   endSec: number;
+}
+
+/**
+ * Um ponto no tempo do jogo — parte + segundo decorrido dentro dela — usado
+ * como início pra gerar ou avaliar só o que falta do jogo
+ * (specs/006-live-rotation-replan/), em vez do jogo inteiro desde o minuto 0.
+ */
+export interface RotationStartPoint {
+  period: number;
+  elapsedSec: number;
+}
+
+/**
+ * Verdadeiro se um turno ainda está no futuro em relação a um
+ * RotationStartPoint — reaproveitado tanto pra detectar turnos afetados por
+ * uma indisponibilidade (`stintsAfetadosPorIndisponibilidade`) quanto pra
+ * decidir, ao montar um replaneamento, quais turnos já jogados preservar
+ * intocados. Um turno que já começou antes do momento atual (mesmo que ainda
+ * não tenha terminado — em andamento agora mesmo) NUNCA conta como futuro:
+ * quem está em quadra neste exato momento continua até o fim natural desse
+ * turno, o replaneamento só vale a partir do próximo turno de cada vaga.
+ */
+export function isStintFuture(stint: RotationStint, startPoint: RotationStartPoint): boolean {
+  if (stint.period !== startPoint.period) return stint.period > startPoint.period;
+  return stint.startSec >= startPoint.elapsedSec;
+}
+
+/** Turnos futuros de um atleta indisponível, um grupo por atleta — `[]` quando ninguém com turno futuro está indisponível. */
+export interface StintsAfetados {
+  playerId: string;
+  stints: RotationStint[];
+}
+
+/**
+ * Turnos FUTUROS (a partir de `startPoint`) que escalam algum atleta hoje
+ * marcado `indisponivel` — specs/006-live-rotation-replan/, User Story 1.
+ * Só `indisponivel` dispara isto; `a_retomar` nunca conta (o atleta ainda
+ * pode jogar, só com entrada dosada — ver `rotationWeights.ts`). `[]` =
+ * nenhum turno futuro do plano foi afetado, nenhum aviso deve aparecer.
+ */
+export function stintsAfetadosPorIndisponibilidade(
+  stints: RotationStint[],
+  availabilityByPlayer: Record<string, AvailabilityStatus>,
+  startPoint: RotationStartPoint
+): StintsAfetados[] {
+  const byPlayer = new Map<string, RotationStint[]>();
+  stints.forEach((s) => {
+    if (availabilityByPlayer[s.playerId] !== "indisponivel") return;
+    if (!isStintFuture(s, startPoint)) return;
+    const list = byPlayer.get(s.playerId);
+    if (list) list.push(s);
+    else byPlayer.set(s.playerId, [s]);
+  });
+  return Array.from(byPlayer.entries(), ([playerId, stints]) => ({ playerId, stints }));
 }
 
 // 4 vagas FIXAS de linha, sempre nesta ordem — slotIndex é o índice neste

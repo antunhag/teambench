@@ -89,3 +89,41 @@ fazendo delete+insert só da fatia futura — rejeitado por ser otimização pre
 volume de linhas por jogo é pequeno, ~20-40 stints no total) que adicionaria uma
 segunda forma de gravar o mesmo dado, aumentando a chance de inconsistência entre as
 duas em vez de reduzir.
+
+## Decisão 5 (encontrada durante a implementação da US1): "Ponto atual do jogo" nunca reaproveita `useLiveMatch` direto — hook novo, só leitura, mesmo padrão já seguro de `ReadOnlyMatch.tsx`
+
+**Histórico**: A Decisão 3 (acima) assumia "calcula o ponto atual do jogo via
+`useLiveMatch`/`matchElapsedMs` já existente" sem detalhar COMO — a investigação do
+código, ao implementar T006, encontrou que `useLiveMatch` só é montado por quem detém
+a trava do jogo (`useMatchLock`, ver comentário em `MatchFlow.tsx`: "Só quem
+reivindicar a trava do jogo... chega a montar useLiveMatch — quem está em modo leitura
+não deve tocar em localStorage/outbox do jogo de outra pessoa"). `RotationPlanner.tsx`
+não é gated por essa trava — monta mesmo que outro aparelho já esteja a registar o
+jogo ao vivo.
+
+**Decisão**: Criado `apps/web/src/match/useLiveMatchPoint.ts` — hook novo, exclusivamente
+de leitura, que busca `match_events` já sincronizados do Supabase (mesmo padrão já
+usado por `ReadOnlyMatch.tsx`, poll a cada 15s) e reconstrói o `RotationStartPoint`
+via `engine.replayEvents`/`engine.matchElapsedMs` (funções puras já existentes, mesmas
+usadas pelo caminho de fallback do próprio `useLiveMatch` quando reabre um jogo sem
+progresso local). NUNCA toca `localStorage`, nunca enfileira na `outbox`, nunca
+reivindica a trava — não é capaz de interferir com quem está de facto a registar o
+jogo.
+
+**Rationale**: Montar uma 2ª cópia de `useLiveMatch` (localStorage própria, relógio
+próprio, fila de sincronização própria) a partir de um contexto sem a trava é
+exatamente o tipo de edição concorrente sem aviso que o Princípio I da constituição
+("correção dos dados de jogo acima de tudo") pede pra tratar como normal, não exceção
+— mas aqui dava pra EVITAR o risco inteiramente, em vez de só "aceitar que pode
+acontecer". Reaproveitar `replayEvents`/`matchElapsedMs` (em vez de reimplementar a
+reconstrução do relógio) mantém uma única fonte de verdade pra "como calcular o tempo
+decorrido a partir de eventos", já testada pelo resto do motor.
+
+**Alternatives considered**: Levantar `useLiveMatch` pra `MatchHub.tsx` e passar `live`
+como prop pra `MatchFlow` e `RotationPlanner` — rejeitado: exigiria tirar o gate de
+`useMatchLock` de dentro de `MatchFlowEditor` (onde vive hoje, depois do `lock.status`
+já ter sido checado) pra um nível acima que não tem essa checagem, abrindo a mesma
+falha de concorrência que o gate existe pra evitar. Reconstruir o estado a partir de
+`buildTimelineData` (já usado por `ReadOnlyMatch.tsx`) em vez de `replayEvents` —
+rejeitado por não expor um `clock`/`period` com a mesma precisão de segundo que
+`matchElapsedMs` precisa; `buildTimelineData` já agrega pra exibição, não pra cálculo.
