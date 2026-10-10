@@ -1,0 +1,44 @@
+{
+  "jogo": {"partes": 2, "minutos_por_parte": 30, "partes_iguais": false},
+  "posicoes": ["Fixo", "Pivô", "Ala esquerda", "Ala direita"],
+  "atletas": [
+    {"nome": "Dinis",     "papel": "principal", "posicoes": ["Fixo"],                                 "alvo_min": 28},
+    {"nome": "Felipe",    "papel": "principal", "posicoes": ["Fixo", "Ala esquerda"],                 "alvo_min": 36},
+    {"nome": "Cartucho",  "papel": "principal", "posicoes": ["Pivô"],                                 "alvo_min": 36},
+    {"nome": "Martim",    "papel": "principal", "posicoes": ["Pivô", "Ala esquerda"],                 "alvo_min": 26},
+    {"nome": "Leonardo",  "papel": "principal", "posicoes": ["Ala esquerda", "Ala direita"],          "alvo_min": 24},
+    {"nome": "Salvador",  "papel": "principal", "posicoes": ["Ala direita"],                          "alvo_min": 28},
+    {"nome": "Marcelo",   "papel": "principal", "posicoes": ["Fixo", "Ala esquerda", "Ala direita"], "alvo_min": 26},
+    {"nome": "Rodrigo M", "papel": "apoio",     "posicoes": ["Ala direita"],                          "alvo_min": 14},
+    {"nome": "Ramalho",   "papel": "apoio",     "posicoes": ["Ala esquerda"],                         "alvo_min": 10},
+    {"nome": "Rayan",     "papel": "apoio",     "posicoes": ["Pivô"],                                 "alvo_min": 12}
+  ],
+  "titulares": {"Fixo": "Dinis", "Pivô": "Cartucho", "Ala esquerda": "Felipe", "Ala direita": "Salvador"},
+  "regras": {
+    "tolerancia_min_principal": 4,
+    "tolerancia_min_apoio": 1,
+    "max_minutos_seguidos": 6,
+    "min_minutos_por_entrada": 3,
+    "min_minutos_pausa": 3,
+    "min_minutos_na_posicao": 3,
+    "max_apoio_em_campo": 1,
+    "fecho_sem_apoio_min": 4,
+    "fecho_com_titulares_min": 3,
+    "max_diferenca_entre_partes": 4,
+    "limites_posicao": [
+      {"atleta": "Marcelo", "posicao": "Fixo",         "max_por_parte": 4},
+      {"atleta": "Felipe",  "posicao": "Fixo",         "min_por_parte": 9},
+      {"atleta": "Marcelo", "posicao": "Ala esquerda", "min_jogo": 4},
+      {"atleta": "Marcelo", "posicao": "Ala direita",  "min_jogo": 4}
+    ]
+  },
+  "pesos": {
+    "entrada": 8,
+    "momento_de_troca": 5,
+    "inicio_em_posicao": 2,
+    "minuto_igual_ao_plano_referencia": 0.5,
+    "minuto_de_titular_no_fecho": -1
+  },
+  "plano_referencia": "rotacao_cenario1.json",
+  "solver": {"tempo_limite_s": 480}
+}
