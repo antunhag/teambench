@@ -127,3 +127,44 @@ falha de concorrência que o gate existe pra evitar. Reconstruir o estado a part
 `buildTimelineData` (já usado por `ReadOnlyMatch.tsx`) em vez de `replayEvents` —
 rejeitado por não expor um `clock`/`period` com a mesma precisão de segundo que
 `matchElapsedMs` precisa; `buildTimelineData` já agrega pra exibição, não pra cálculo.
+
+## Decisão 6 (encontrada durante a implementação da US2): preservar turnos passados ao aplicar um replaneamento exige RECORTAR o turno em andamento, nunca mantê-lo inteiro
+
+**Histórico**: A Decisão 4 (acima) descreve montar o array final como "todos os stints
+com `period`/`startSec` já passados (inalterados) + os novos stints gerados" — a
+implementação inicial de `chooseOption` (`RotationPlanner.tsx`) usou
+`localStints.filter((s) => !isStintFuture(s, livePoint))` pra isolar os turnos
+"passados" a preservar. Verificação ao vivo contra o jogo `teste4` expôs o bug: a soma
+de `MINUTOS PREVISTOS` deu 15368s em vez dos 14400s esperados (4 vagas × 3600s), uma
+sobreposição de exatamente 242s × 4 vagas. Causa: `isStintFuture` classifica um turno
+EM ANDAMENTO no momento do replaneamento (ex.: Pivô 0-300s, com `elapsedSec≈58`) como
+"não futuro" — então o filtro preservava esse turno INTEIRO (0-300) — enquanto a
+geração nova (Decisão 1) também cobre a partir de `elapsedSec=58` na mesma vaga,
+duplicando a cobertura do intervalo `[58, 300)`.
+
+**Decisão**: Nova função `clippedPastStints(stints, startPoint)` em
+`packages/engine/src/rotationPlan.ts` — mesma regra de "o que preservar" de
+`isStintFuture`, mas um turno em andamento no momento exato de `startPoint` tem seu
+`endSec` RECORTADO pra `startPoint.elapsedSec` em vez de mantido inteiro. `chooseOption`
+passa a montar o array final com `clippedPastStints(localStints, livePoint)` + os
+stints da opção escolhida, nunca mais com o filtro baseado só em `isStintFuture`.
+`isStintFuture` continua existindo exatamente como estava — segue correto pro seu uso
+original (`stintsAfetadosPorIndisponibilidade`, US1: decidir se vale a pena AVISAR,
+onde um turno em andamento genuinamente não precisa de aviso) — só ganhou um aviso no
+docstring deixando explícito que não serve pra decidir o que preservar na persistência.
+
+**Rationale**: As duas perguntas são diferentes mesmo parecendo a mesma checagem de
+tempo: "isto já é passado o bastante pra não precisar de aviso?" (US1) vs. "isto é
+exatamente o que preservar sem duplicar com a geração nova?" (US2/persistência). A
+primeira pode tratar "em andamento" como "não é futuro, não avisa" sem problema — o
+treinador já sabe quem está em quadra agora. A segunda não pode, porque a geração nova
+sempre recomeça do zero exatamente em `elapsedSec`, então QUALQUER parte do turno em
+andamento que vá além de `elapsedSec` já está coberta de novo pela opção escolhida.
+
+**Alternatives considered**: Fazer a geração nova começar DEPOIS do fim do turno em
+andamento (ex.: `elapsedSec` arredondado pro próximo turno) — rejeitado: a opção
+escolhida deixaria de cobrir o intervalo `[elapsedSec, fim do turno em andamento)`,
+criando um BURACO em vez de sobreposição, e complicaria `generateRotationOptions` com
+um segundo parâmetro (quando o turno em andamento termina) que a Decisão 1 nunca
+precisou. Recortar o turno passado é a correção mínima — não muda nada na geração
+(Decisão 1 permanece exatamente como está, já testada), só na montagem do array final.

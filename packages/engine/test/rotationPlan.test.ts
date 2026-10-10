@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   aptitudeLabel,
+  clippedPastStints,
   currentStintFor,
   isStintFuture,
   nextStintInSlot,
@@ -177,6 +178,43 @@ describe("stintsAfetadosPorIndisponibilidade", () => {
   it("'a_retomar' nunca conta como indisponível — só 'indisponivel' dispara o aviso", () => {
     const availability: Record<string, AvailabilityStatus> = { [indisponivel]: "a_retomar" };
     expect(stintsAfetadosPorIndisponibilidade(stints, availability, startPoint)).toEqual([]);
+  });
+});
+
+describe("clippedPastStints", () => {
+  it("preserva inteiro um turno totalmente no passado", () => {
+    const passado: RotationStint = { playerId: ala1, slotIndex: 0, period: 1, startSec: 0, endSec: 200 };
+    expect(clippedPastStints([passado], { period: 1, elapsedSec: 300 })).toEqual([passado]);
+  });
+
+  it("RECORTA (nunca mantém inteiro) um turno em andamento no momento do startPoint — nunca duplica cobertura com a geração nova, que sempre começa exatamente em elapsedSec", () => {
+    const emAndamento: RotationStint = { playerId: ala1, slotIndex: 0, period: 1, startSec: 0, endSec: 600 };
+    const resultado = clippedPastStints([emAndamento], { period: 1, elapsedSec: 300 });
+    expect(resultado).toEqual([{ playerId: ala1, slotIndex: 0, period: 1, startSec: 0, endSec: 300 }]);
+  });
+
+  it("exclui por completo um turno que começa no momento do startPoint ou depois", () => {
+    const futuro: RotationStint = { playerId: ala1, slotIndex: 0, period: 1, startSec: 300, endSec: 600 };
+    expect(clippedPastStints([futuro], { period: 1, elapsedSec: 300 })).toEqual([]);
+  });
+
+  it("preserva inteiro qualquer turno de uma parte anterior à do startPoint", () => {
+    const parteAnterior: RotationStint = { playerId: ala1, slotIndex: 0, period: 1, startSec: 1000, endSec: 1800 };
+    expect(clippedPastStints([parteAnterior], { period: 2, elapsedSec: 0 })).toEqual([parteAnterior]);
+  });
+
+  it("exclui por completo qualquer turno de uma parte posterior à do startPoint", () => {
+    const parteSeguinte: RotationStint = { playerId: ala1, slotIndex: 0, period: 2, startSec: 0, endSec: 300 };
+    expect(clippedPastStints([parteSeguinte], { period: 1, elapsedSec: 300 })).toEqual([]);
+  });
+
+  it("concatenado com uma geração nova a partir do mesmo startPoint nunca se sobrepõe nem deixa buraco", () => {
+    // Mesma vaga: turno em andamento 0-300 (recortado pra 0-58), geração nova cobre 58 em diante.
+    const plano: RotationStint[] = [{ playerId: ala1, slotIndex: 0, period: 1, startSec: 0, endSec: 300 }];
+    const startPoint = { period: 1, elapsedSec: 58 };
+    const passado = clippedPastStints(plano, startPoint);
+    const novoTurno: RotationStint = { playerId: ala2, slotIndex: 0, period: 1, startSec: 58, endSec: 300 };
+    expect(passado[0].endSec).toBe(novoTurno.startSec); // encosta exatamente, sem buraco nem sobreposição
   });
 });
 

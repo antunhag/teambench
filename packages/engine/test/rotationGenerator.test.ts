@@ -167,3 +167,88 @@ describe("generateRotationOptions", () => {
     }
   });
 });
+
+describe("generateRotationOptions com RotationStartPoint (specs/006-live-rotation-replan/)", () => {
+  const weights: PlayerSlotWeights = {
+    p1: { Fixo: 5 },
+    p2: { "Ala Esquerda": 5 },
+    p3: { "Ala Esquerda": 3 },
+    p4: { "Ala Direita": 4 },
+    p5: { "Pivô": 2 },
+  };
+  const TWO_PERIODS: MatchFormat = { periodCount: 2, periodMinutes: 20, overtimePeriodCount: 0, overtimeMinutes: 0 };
+
+  it("omitido = comportamento idêntico a não passar o parâmetro nenhum (regressão: nunca muda o plano pré-jogo)", () => {
+    const semArgumento = generateRotationOptions([p1, p2, p3, p4, p5], weights, noAvailability(), ONE_PERIOD);
+    const comUndefined = generateRotationOptions([p1, p2, p3, p4, p5], weights, noAvailability(), ONE_PERIOD, undefined);
+    expect(comUndefined).toEqual(semArgumento);
+  });
+
+  it("com startPoint no meio da parte: nenhum stint começa antes do ponto de início, cobertura exata até o fim", () => {
+    const startPoint = { period: 1, elapsedSec: 320 };
+    const options = generateRotationOptions([p1, p2, p3, p4, p5], weights, noAvailability(), ONE_PERIOD, startPoint);
+    for (const option of options) {
+      for (let slotIndex = 0; slotIndex < 4; slotIndex++) {
+        const slotStints = option.stints.filter((s) => s.slotIndex === slotIndex && s.period === 1).sort((a, b) => a.startSec - b.startSec);
+        expect(slotStints.length).toBeGreaterThan(0);
+        expect(slotStints[0].startSec).toBe(320); // nunca antes do ponto de início
+        expect(slotStints[slotStints.length - 1].endSec).toBe(PERIOD_SEC);
+        for (let i = 1; i < slotStints.length; i++) {
+          expect(slotStints[i].startSec).toBe(slotStints[i - 1].endSec); // sem buraco nem sobreposição
+        }
+      }
+    }
+  });
+
+  it("partes inteiramente antes do período do startPoint não geram nenhum stint — só a UI preserva os turnos já jogados, o motor não os repete", () => {
+    const startPoint = { period: 2, elapsedSec: 0 };
+    const options = generateRotationOptions([p1, p2, p3, p4, p5], weights, noAvailability(), TWO_PERIODS, startPoint);
+    for (const option of options) {
+      expect(option.stints.some((s) => s.period === 1)).toBe(false);
+      expect(option.stints.some((s) => s.period === 2)).toBe(true);
+    }
+  });
+
+  it("parte depois do período do startPoint continua cobrindo do minuto 0, normalmente", () => {
+    const startPoint = { period: 1, elapsedSec: 600 };
+    const options = generateRotationOptions([p1, p2, p3, p4, p5], weights, noAvailability(), TWO_PERIODS, startPoint);
+    for (const option of options) {
+      const periodo2 = option.stints.filter((s) => s.period === 2 && s.slotIndex === 0).sort((a, b) => a.startSec - b.startSec);
+      expect(periodo2[0].startSec).toBe(0);
+    }
+  });
+
+  it("atleta indisponível nunca aparece, mesmo com startPoint", () => {
+    const startPoint = { period: 1, elapsedSec: 320 };
+    const options = generateRotationOptions([p1, p2, p3, p4, p5], weights, { p2: "indisponivel" }, ONE_PERIOD, startPoint);
+    for (const option of options) {
+      expect(option.stints.some((s) => s.playerId === "p2")).toBe(false);
+    }
+  });
+
+  it("teto de 5 min seguidos continua valendo dentro da janela restrita", () => {
+    const longPeriod: MatchFormat = { periodCount: 1, periodMinutes: 30, overtimePeriodCount: 0, overtimeMinutes: 0 };
+    const soloSpecialistWeights: PlayerSlotWeights = { p1: { Fixo: 5 }, p2: { "Ala Esquerda": 5 }, p3: { "Ala Direita": 4 }, p5: { Pivô: 5 } };
+    const startPoint = { period: 1, elapsedSec: 320 };
+    const options = generateRotationOptions([p1, p2, p3, p5], soloSpecialistWeights, noAvailability(), longPeriod, startPoint);
+    for (const option of options) {
+      for (const stint of option.stints) {
+        expect(stint.endSec - stint.startSec).toBeLessThanOrEqual(MAX_STINT_SEC);
+      }
+      for (let slotIndex = 0; slotIndex < 4; slotIndex++) {
+        const slotStints = option.stints.filter((s) => s.slotIndex === slotIndex).sort((a, b) => a.startSec - b.startSec);
+        for (let i = 1; i < slotStints.length; i++) {
+          expect(slotStints[i].playerId).not.toBe(slotStints[i - 1].playerId);
+        }
+      }
+    }
+  });
+
+  it("startPoint exatamente no fim (ou depois) da parte não gera nenhum stint pra essa parte", () => {
+    const startPoint = { period: 1, elapsedSec: PERIOD_SEC };
+    const options = generateRotationOptions([p1, p2, p3, p4, p5], weights, noAvailability(), ONE_PERIOD, startPoint);
+    for (const option of options) {
+      expect(option.stints).toEqual([]);
+    }
+  });
+});

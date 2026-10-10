@@ -121,33 +121,42 @@ intocados.
 
 > Escrever estes testes PRIMEIRO, confirmar que falham antes de implementar.
 
-- [ ] T009 [P] [US2] Testes em `packages/engine/test/rotationGenerator.test.ts` pra
+- [X] T009 [P] [US2] Testes em `packages/engine/test/rotationGenerator.test.ts` pra
       `generateRotationOptions` com `startPoint` opcional: omitido → saída idêntica à
       de hoje (teste de regressão, nenhum `startPoint` nunca muda o comportamento já
       existente); com `startPoint` → nenhuma das 3 opções tem stint antes do ponto de
       início; cobertura exata de [startPoint, fim da parte/jogo]; atleta indisponível
       nunca aparece; teto de 5 min e domínio de peso (Decisões 6-8 de
       specs/004-rotation-plan-generation/research.md) continuam valendo dentro da
-      janela restrita.
+      janela restrita. 7 testes novos, todos passando.
 
 ### Implementation for User Story 2
 
-- [ ] T010 [US2] Modificar `scheduleWindowed` em
+- [X] T010 [US2] Modificar `scheduleWindowed` em
       `packages/engine/src/rotationGenerator.ts` pra aceitar um cursor inicial
       (`elapsedSec`) em vez de sempre começar em 0.
-- [ ] T011 [US2] Modificar `generateRotationOptions` pra aceitar o `RotationStartPoint`
+- [X] T011 [US2] Modificar `generateRotationOptions` pra aceitar o `RotationStartPoint`
       opcional (depende de T002, T010): pula períodos antes de `startPoint.period`
       inteiramente, e começa o cursor em `startPoint.elapsedSec` só pro período de
       `startPoint.period` (T009 deve falhar antes, passar depois).
-- [ ] T012 [US2] Em `RotationPlanner.tsx`, quando o jogo está ao vivo (reaproveitando
+- [X] T012 [US2] Em `RotationPlanner.tsx`, quando o jogo está ao vivo (reaproveitando
       a detecção de T006), passar o `RotationStartPoint` calculado pra
       `generateRotationOptions` ao clicar "Gerar opções de plano".
-- [ ] T013 [US2] Em `RotationPlanner.tsx`, no "Escolher esta": montar o array final de
+- [X] T013 [US2] Em `RotationPlanner.tsx`, no "Escolher esta": montar o array final de
       stints = stints existentes com `period`/`startSec` antes do `RotationStartPoint`
-      (copiados sem alteração, usando o utilitário de T003) + os stints da opção
-      escolhida; chamar `saveStints` já existente com esse array, sem mudar a
-      assinatura dela.
-- [ ] T014 [US2] Verificação manual: Cenário 2 de `quickstart.md`.
+      + os stints da opção escolhida; chamar `saveStints` já existente com esse array,
+      sem mudar a assinatura dela. **Desvio do plano original**: o utilitário de T003
+      (`isStintFuture`) preserva um turno EM ANDAMENTO no momento do replaneamento
+      inteiro, não recortado — verificação ao vivo contra `teste4` expôs que isso
+      duplica cobertura com a geração nova (que também começa exatamente em
+      `elapsedSec`), inflando `MINUTOS PREVISTOS` em 242s × 4 vagas. Corrigido com uma
+      função nova, `clippedPastStints` (`rotationPlan.ts`), que recorta o `endSec` do
+      turno em andamento pra `startPoint.elapsedSec` em vez de preservá-lo inteiro —
+      ver Decisão 6, `research.md`. `isStintFuture` não mudou de comportamento, só
+      ganhou um aviso no docstring.
+- [X] T014 [US2] Verificação manual: Cenário 2 de `quickstart.md`. Confirmado ao vivo
+      contra `teste4` (TESTE Z1 indisponível): `MINUTOS PREVISTOS` somou exatamente
+      14400s (4 vagas × 3600s) após a correção de T013 — sem sobreposição, sem buraco.
 
 **Checkpoint**: User Stories 1 e 2 funcionam juntas — aviso aparece, replaneamento é
 gerado e aplicado corretamente, turnos passados nunca são tocados.

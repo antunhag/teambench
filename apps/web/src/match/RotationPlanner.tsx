@@ -357,12 +357,21 @@ export function RotationPlanner({ teamId, matchId, opponent, formatId, status, o
       });
       weightsBySlot[p.id] = bySlot;
     });
-    setRotationOptions(engine.generateRotationOptions(includedPlayersSorted, weightsBySlot, availabilityByPlayer, format));
+    // Com o jogo ao vivo, gera só a partir do momento atual (specs/006-live-rotation-replan/) — pré-jogo
+    // continua gerando o jogo inteiro desde o minuto 0, igual sempre (livePoint é null fora de um jogo ao vivo).
+    setRotationOptions(
+      engine.generateRotationOptions(includedPlayersSorted, weightsBySlot, availabilityByPlayer, format, livePoint ?? undefined)
+    );
   }
 
   async function chooseOption(option: engine.RotationPlanOption) {
     setRotationOptions(null);
-    await persistStints(option.stints);
+    // Ao vivo: preserva os turnos já jogados do plano atual, recortando o turno em andamento (se houver) em
+    // vez de mantê-lo inteiro — a opção escolhida já cobre o intervalo restante a partir do mesmo instante,
+    // preservar o turno em andamento por inteiro duplicaria a cobertura (clippedPastStints). Pré-jogo
+    // (livePoint null): substitui o plano inteiro, igual sempre.
+    const nextStints = livePoint ? [...engine.clippedPastStints(localStints, livePoint), ...option.stints] : option.stints;
+    await persistStints(nextStints);
   }
 
   return (

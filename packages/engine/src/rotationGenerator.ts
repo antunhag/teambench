@@ -15,7 +15,7 @@
 // curto deixa os 2-3 mais aptos ali alternando quase só entre eles; um
 // esfriamento longo abre espaço de verdade pra quem tem menos aptidão também
 // jogar ali, não só nos minutos que sobram.
-import { ROTATION_SLOT_TYPES, plannedSecondsByPlayer, type RotationSlotType, type RotationStint } from "./rotationPlan";
+import { ROTATION_SLOT_TYPES, plannedSecondsByPlayer, type RotationSlotType, type RotationStartPoint, type RotationStint } from "./rotationPlan";
 import type { AvailabilityStatus } from "./rotationSuggestion";
 import type { MatchFormat, Player } from "./types";
 
@@ -47,11 +47,22 @@ const OPTION_CONFIGS: { label: string; cooldownWindows: number }[] = [
   { label: "Dá minutos a todos", cooldownWindows: 4 }, // fica mais tempo "esfriando", abre espaço pra mais gente
 ];
 
+/**
+ * `startPoint` opcional — ausente (ou undefined) gera o jogo inteiro desde o
+ * período 1, minuto 0, EXATAMENTE como sempre (nunca muda o plano pré-jogo,
+ * ver teste de regressão). Presente, gera só a partir dali: períodos
+ * inteiramente anteriores a `startPoint.period` não produzem nenhum stint (a
+ * UI é quem preserva os turnos já jogados, reaproveitando-os sem alteração —
+ * ver `isStintFuture`/Decisão 4, specs/006-live-rotation-replan/research.md),
+ * e o período de `startPoint.period` começa a janela em
+ * `startPoint.elapsedSec` em vez de 0.
+ */
 export function generateRotationOptions(
   players: Player[],
   weightsBySlot: PlayerSlotWeights,
   availabilityByPlayer: Record<string, AvailabilityStatus>,
-  format: MatchFormat
+  format: MatchFormat,
+  startPoint?: RotationStartPoint
 ): RotationPlanOption[] {
   const available = players.filter((p) => availabilityByPlayer[p.id] !== "indisponivel");
 
@@ -59,23 +70,31 @@ export function generateRotationOptions(
     const stints: RotationStint[] = [];
     const periodSec = format.periodMinutes * 60;
     for (let period = 1; period <= format.periodCount; period++) {
-      stints.push(...scheduleWindowed(available, weightsBySlot, periodSec, cooldownWindows, period));
+      if (startPoint && period < startPoint.period) continue; // período inteiro já no passado — nada a gerar
+      const startSec = startPoint && period === startPoint.period ? startPoint.elapsedSec : 0;
+      if (startSec >= periodSec) continue; // ponto de início já no fim (ou depois) da parte
+      stints.push(...scheduleWindowed(available, weightsBySlot, periodSec, cooldownWindows, period, startSec));
     }
     return { label, stints, totalSecondsByPlayer: plannedSecondsByPlayer(stints) };
   });
 }
 
 /**
- * Preenche um período inteiro, janela de 5 min por janela — em cada uma,
- * decide de uma vez só quem entra em cada uma das 4 vagas (nunca vaga por
- * vaga em sequência).
+ * Preenche um período inteiro (ou só a janela restante, a partir de
+ * `startSec`), janela de 5 min por janela — em cada uma, decide de uma vez só
+ * quem entra em cada uma das 4 vagas (nunca vaga por vaga em sequência).
+ * `startSec` vira o novo "zero" da sequência de janelas desta chamada —
+ * cooldown/force-out contam a partir daqui, nunca em relação ao início real
+ * da parte (cada geração é sempre independente, mesmo princípio já usado
+ * entre partes diferentes).
  */
 function scheduleWindowed(
   players: Player[],
   weightsBySlot: PlayerSlotWeights,
   periodSec: number,
   cooldownWindows: number,
-  period: number
+  period: number,
+  startSec = 0
 ): RotationStint[] {
   const accumulated: Record<string, number> = {};
   // Por atleta, por vaga: índice da ÚLTIMA janela em que ele ocupou aquela vaga — ausente se nunca ocupou.
@@ -86,7 +105,7 @@ function scheduleWindowed(
   });
 
   const stints: RotationStint[] = [];
-  let cursor = 0;
+  let cursor = startSec;
   let windowIndex = 0;
   while (cursor < periodSec) {
     const windowEnd = Math.min(periodSec, cursor + WINDOW_SEC);

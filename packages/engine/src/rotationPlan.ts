@@ -33,17 +33,44 @@ export interface RotationStartPoint {
 
 /**
  * Verdadeiro se um turno ainda está no futuro em relação a um
- * RotationStartPoint — reaproveitado tanto pra detectar turnos afetados por
- * uma indisponibilidade (`stintsAfetadosPorIndisponibilidade`) quanto pra
- * decidir, ao montar um replaneamento, quais turnos já jogados preservar
- * intocados. Um turno que já começou antes do momento atual (mesmo que ainda
- * não tenha terminado — em andamento agora mesmo) NUNCA conta como futuro:
- * quem está em quadra neste exato momento continua até o fim natural desse
- * turno, o replaneamento só vale a partir do próximo turno de cada vaga.
+ * RotationStartPoint — usado pra detectar turnos afetados por uma
+ * indisponibilidade (`stintsAfetadosPorIndisponibilidade`), pra decidir o que
+ * vale a pena AVISAR o treinador. Um turno que já começou antes do momento
+ * atual (mesmo em andamento agora mesmo, ainda não terminado) NUNCA conta
+ * como futuro — o treinador já sabe quem está em quadra neste instante, não
+ * precisa de aviso sobre isso.
+ *
+ * NUNCA usar isto sozinho pra decidir quais turnos PRESERVAR ao montar um
+ * replaneamento — um turno em andamento teria o início preservado (não é
+ * futuro) E o fim coberto de novo pela geração nova (que começa exatamente em
+ * `elapsedSec`), duplicando a cobertura. Pra isso, usar `clippedPastStints`.
  */
 export function isStintFuture(stint: RotationStint, startPoint: RotationStartPoint): boolean {
   if (stint.period !== startPoint.period) return stint.period > startPoint.period;
   return stint.startSec >= startPoint.elapsedSec;
+}
+
+/**
+ * Turnos a PRESERVAR intocados ao montar um replaneamento — tudo que
+ * aconteceu estritamente antes de `startPoint`, nunca mais que isso. Um
+ * turno que esteja em andamento no momento exato de `startPoint` é
+ * RECORTADO (`endSec` reduzido pra `startPoint.elapsedSec`), nunca mantido
+ * inteiro — a geração nova sempre começa exatamente em `startPoint`
+ * (`generateRotationOptions`), então preservar o turno em andamento por
+ * inteiro duplicaria a cobertura entre o fim do turno antigo e o começo do
+ * novo. Turnos inteiramente futuros (começam em `startPoint` ou depois) são
+ * excluídos por completo — ficam por conta da geração nova.
+ */
+export function clippedPastStints(stints: RotationStint[], startPoint: RotationStartPoint): RotationStint[] {
+  const result: RotationStint[] = [];
+  for (const s of stints) {
+    if (s.period < startPoint.period) {
+      result.push(s);
+    } else if (s.period === startPoint.period && s.startSec < startPoint.elapsedSec) {
+      result.push(s.endSec <= startPoint.elapsedSec ? s : { ...s, endSec: startPoint.elapsedSec });
+    }
+  }
+  return result;
 }
 
 /** Turnos futuros de um atleta indisponível, um grupo por atleta — `[]` quando ninguém com turno futuro está indisponível. */
