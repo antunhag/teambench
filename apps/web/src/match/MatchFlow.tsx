@@ -33,8 +33,12 @@ export function MatchFlow({ teamId, matchId, opponent, formatId, onExit, sync }:
   // O formato deste jogo específico (definido na criação/edição do jogo),
   // com fallback para o padrão da equipa — cada jogo respeita o SEU
   // period_count, nunca um valor fixo global.
-  const format: MatchFormat =
-    formats.find((f) => f.id === formatId) ?? formats.find((f) => f.isDefault) ?? formats[0] ?? FALLBACK_FORMAT;
+  const matchingFormat = formats.find((f) => f.id === formatId) ?? formats.find((f) => f.isDefault) ?? formats[0];
+  const format: MatchFormat = matchingFormat ?? FALLBACK_FORMAT;
+  // Mínimo de convocados esperado (specs/007-convocados-sync/ US3) — à
+  // parte de `format` porque esse é tipado como `engine.MatchFormat` (sem
+  // `minConvocados`); `FALLBACK_FORMAT` nunca tem mínimo configurado.
+  const minConvocados = matchingFormat?.minConvocados ?? null;
 
   // Só quem reivindicar a trava do jogo (useMatchLock) chega a montar
   // useLiveMatch — quem está em modo leitura não deve tocar em
@@ -63,6 +67,7 @@ export function MatchFlow({ teamId, matchId, opponent, formatId, onExit, sync }:
           matchId={matchId}
           opponent={opponent}
           format={format}
+          minConvocados={minConvocados}
           activeRoster={activeRoster}
           ourLabel={ourLabel}
         />
@@ -76,6 +81,7 @@ function MatchFlowEditor({
   matchId,
   opponent,
   format,
+  minConvocados,
   activeRoster,
   ourLabel,
 }: {
@@ -83,6 +89,7 @@ function MatchFlowEditor({
   matchId: string;
   opponent: string | null;
   format: MatchFormat;
+  minConvocados: number | null;
   activeRoster: PlayerRow[];
   ourLabel: string;
 }) {
@@ -120,7 +127,7 @@ function MatchFlowEditor({
           ourLabel={ourLabel}
         />
       ) : showPreMatch ? (
-        <PreMatch live={live} roster={activeRoster} opponent={opponent} onConfirm={() => setConfirmed(true)} />
+        <PreMatch live={live} roster={activeRoster} opponent={opponent} minConvocados={minConvocados} onConfirm={() => setConfirmed(true)} />
       ) : (
         <LiveMatch live={live} roster={activeRoster} opponent={opponent} onViewSummary={() => setShowSummary(true)} ourLabel={ourLabel} />
       )}

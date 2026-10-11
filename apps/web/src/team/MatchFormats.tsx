@@ -10,32 +10,71 @@ interface Props {
 
 /** Duração de jogo configurável — cada equipa/competição pode ter a sua (ver plano: match_formats). */
 export function MatchFormats({ teamId, canManage }: Props) {
-  const { formats, status, errorMessage, addFormat, setDefault } = useMatchFormats(teamId);
+  const { formats, status, errorMessage, addFormat, setDefault, updateFormat } = useMatchFormats(teamId);
 
   const [name, setName] = useState("");
   const [periodCount, setPeriodCount] = useState(2);
   const [periodMinutes, setPeriodMinutes] = useState(25);
   const [overtimePeriodCount, setOvertimePeriodCount] = useState(0);
   const [overtimeMinutes, setOvertimeMinutes] = useState(0);
+  // String (não number) pra aceitar vazio = "sem mínimo configurado" (null) —
+  // specs/007-convocados-sync/ US3.
+  const [minConvocados, setMinConvocados] = useState("");
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "error">("idle");
   const [saveError, setSaveError] = useState("");
 
-  // Esta tela não tem um "modo de edição" explícito (só o formulário de
-  // adicionar) — o sinal de "a editar" é ter começado a preencher o nome do
-  // formato novo, mesmo espírito do editingId do Plantel: nunca trava só por
-  // ver a lista (FR-006), só quando há de facto uma edição em curso.
-  const lock = useResourceLock(teamId, "match_format", name !== "");
+  // Não existia nenhum "modo de edição" aqui (só o formulário de adicionar)
+  // — formatos já criados (ex.: usados em jogos reais) não tinham como
+  // ganhar um minConvocados depois de criados (specs/007-convocados-sync/
+  // research.md Decisão 6). `editingId` é null = criando um formato novo;
+  // com valor = editando esse formato existente, mesmo formulário reaproveitado.
+  const [editingId, setEditingId] = useState<string | null>(null);
 
-  async function handleAdd(e: Event) {
+  // O sinal de "a editar" é ter começado a preencher o nome (criar) ou estar
+  // em modo de edição de um formato existente — mesmo espírito do
+  // editingId do Plantel: nunca trava só por ver a lista (FR-006), só
+  // quando há de facto uma edição em curso.
+  const lock = useResourceLock(teamId, "match_format", name !== "" || editingId !== null);
+
+  function resetForm() {
+    setEditingId(null);
+    setName("");
+    setPeriodCount(2);
+    setPeriodMinutes(25);
+    setOvertimePeriodCount(0);
+    setOvertimeMinutes(0);
+    setMinConvocados("");
+  }
+
+  function startEdit(f: (typeof formats)[number]) {
+    setEditingId(f.id);
+    setName(f.name);
+    setPeriodCount(f.periodCount);
+    setPeriodMinutes(f.periodMinutes);
+    setOvertimePeriodCount(f.overtimePeriodCount);
+    setOvertimeMinutes(f.overtimeMinutes);
+    setMinConvocados(f.minConvocados != null ? String(f.minConvocados) : "");
+  }
+
+  async function handleSubmit(e: Event) {
     e.preventDefault();
     setSaveStatus("saving");
     setSaveError("");
+    const input = {
+      name,
+      periodCount,
+      periodMinutes,
+      overtimePeriodCount,
+      overtimeMinutes,
+      minConvocados: minConvocados.trim() === "" ? null : Number(minConvocados),
+    };
     try {
-      await addFormat(
-        { name, periodCount, periodMinutes, overtimePeriodCount, overtimeMinutes },
-        formats.length === 0 // o primeiro formato criado já vira o padrão automaticamente
-      );
-      setName("");
+      if (editingId) {
+        await updateFormat(editingId, input);
+      } else {
+        await addFormat(input, formats.length === 0); // o primeiro formato criado já vira o padrão automaticamente
+      }
+      resetForm();
       setSaveStatus("idle");
     } catch (err) {
       setSaveStatus("error");
@@ -61,12 +100,20 @@ export function MatchFormats({ teamId, canManage }: Props) {
                 <div className="lsub">
                   {f.periodCount}×{f.periodMinutes} min
                   {f.overtimePeriodCount > 0 ? ` + ${f.overtimePeriodCount}×${f.overtimeMinutes} min prolongamento` : ""}
+                  {f.minConvocados != null ? ` · mín. ${f.minConvocados} convocados` : ""}
                 </div>
               </div>
-              {canManage && !f.isDefault && (
-                <button type="button" className="btn sm ghost" onClick={() => setDefault(f.id)} style={{ marginTop: 4 }}>
-                  Tornar padrão
-                </button>
+              {canManage && (
+                <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
+                  {!f.isDefault && (
+                    <button type="button" className="btn sm ghost" onClick={() => setDefault(f.id)}>
+                      Tornar padrão
+                    </button>
+                  )}
+                  <button type="button" className="btn sm ghost" onClick={() => startEdit(f)}>
+                    Editar
+                  </button>
+                </div>
               )}
             </div>
           ))}
@@ -76,11 +123,12 @@ export function MatchFormats({ teamId, canManage }: Props) {
       {canManage && lock.status === "readonly" && (
         <div className="banner warn" style={{ marginTop: 12 }}>
           O Formato de Jogo está a ser editado por outra pessoa agora.{" "}
-          <button type="button" className="btn sm ghost" onClick={() => setName("")}>Fechar</button>
+          <button type="button" className="btn sm ghost" onClick={resetForm}>Fechar</button>
         </div>
       )}
       {canManage && lock.status !== "readonly" && (
-        <form onSubmit={handleAdd} className="inline-fields" style={{ marginTop: 12 }}>
+        <form onSubmit={handleSubmit} className="inline-fields" style={{ marginTop: 12 }}>
+          {editingId && <p className="hint" style={{ width: "100%", margin: "0 0 4px" }}>A editar "{name}".</p>}
           <div className="field" style={{ marginBottom: 0 }}>
             <label>Nome</label>
             <input required value={name} onInput={(e) => setName((e.target as HTMLInputElement).value)} placeholder="Ex.: Campeonato Distrital Sub-15" style={{ width: 220 }} />
@@ -101,9 +149,25 @@ export function MatchFormats({ teamId, canManage }: Props) {
             <label>Min/prolong.</label>
             <input type="number" min={0} value={overtimeMinutes} onInput={(e) => setOvertimeMinutes(Number((e.target as HTMLInputElement).value))} style={{ width: 70 }} />
           </div>
+          <div className="field" style={{ marginBottom: 0 }}>
+            <label>Mín. convocados</label>
+            <input
+              type="number"
+              min={1}
+              placeholder="opcional"
+              value={minConvocados}
+              onInput={(e) => setMinConvocados((e.target as HTMLInputElement).value)}
+              style={{ width: 90 }}
+            />
+          </div>
           <button type="submit" className="btn primary" disabled={saveStatus === "saving" || lock.status === "checking"}>
-            Adicionar formato
+            {editingId ? "Guardar" : "Adicionar formato"}
           </button>
+          {editingId && (
+            <button type="button" className="btn ghost" onClick={resetForm}>
+              Cancelar
+            </button>
+          )}
         </form>
       )}
       {saveStatus === "error" && <p className="banner error" style={{ marginTop: 8 }}>{saveError}</p>}

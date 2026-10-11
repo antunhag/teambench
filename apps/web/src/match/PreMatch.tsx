@@ -6,18 +6,27 @@ interface Props {
   live: ReturnType<typeof useLiveMatch>;
   roster: PlayerRow[];
   opponent: string | null;
+  /** Mínimo de convocados esperado pro Formato de Jogo deste jogo — null = sem aviso configurado (specs/007-convocados-sync/ US3). */
+  minConvocados: number | null;
   onConfirm: () => void;
 }
 
-export function PreMatch({ live, roster, opponent, onConfirm }: Props) {
+export function PreMatch({ live, roster, opponent, minConvocados, onConfirm }: Props) {
   const { state } = live;
   const convocados = roster.filter((p) => state.convocadoIds.includes(p.id));
+  const abaixoDoMinimo = minConvocados != null && convocados.length < minConvocados;
 
   return (
     <div>
       <h2 style={{ fontSize: 18 }}>Pré-jogo{opponent ? ` — vs ${opponent}` : ""}</h2>
 
       <h3 className="section-title" style={{ marginTop: 20 }}>Convocados ({convocados.length})</h3>
+      {abaixoDoMinimo && (
+        <p className="banner warn">
+          Só {convocados.length} convocado{convocados.length === 1 ? "" : "s"} — o habitual pra este formato é pelo
+          menos {minConvocados}. Pode continuar mesmo assim.
+        </p>
+      )}
       <div className="pgrid">
         {roster.map((p) => {
           const checked = state.convocadoIds.includes(p.id);

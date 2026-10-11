@@ -201,27 +201,32 @@ contagem ficar abaixo do mínimo configurado pro Formato de Jogo daquele jogo.
 
 ### Implementation for User Story 3
 
-- [ ] T012 [US3] Migração `supabase/migrations/0025_match_format_min_convocados.sql`:
+- [X] T012 [US3] Migração `supabase/migrations/0025_match_format_min_convocados.sql`:
       `alter table match_formats add column min_convocados int;` (nullable, sem
-      CHECK — ver data-model.md). Não aplicar sozinho — fica pendente de o
-      treinador rodar no SQL Editor do Supabase, mesmo processo já estabelecido
-      nas migrações anteriores (ver T018).
-- [ ] T013 [US3] Estender `apps/web/src/team/useMatchFormats.ts`: adicionar
-      `minConvocados: number | null` a `MatchFormatRow`/`NewMatchFormat`, incluir
-      `min_convocados` no `select`/`insert`, e criar `updateFormat(id, patch)` —
-      não existe NENHUMA forma de editar um formato já criado hoje (hoje só há
-      `addFormat`/`setDefault`), necessário pra formatos já em uso (ex.: "SUB-15
-      DIVISÃO ELITE", já usado em jogos reais) poderem ganhar um mínimo. Depende de
-      T012.
-- [ ] T014 [US3] Estender `apps/web/src/team/MatchFormats.tsx`: campo "Mín.
-      convocados (opcional)" no formulário de criar formato, E uma affordance de
-      EDITAR um formato já existente (hoje só lista + "Tornar padrão") usando
-      `updateFormat` de T013. Depende de T013.
-- [ ] T015 [US3] Em `apps/web/src/match/PreMatch.tsx`: aviso não-bloqueante quando
-      `convocados.length < format.minConvocados` (só quando `minConvocados` não é
-      `null` — FR-013); desaparece sozinho assim que a contagem atinge o mínimo,
-      sem estado extra (reage direto a `convocados.length`). Depende de T013.
-- [ ] T016 [US3] Verificação manual: Cenário 3 de `quickstart.md`.
+      CHECK — ver data-model.md). Aplicada pelo treinador no SQL Editor do Supabase,
+      mesmo processo já estabelecido nas migrações anteriores.
+- [X] T013 [US3] Estendido `apps/web/src/team/useMatchFormats.ts`: `minConvocados:
+      number | null` em `MatchFormatRow`/`NewMatchFormat`, incluído no
+      `select`/`insert`, e `updateFormat(id, input)` novo — não existia NENHUMA
+      forma de editar um formato já criado (só `addFormat`/`setDefault`).
+- [X] T014 [US3] Estendido `apps/web/src/team/MatchFormats.tsx`: campo "Mín.
+      convocados" (`placeholder="opcional"`) no formulário; `editingId` novo faz o
+      MESMO formulário servir pra criar OU editar (botão "Editar" por linha,
+      "Guardar"/"Cancelar" em modo de edição) — reaproveita `updateFormat` de T013.
+- [X] T015 [US3] Em `apps/web/src/match/PreMatch.tsx`: aviso não-bloqueante
+      (`banner warn`) quando `convocados.length < minConvocados` (só quando não é
+      `null` — FR-013), reage direto a `convocados.length` sem estado extra.
+      `minConvocados` precisou subir até `PreMatch` através de `MatchFlow.tsx` (que
+      já calcula `format` a partir de `formats.find(...)`, mas esse valor é tipado
+      `engine.MatchFormat`, sem `minConvocados` — passado como prop separada,
+      `matchingFormat?.minConvocados ?? null`).
+- [X] T016 [US3] Verificação manual: Cenário 3 de `quickstart.md`, contra um jogo
+      de teste novo (`teste6`, scheduled). Editei "SUB-15 DIVISÃO ELITE" (formato já
+      em uso, inclusive no jogo real de ontem) pra mínimo 12 — confirmei que
+      `MatchFormats.tsx` mostra "2×30 min · mín. 12 convocados". Com 0-11
+      convocados marcados, o aviso "Só N convocados — o habitual pra este formato é
+      pelo menos 12. Pode continuar mesmo assim." apareceu; ao atingir 12, o aviso
+      desapareceu sozinho.
 
 **Checkpoint**: As 3 User Stories funcionam juntas.
 
@@ -229,20 +234,25 @@ contagem ficar abaixo do mínimo configurado pro Formato de Jogo daquele jogo.
 
 ## Phase 6: Polish & Cross-Cutting Concerns
 
-- [ ] T017 [P] Atualizar `docs/ARCHITECTURE.md` (Princípio VI) — documentar que
-      convocados/titulares agora são event-sourced via `match_events` (não mais só
-      `localStorage`), com merge entre aparelhos por "última ação vence" (`ts`) —
-      ver research.md Decisões 1-3.
-- [ ] T018 Pedir ao treinador pra aplicar a migração `0025` manualmente no SQL
-      Editor do Supabase (mesmo processo já estabelecido nas migrações anteriores
-      desta sessão/projeto) — nunca aplicada automaticamente.
-- [ ] T019 Rodar os Portões de Qualidade da constituição antes do push:
-      `npm test --workspace packages/engine`, `npx tsc --noEmit -p apps/web`,
-      `npm run build --workspace apps/web`.
-- [ ] T020 Regressão: secção "Regressão" de `quickstart.md` — um jogo pré-existente
-      (sem nenhum evento `convocado_*`/`titular_*`, seleção feita do jeito antigo)
-      continua a abrir sem quebrar (lista de convocados fica vazia nesse caso, que
-      já é o comportamento aceito hoje pra um jogo começado do zero).
+- [X] T017 [P] Atualizado `docs/ARCHITECTURE.md` (Princípio VI) — nova secção
+      "Seleção de convocados/titulares — também event-sourced, mas separada do
+      registo de jogo", logo depois de "Registo de jogo — event-sourced". Feito
+      durante a Foundational/US1 (commit `e1a19c7`), não adiado pro fim — gate 5 da
+      constituição exige o documento atualizado ANTES do push que já alterava
+      arquitetura, não só no fim de toda a feature.
+- [X] T018 Migração `0025` aplicada pelo treinador no SQL Editor do Supabase,
+      confirmada antes de iniciar a verificação manual da US3.
+- [X] T019 Portões de Qualidade rodados repetidamente ao longo da implementação
+      (a cada fase) e uma última vez no fim: `npm test --workspace packages/engine`
+      (167 testes), `npx tsc --noEmit -p apps/web`, `npm run build --workspace
+      apps/web` — todos limpos.
+- [X] T020 Regressão verificada contra um jogo REAL pré-existente (AD Modicus
+      Sandim, 10/10/2026 — o próprio jogo do incidente que motivou esta spec,
+      jogado antes desta feature existir, sem nenhum evento `convocado_*`/
+      `titular_*`). Abri só pra leitura (sem registar nenhuma ação nova): os 16
+      eventos reais, placar (4-0), convocados (5 em quadra + 4 no banco) e registo
+      cronológico reconstruíram corretamente via o heurístico já existente em
+      `checkRemote` — nada regrediu pra jogos de antes desta feature.
 
 ---
 
