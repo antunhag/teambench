@@ -172,14 +172,20 @@ que não estava nos convocados originais, a qualquer momento.
 
 ### Implementation for User Story 2
 
-- [ ] T010 [US2] Em `apps/web/src/match/LiveMatch.tsx`: botão "+ Chamar atleta"
-      perto do cabeçalho "Banco", abrindo um seletor sobre
-      `roster.filter(p => !state.convocadoIds.includes(p.id))` — ao escolher um
-      atleta, chama `live.toggleConvocado(id)` (já produz e sincroniza o evento
-      certo desde a Foundational, funciona sem guarda de `started` desde sempre).
-      Mesmo padrão visual dos pickers já existentes neste ficheiro (ex.: escolher
-      quem sai pra entrar). Depende de T006, T007.
-- [ ] T011 [US2] Verificação manual: Cenário 2 de `quickstart.md`.
+- [X] T010 [US2] Em `apps/web/src/match/LiveMatch.tsx`: botão "+ Chamar atleta"
+      perto do cabeçalho "Banco", abrindo um novo tipo de `Picker`
+      (`add-convocado`, mesmo padrão de `Sheet`/`PlayerChip` já usado pelos
+      outros pickers) sobre `roster.filter(p => !state.convocadoIds.includes(p.id))`
+      — ao escolher um atleta, chama `live.toggleConvocado(id)` (já produz e
+      sincroniza o evento certo desde a Foundational, funciona sem guarda de
+      `started` desde sempre).
+- [X] T011 [US2] Verificação manual: Cenário 2 de `quickstart.md`, contra o
+      jogo de teste `teste5` já em curso. Chamei Rayan (não convocado
+      originalmente) ao banco mid-jogo — apareceu em "Banco" imediatamente,
+      "Registo" continuou mostrando só 1 evento (kickoff, nenhuma poluição).
+      Fiz uma substituição de verdade trazendo Rayan pra quadra (saiu Felipe)
+      — registada normalmente ("Registo (2)"), sem nenhum passo extra de
+      correção.
 
 **Checkpoint**: User Stories 1 e 2 funcionam juntas — o cenário completo do
 incidente real (seleção incompleta + impossível adicionar depois) está coberto.

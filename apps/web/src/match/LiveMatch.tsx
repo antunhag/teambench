@@ -49,6 +49,7 @@ type Picker =
   | { kind: "sub-out"; openedAtMs: number } // atalho da barra: escolher primeiro quem sai
   | { kind: "sub-in"; outId: string; openedAtMs: number } // escolher quem entra, já sabendo quem sai
   | { kind: "sub-out-for-entry"; inId: string; openedAtMs: number } // banco cheio: escolher quem sai para este entrar
+  | { kind: "add-convocado" } // specs/007-convocados-sync/ US2 — chamar ao banco alguém que não estava nos convocados
   | null;
 
 /**
@@ -471,7 +472,12 @@ export function LiveMatch({ live, roster, opponent, onViewSummary, ourLabel }: P
         ))}
       </div>
 
-      <h3 className="section-title" style={{ marginTop: 16 }}>Banco ({bench.length})</h3>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginTop: 16 }}>
+        <h3 className="section-title" style={{ marginTop: 0 }}>Banco ({bench.length})</h3>
+        <button type="button" className="btn sm ghost" onClick={() => setPicker({ kind: "add-convocado" })}>
+          + Chamar atleta
+        </button>
+      </div>
       <p className="hint" style={{ marginTop: 0 }}>Toca para entrar em quadra.</p>
       <div className="pgrid">
         {bench.map((p) => (
@@ -806,6 +812,25 @@ export function LiveMatch({ live, roster, opponent, onViewSummary, ourLabel }: P
                 }}
               />
             ))}
+          </div>
+        </Sheet>
+      )}
+
+      {picker?.kind === "add-convocado" && (
+        <Sheet title="Chamar atleta ao banco" sub="Quem não estava nos convocados antes do apito — passa a poder entrar a partir de agora" onClose={() => setPicker(null)}>
+          <div className="pgrid">
+            {roster
+              .filter((p) => !state.convocadoIds.includes(p.id))
+              .map((p) => (
+                <PlayerChip
+                  key={p.id}
+                  p={p}
+                  onClick={() => {
+                    live.toggleConvocado(p.id);
+                    setPicker(null);
+                  }}
+                />
+              ))}
           </div>
         </Sheet>
       )}
