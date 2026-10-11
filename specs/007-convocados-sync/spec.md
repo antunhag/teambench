@@ -41,6 +41,22 @@ Durante o jogo ao vivo, o treinador percebe que precisa de um atleta que não fi
 
 ---
 
+### User Story 3 - Aviso de poucos convocados (Priority: P3)
+
+Ao marcar os convocados antes do jogo, se o treinador tiver marcado menos atletas do que o mínimo esperado pro formato daquele jogo, o sistema avisa — dando a chance de reparar no esquecimento antes do apito, em vez de só descobrir a falta a meio do jogo (como aconteceu no incidente real).
+
+**Why this priority**: É um complemento às User Stories 1 e 2, não uma substituição — mesmo com a seleção bem guardada (US1) e a possibilidade de adicionar alguém depois (US2), continua a valer a pena avisar cedo quando a contagem está visivelmente abaixo do normal, porque US1/US2 resolvem a perda técnica da seleção, mas não um esquecimento genuíno do treinador ao marcar.
+
+**Independent Test**: Configurar um mínimo de convocados para um Formato de Jogo, marcar menos atletas do que esse mínimo num jogo desse formato, e confirmar que aparece um aviso antes do apito — e que marcar o suficiente faz o aviso desaparecer.
+
+**Acceptance Scenarios**:
+
+1. **Given** um Formato de Jogo com um mínimo de convocados configurado, **When** o treinador marca menos atletas como convocados do que esse mínimo, **Then** vê um aviso claro antes de poder dar o apito (sem ser bloqueado — o treinador pode avançar mesmo assim, é só um alerta).
+2. **Given** o aviso de poucos convocados visível, **When** o treinador marca mais um atleta e atinge o mínimo, **Then** o aviso desaparece automaticamente.
+3. **Given** um Formato de Jogo sem mínimo configurado, **When** o treinador marca convocados num jogo desse formato, **Then** nenhum aviso de contagem aparece — o aviso só é mostrado quando um mínimo foi explicitamente definido.
+
+---
+
 ### Edge Cases
 
 - Dois aparelhos/sessões diferentes marcam convocados no mesmo jogo ao mesmo tempo (ex.: treinador principal e assistente, cada um no seu telemóvel) antes do apito — a última marcação a chegar não pode apagar silenciosamente as marcações feitas no outro aparelho entretanto.
@@ -62,12 +78,16 @@ Durante o jogo ao vivo, o treinador percebe que precisa de um atleta que não fi
 - **FR-008**: Adicionar um atleta ao banco depois do apito MUST ser uma ação direta, sem exigir confirmação adicional — mesmo nível de fricção que marcar um convocado antes do jogo, já que o cenário típico é sob pressão de tempo durante o jogo.
 - **FR-009**: Esta entrega NÃO precisa de incluir nenhuma forma de retomar ou encerrar formalmente jogos que ficaram "presos" sem nunca terem sido fechados (como o jogo de ontem) — fica fora de escopo, é só prevenção daqui pra frente. Um jogo que ficou preso por este motivo específico deixa de poder acontecer com FR-001 a FR-006 implementados; casos residuais ficam para uma entrega futura, se necessário.
 - **FR-010**: Quando duas sessões diferentes marcam convocados no mesmo jogo por volta do mesmo momento (ex.: dois aparelhos do mesmo treinador, ou treinador principal e assistente), o sistema MUST combinar as marcações em vez de uma sobrescrever silenciosamente a outra — nenhuma marcação feita por uma sessão pode desaparecer só porque outra sessão também gravou por perto.
+- **FR-011**: O sistema MUST permitir configurar, por Formato de Jogo, um número mínimo de convocados esperado — reaproveitando a configuração de formato já existente (onde hoje já vivem período/duração), em vez de criar um conceito novo de "competição".
+- **FR-012**: Quando a contagem de convocados marcados for menor que o mínimo configurado pro formato daquele jogo, o sistema MUST mostrar um aviso visível antes do apito — sem bloquear o treinador de avançar mesmo assim, já que pode ser intencional (ex.: equipa com menos atletas disponíveis naquele dia).
+- **FR-013**: Se o Formato de Jogo não tiver um mínimo configurado, o sistema MUST NOT mostrar nenhum aviso de contagem — o aviso é sempre opt-in, nunca um valor por defeito imposto.
 
 ### Key Entities *(include if feature involves data)*
 
 - **Seleção de convocados do jogo**: quem está disponível para jogar numa partida específica — hoje existe só como estado temporário num aparelho, não é um registo que sobrevive entre sessões ou aparelhos.
 - **Titulares**: subconjunto dos convocados que começa o jogo em quadra — continua fixo assim que o apito é dado, sem mudança nesta entrega.
 - **Jogo (partida)**: já existe hoje; passa a ser o ponto de referência único de onde a seleção de convocados é lida/guardada, em vez de viver presa a um aparelho.
+- **Formato de Jogo**: já existe hoje (período, duração); ganha um número mínimo de convocados esperado, opcional, usado só pelo aviso da User Story 3.
 
 ## Success Criteria *(mandatory)*
 
@@ -76,9 +96,11 @@ Durante o jogo ao vivo, o treinador percebe que precisa de um atleta que não fi
 - **SC-001**: Um treinador que marca convocados num aparelho e reabre o mesmo jogo noutro aparelho (ou depois de reiniciar a app) vê 100% da seleção preservada, nunca uma lista vazia.
 - **SC-002**: Zero jogos precisam de ser abandonados a meio (registo interrompido) por falta de um atleta disponível na lista de convocados — qualquer atleta do plantel pode ser chamado ao banco a qualquer momento do jogo.
 - **SC-003**: Adicionar um atleta ao banco durante o jogo ao vivo leva menos de 10 segundos, sem sair da tela de acompanhamento ao vivo.
+- **SC-004**: Num formato de jogo com mínimo configurado, 100% dos jogos que chegam ao apito com convocados abaixo desse mínimo mostraram o aviso antes de o apito ser possível.
 
 ## Assumptions
 
 - O plantel da equipa (lista completa de atletas) já existe e está acessível durante o jogo ao vivo — esta entrega só muda quem, dentro desse plantel, está marcado como disponível para a partida específica.
 - Esta entrega não cobre retroativamente jogos já encerrados ou já perdidos por este bug (como o jogo de ontem vs. AD Modicus Sandim) — o treinador confirmou explicitamente que não quer correção de dados históricos, só prevenção.
 - A lista de titulares (quem começa a jogar) permanece fixa depois do apito, exatamente como hoje — esta entrega não introduz nenhuma forma de trocar titulares retroativamente.
+- Um número **máximo** de atletas convocados e um máximo de pessoas no banco (regras de competição, ex.: limite da federação) ficam fora desta entrega — ideia levantada durante a definição do spec, mas sem uso concreto ainda planeado; fica em backlog até haver necessidade clara de validar/bloquear por um teto, em vez de só avisar por um mínimo.
