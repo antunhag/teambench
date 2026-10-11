@@ -33,6 +33,7 @@ export function useLiveMatchPoint(matchId: string, format: engine.MatchFormat, e
         .from("match_events")
         .select("payload")
         .eq("match_id", matchId)
+        .not("type", "in", `(${(engine.SQUAD_EVENT_TYPES as string[]).join(",")})`)
         .order("period", { ascending: true })
         .order("ms", { ascending: true });
       if (cancelled || error || !data || data.length === 0) return;

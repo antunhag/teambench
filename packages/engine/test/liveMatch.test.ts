@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   createLiveMatchState,
+  deriveConvocadoIds,
+  deriveTitularIds,
   doCard,
   doEnter,
   doFoul,
@@ -22,7 +24,7 @@ import {
   toggleConvocado,
   toggleTitular,
 } from "../src/liveMatch";
-import type { MatchFormat } from "../src/types";
+import type { MatchEvent, MatchFormat } from "../src/types";
 
 // Mesmos dois atletas do incidente real (rows.test.ts), usados aqui para
 // confirmar que a orquestração completa do jogo também os mantém separados.
@@ -38,36 +40,104 @@ const COM_PROLONGAMENTO: MatchFormat = { periodCount: 2, periodMinutes: 25, over
 describe("liveMatch — fluxo pré-jogo", () => {
   it("toggleConvocado adiciona e remove", () => {
     let s = createLiveMatchState();
-    s = toggleConvocado(s, salvador);
+    s = toggleConvocado(s, salvador, 0);
     expect(s.convocadoIds).toEqual([salvador]);
-    s = toggleConvocado(s, salvador);
+    s = toggleConvocado(s, salvador, 0);
     expect(s.convocadoIds).toEqual([]);
   });
 
   it("toggleTitular respeita o limite de 5 em quadra", () => {
     let s = createLiveMatchState(["p1", "p2", "p3", "p4", "p5", "p6"]);
-    ["p1", "p2", "p3", "p4", "p5"].forEach((id) => (s = toggleTitular(s, id)));
+    ["p1", "p2", "p3", "p4", "p5"].forEach((id) => (s = toggleTitular(s, id, 0)));
     expect(s.onCourt).toHaveLength(5);
-    s = toggleTitular(s, "p6"); // sexto não entra
+    s = toggleTitular(s, "p6", 0); // sexto não entra
     expect(s.onCourt).toHaveLength(5);
   });
 
   it("depois de started=true, toggleTitular não faz nada (usa-se substituição)", () => {
     let s = createLiveMatchState([salvador]);
-    s = toggleTitular(s, salvador);
+    s = toggleTitular(s, salvador, 0);
     s = goLive(s);
     s = resumeOrStart(s, 0);
     const before = s.onCourt;
-    s = toggleTitular(s, joao);
+    s = toggleTitular(s, joao, 0);
     expect(s.onCourt).toBe(before);
+  });
+
+  it("toggleConvocado funciona com state.started tanto false quanto true — nunca teve essa guarda", () => {
+    let s = createLiveMatchState([salvador]);
+    s = toggleTitular(s, salvador, 0);
+    s = goLive(s);
+    s = resumeOrStart(s, 0);
+    expect(s.started).toBe(true);
+    s = toggleConvocado(s, joao, 1_000); // specs/007-convocados-sync/ US2 — chamar atleta depois do apito
+    expect(s.convocadoIds).toContain(joao);
+  });
+
+  it("toggleConvocado/toggleTitular acrescentam exatamente 1 evento do tipo certo a squadEvents, nunca a events", () => {
+    let s = createLiveMatchState();
+    s = toggleConvocado(s, salvador, 100);
+    expect(s.squadEvents.map((e) => e.type)).toEqual(["convocado_add"]);
+    expect(s.events).toEqual([]); // nunca polui a lista de ações em quadra (ver research.md Decisão 3)
+    s = toggleConvocado(s, salvador, 200);
+    expect(s.squadEvents.map((e) => e.type)).toEqual(["convocado_add", "convocado_remove"]);
+    s = toggleTitular(s, salvador, 300);
+    expect(s.squadEvents.at(-1)?.type).toBe("titular_add");
+    expect(s.events).toEqual([]);
+  });
+});
+
+describe("liveMatch — deriveConvocadoIds/deriveTitularIds (specs/007-convocados-sync/ research.md Decisão 2)", () => {
+  function ev(type: MatchEvent["type"], playerId: string, ts: number): MatchEvent {
+    return { id: `${type}-${playerId}-${ts}`, type, playerId, ms: 0, min: 0, sec: 0, period: 1, ts };
+  }
+
+  it("lista vazia devolve []", () => {
+    expect(deriveConvocadoIds([])).toEqual([]);
+    expect(deriveTitularIds([])).toEqual([]);
+  });
+
+  it("add seguido de remove do mesmo atleta remove", () => {
+    const events = [ev("convocado_add", salvador, 1), ev("convocado_remove", salvador, 2)];
+    expect(deriveConvocadoIds(events)).toEqual([]);
+  });
+
+  it("remove seguido de add do mesmo atleta adiciona", () => {
+    const events = [ev("convocado_remove", salvador, 1), ev("convocado_add", salvador, 2)];
+    expect(deriveConvocadoIds(events)).toEqual([salvador]);
+  });
+
+  it("eventos de outros tipos (inclusive titular) são ignorados por deriveConvocadoIds", () => {
+    const events = [ev("convocado_add", salvador, 1), ev("titular_add", joao, 2), ev("golo", salvador, 3)];
+    expect(deriveConvocadoIds(events)).toEqual([salvador]);
+  });
+
+  it("a ordem no ARRAY não importa — só o ts mais recente vence, mesmo fora de ordem (merge entre aparelhos)", () => {
+    // Simula 2 aparelhos: um adicionou salvador (ts=10) e depois outro removeu (ts=5, só chegou depois
+    // via sincronização, mas é cronologicamente ANTERIOR) — o merge tem de obedecer ao ts, não à ordem de chegada.
+    const foraDeOrdem = [ev("convocado_remove", salvador, 5), ev("convocado_add", salvador, 10)];
+    expect(deriveConvocadoIds(foraDeOrdem)).toEqual([salvador]); // o add (ts=10) é o mais recente, vence
+
+    const foraDeOrdem2 = [ev("convocado_add", salvador, 10), ev("convocado_remove", salvador, 5)];
+    expect(deriveConvocadoIds(foraDeOrdem2)).toEqual([salvador]); // mesmo resultado, independente da ordem no array
+  });
+
+  it("ts empatado: o evento mais tarde no array vence (mesmo aparelho, mesma sequência local)", () => {
+    const events = [ev("convocado_add", salvador, 0), ev("convocado_remove", salvador, 0)];
+    expect(deriveConvocadoIds(events)).toEqual([]);
+  });
+
+  it("deriveTitularIds segue a mesma regra, independente de deriveConvocadoIds", () => {
+    const events = [ev("titular_add", salvador, 1), ev("convocado_remove", salvador, 2)];
+    expect(deriveTitularIds(events)).toEqual([salvador]); // convocado_remove não afeta titularIds
   });
 });
 
 describe("liveMatch — relógio, golos, cartões", () => {
   it("resumeOrStart regista kickoff e começa a contar tempo para quem está em campo", () => {
     let s = createLiveMatchState([salvador, guarda]);
-    s = toggleTitular(s, salvador);
-    s = toggleTitular(s, guarda);
+    s = toggleTitular(s, salvador, 0);
+    s = toggleTitular(s, guarda, 0);
     s = goLive(s);
     s = resumeOrStart(s, 1_000);
     expect(s.clock.running).toBe(true);
@@ -77,8 +147,8 @@ describe("liveMatch — relógio, golos, cartões", () => {
 
   it("titularIdsFromEvents reconstrói os titulares do kickoff da parte 1, mesmo sem golos", () => {
     let s = createLiveMatchState([salvador, guarda]);
-    s = toggleTitular(s, salvador);
-    s = toggleTitular(s, guarda);
+    s = toggleTitular(s, salvador, 0);
+    s = toggleTitular(s, guarda, 0);
     s = goLive(s);
     s = resumeOrStart(s, 0); // kickoff da parte 1 — sem nenhum golo no jogo
     s = pause(s, 10_000, "Pedido de Tempo — Nós", "tempo_nos");
@@ -88,7 +158,7 @@ describe("liveMatch — relógio, golos, cartões", () => {
 
   it("timeoutUsedInPeriod reconhece o pedido de tempo já feito na parte, e reseta na parte seguinte", () => {
     let s = createLiveMatchState([salvador]);
-    s = toggleTitular(s, salvador);
+    s = toggleTitular(s, salvador, 0);
     s = goLive(s);
     s = resumeOrStart(s, 0);
     expect(timeoutUsedInPeriod(s.events, 1, "tempo_nos")).toBe(false);
@@ -106,7 +176,7 @@ describe("liveMatch — relógio, golos, cartões", () => {
 
   it("pause NÃO para o relógio — só marca o início; endPause desconta o tempo em quadra", () => {
     let s = createLiveMatchState([salvador]);
-    s = toggleTitular(s, salvador);
+    s = toggleTitular(s, salvador, 0);
     s = goLive(s);
     s = resumeOrStart(s, 0);
     s = pause(s, 30_000, "Pedido de Tempo — Nós", "tempo_nos");
@@ -124,7 +194,7 @@ describe("liveMatch — relógio, golos, cartões", () => {
 
   it("endPause é idempotente sem pausa em curso, e endPeriod fecha sozinho uma pausa esquecida aberta", () => {
     let s = createLiveMatchState([salvador]);
-    s = toggleTitular(s, salvador);
+    s = toggleTitular(s, salvador, 0);
     s = goLive(s);
     s = resumeOrStart(s, 0);
     const before = s;
@@ -141,7 +211,7 @@ describe("liveMatch — relógio, golos, cartões", () => {
 
   it("doGoal e doOppGoal recalculam o placar a partir dos eventos", () => {
     let s = createLiveMatchState([salvador]);
-    s = toggleTitular(s, salvador);
+    s = toggleTitular(s, salvador, 0);
     s = goLive(s);
     s = resumeOrStart(s, 0);
     s = doGoal(s, salvador, null, 5_000);
@@ -155,8 +225,8 @@ describe("liveMatch — relógio, golos, cartões", () => {
       "corretamente cada um ao seu próprio id, mesmo com o mesmo número de exibição",
     () => {
       let s = createLiveMatchState([salvador, joao]);
-      s = toggleTitular(s, salvador);
-      s = toggleTitular(s, joao);
+      s = toggleTitular(s, salvador, 0);
+      s = toggleTitular(s, joao, 0);
       s = goLive(s);
       s = resumeOrStart(s, 0);
       s = doGoal(s, salvador, joao, 10_000); // Salvador marca, João assiste
@@ -171,8 +241,8 @@ describe("liveMatch — relógio, golos, cartões", () => {
 
   it("cartão vermelho tira o atleta de campo e assenta o tempo dele; amarelo não tira", () => {
     let s = createLiveMatchState([salvador, joao]);
-    s = toggleTitular(s, salvador);
-    s = toggleTitular(s, joao);
+    s = toggleTitular(s, salvador, 0);
+    s = toggleTitular(s, joao, 0);
     s = goLive(s);
     s = resumeOrStart(s, 0);
     s = doCard(s, joao, "amarelo", 5_000);
@@ -186,7 +256,7 @@ describe("liveMatch — relógio, golos, cartões", () => {
 
   it("doFoul incrementa periodFouls e regista o evento", () => {
     let s = createLiveMatchState([salvador]);
-    s = toggleTitular(s, salvador);
+    s = toggleTitular(s, salvador, 0);
     s = goLive(s);
     s = resumeOrStart(s, 0);
     s = doFoul(s, salvador, 1_000);
@@ -196,7 +266,7 @@ describe("liveMatch — relógio, golos, cartões", () => {
 
   it("doFoulSuffered incrementa periodFoulsAdvers, separado de periodFouls", () => {
     let s = createLiveMatchState([salvador]);
-    s = toggleTitular(s, salvador);
+    s = toggleTitular(s, salvador, 0);
     s = goLive(s);
     s = resumeOrStart(s, 0);
     s = doFoul(s, salvador, 1_000);
@@ -209,7 +279,7 @@ describe("liveMatch — relógio, golos, cartões", () => {
 
   it("endPeriod reinicia periodFouls e periodFoulsAdvers para a parte seguinte", () => {
     let s = createLiveMatchState([salvador]);
-    s = toggleTitular(s, salvador);
+    s = toggleTitular(s, salvador, 0);
     s = goLive(s);
     s = resumeOrStart(s, 0);
     s = doFoul(s, salvador, 1_000);
@@ -224,7 +294,7 @@ describe("liveMatch — relógio, golos, cartões", () => {
 
   it("doEnter põe um jogador em campo sem ninguém sair, só se houver vaga (<5)", () => {
     let s = createLiveMatchState([salvador, joao]);
-    s = toggleTitular(s, salvador);
+    s = toggleTitular(s, salvador, 0);
     s = goLive(s);
     s = resumeOrStart(s, 0);
     s = doEnter(s, joao, 10_000);
@@ -233,7 +303,7 @@ describe("liveMatch — relógio, golos, cartões", () => {
 
     // com 5 em campo, doEnter não faz nada
     let full = createLiveMatchState(["p1", "p2", "p3", "p4", "p5", "p6"]);
-    ["p1", "p2", "p3", "p4", "p5"].forEach((id) => (full = toggleTitular(full, id)));
+    ["p1", "p2", "p3", "p4", "p5"].forEach((id) => (full = toggleTitular(full, id, 0)));
     full = goLive(full);
     full = resumeOrStart(full, 0);
     const before = full.onCourt;
@@ -243,7 +313,7 @@ describe("liveMatch — relógio, golos, cartões", () => {
 
   it("substituição assenta o tempo de quem sai e começa a contar para quem entra", () => {
     let s = createLiveMatchState([salvador, suplente]);
-    s = toggleTitular(s, salvador);
+    s = toggleTitular(s, salvador, 0);
     s = goLive(s);
     s = resumeOrStart(s, 0);
     s = doSub(s, salvador, suplente, 15_000);
@@ -258,7 +328,7 @@ describe("liveMatch — relógio, golos, cartões", () => {
       "volta a entrar depois de já ter saído.",
     () => {
       let s = createLiveMatchState([salvador, suplente]);
-      s = toggleTitular(s, salvador);
+      s = toggleTitular(s, salvador, 0);
       s = goLive(s);
       s = resumeOrStart(s, 0);
       s = doSub(s, salvador, suplente, 15_000); // salvador joga 15s, sai; suplente entra
@@ -273,7 +343,7 @@ describe("liveMatch — relógio, golos, cartões", () => {
 
   it("atendimento (lesão) regista início e fim com a duração certa (tempo de jogo, relógio a correr)", () => {
     let s = createLiveMatchState([salvador]);
-    s = toggleTitular(s, salvador);
+    s = toggleTitular(s, salvador, 0);
     s = goLive(s);
     s = resumeOrStart(s, 0); // relógio de jogo começa a correr a partir de nowMs=0
     s = startTreatment(s, salvador, 5_000);
@@ -287,7 +357,7 @@ describe("liveMatch — relógio, golos, cartões", () => {
 describe("liveMatch — fim de parte", () => {
   it("endPeriod assenta o tempo, zera o relógio e avança a parte (ainda não é a última)", () => {
     let s = createLiveMatchState([salvador]);
-    s = toggleTitular(s, salvador);
+    s = toggleTitular(s, salvador, 0);
     s = goLive(s);
     s = resumeOrStart(s, 0);
     s = endPeriod(s, SUB15, 600_000); // 10 min de parte, formato de 2 partes
@@ -301,7 +371,7 @@ describe("liveMatch — fim de parte", () => {
   it("cinco em quadra o tempo todo: soma dos minutos bate com 5× a duração da parte", () => {
     const ids = ["p1", "p2", "p3", "p4", "p5"];
     let s = createLiveMatchState(ids);
-    ids.forEach((id) => (s = toggleTitular(s, id)));
+    ids.forEach((id) => (s = toggleTitular(s, id, 0)));
     s = goLive(s);
     s = resumeOrStart(s, 0);
     const durMs = 300_000; // 5 minutos
@@ -315,7 +385,7 @@ describe("liveMatch — fim de parte", () => {
       "não avança para uma 3ª parte indefinidamente. Cada escalão/equipa respeita o seu próprio period_count.",
     () => {
       let s = createLiveMatchState([salvador]);
-      s = toggleTitular(s, salvador);
+      s = toggleTitular(s, salvador, 0);
       s = goLive(s);
       s = resumeOrStart(s, 0);
       s = endPeriod(s, SUB15, 1_500_000); // fim da 1ª parte (25 min)
@@ -329,7 +399,7 @@ describe("liveMatch — fim de parte", () => {
 
       // Sub-13 com partes mais curtas também respeita o SEU period_count (2), não um valor global fixo.
       let s13 = createLiveMatchState([salvador]);
-      s13 = toggleTitular(s13, salvador);
+      s13 = toggleTitular(s13, salvador, 0);
       s13 = goLive(s13);
       s13 = resumeOrStart(s13, 0);
       s13 = endPeriod(s13, SUB13, 1_200_000);
@@ -341,7 +411,7 @@ describe("liveMatch — fim de parte", () => {
 
   it("com prolongamento configurado, terminar a 2ª parte NÃO termina o jogo — só a última parte do prolongamento termina", () => {
     let s = createLiveMatchState([salvador]);
-    s = toggleTitular(s, salvador);
+    s = toggleTitular(s, salvador, 0);
     s = goLive(s);
     s = resumeOrStart(s, 0);
     s = endPeriod(s, COM_PROLONGAMENTO, 1_500_000); // fim da 1ª parte

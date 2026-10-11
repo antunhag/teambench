@@ -87,6 +87,41 @@ registando localmente; sincroniza quando a rede volta, via `apps/web/src/sync/`)
 e o que torna possível reconstruir a Timeline/Resumo de forma consistente mesmo
 depois de correções feitas noutro aparelho.
 
+### Seleção de convocados/titulares — também event-sourced, mas separada do registo de jogo
+
+A lista de convocados (quem está disponível pra jogar) e titulares (cinco
+inicial), marcada antes do apito em `PreMatch.tsx`, segue o MESMO pipeline
+de sincronização do resto (fila local + `match_events`, ver acima) — mas
+antes da `specs/007-convocados-sync/` vivia só em `localStorage`, nunca
+sincronizada, causa raiz de um incidente real (treinador perdeu parte da
+seleção ao trocar de aparelho sob pressão de tempo, e depois não tinha
+como adicionar um atleta em falta já com o jogo a decorrer).
+
+A correção: 4 tipos de evento novos (`convocado_add`/`convocado_remove`/
+`titular_add`/`titular_remove`, `packages/engine/src/types.ts`), que
+passam pela MESMA fila de sincronização (`apps/web/src/sync/outbox.ts`)
+já usada por golo/cartão/substituição — nenhuma tabela nova. A diferença
+central pro resto do registo: estes 4 tipos vivem num campo PRÓPRIO,
+`LiveMatchState.squadEvents`, separado de `LiveMatchState.events`
+(ações em quadra) — nunca misturados. Misturar exigiria filtrar em cerca
+de 10 sítios que leem `events` direto esperando só lances de jogo
+(timeline, registo cronológico, exportação) — separar por construção
+evita essa classe de bug inteira, em vez de só reduzir a chance. Qualquer
+consulta ao Supabase que alimente essas telas exclui os 4 tipos via a
+constante `SQUAD_EVENT_TYPES` (`types.ts`).
+
+Reconstrução do estado: `convocadoIds`/`onCourt` (pré-apito) são sempre uma
+PROJEÇÃO pura de `squadEvents` — "a ação com o `ts` mais recente vence, por
+atleta" (`deriveConvocadoIds`/`deriveTitularIds`), nunca reprodução de um
+toggle (que seria ambíguo sob reordenação concorrente entre aparelhos). Um
+efeito em `useLiveMatch.ts`, ativo só antes do apito, busca e funde
+periodicamente (~10s) os eventos de escalação que outro aparelho do MESMO
+utilizador já tenha sincronizado — mesmo padrão de poll só-leitura já usado
+por `useLiveMatchPoint.ts` (specs/006). Jogos de antes desta feature (sem
+nenhum `squadEvents`) continuam a funcionar pelo heurístico antigo (todo id
+que aparece em `playerId`/`outId`/`lineup` dos eventos de jogo já
+sincronizados) — nada regride.
+
 ### Trava de edição ao vivo
 
 Dois Lançadores de dados diferentes não podem registar o mesmo jogo ao mesmo

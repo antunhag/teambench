@@ -8,7 +8,7 @@ import { createClockAccounting, markOnSince, nowElapsedMs as clockNowElapsedMs, 
 import type { ClockState } from "./clock";
 import { createEvent, recomputeScoreFor } from "./events";
 import { isLastPeriod } from "./matchFormat";
-import type { ClockAccounting, MatchEvent, MatchFormat, Score } from "./types";
+import type { ClockAccounting, EventType, MatchEvent, MatchFormat, Score } from "./types";
 
 export interface Treatment {
   playerId: string;
@@ -28,6 +28,19 @@ export interface LiveMatchState {
   clock: ClockState;
   period: number;
   events: MatchEvent[];
+  /**
+   * Eventos de escalação (`convocado_add`/`remove`, `titular_add`/`remove` —
+   * ver `EventType`/`SQUAD_EVENT_TYPES` em types.ts) — separados de `events`
+   * de propósito: `events` é lido direto por várias funções puras e telas
+   * (describeEvents, buildTimelineData, foulsInPeriod, exportText, o
+   * registo cronológico da aba Registo...) que só esperam ações que
+   * aconteceram EM QUADRA. Misturar eventos de escalação ali exigiria
+   * filtrar em cada um desses lugares; mantê-los num campo à parte evita
+   * esse risco por construção (specs/007-convocados-sync/research.md
+   * Decisão 3). `convocadoIds`/`onCourt` continuam sendo a projeção já
+   * pronta destes eventos — ver `toggleConvocado`/`toggleTitular`.
+   */
+  squadEvents: MatchEvent[];
   score: Score;
   treatment: Treatment | null;
   /**
@@ -55,6 +68,7 @@ export function createLiveMatchState(convocadoIds: string[] = []): LiveMatchStat
     clock: { running: false, elapsedMs: 0, startTs: null },
     period: 1,
     events: [],
+    squadEvents: [],
     score: { nos: 0, advers: 0 },
     treatment: null,
     activePause: null,
@@ -71,21 +85,60 @@ export function matchElapsedMs(state: LiveMatchState, nowMs: number): number {
   return clockNowElapsedMs(state.clock, nowMs);
 }
 
-export function toggleConvocado(state: LiveMatchState, playerId: string): LiveMatchState {
-  const has = state.convocadoIds.includes(playerId);
-  return {
-    ...state,
-    convocadoIds: has ? state.convocadoIds.filter((id) => id !== playerId) : [...state.convocadoIds, playerId],
-  };
+/**
+ * Projeta `squadEvents` num conjunto de ids — pra cada atleta, vale a ação
+ * (`addType` ou `removeType`) do evento com o `ts` mais recente entre todos
+ * os conhecidos (local + mesclados de outro aparelho) — "última ação
+ * vence", nunca reprodução de um toggle (que seria ambíguo sob reordenação
+ * concorrente — ver specs/007-convocados-sync/research.md Decisão 2).
+ * Determinístico não importa a ordem em que os eventos chegam.
+ */
+function deriveMembership(events: MatchEvent[], addType: EventType, removeType: EventType): string[] {
+  const latest = new Map<string, { add: boolean; ts: number }>();
+  for (const e of events) {
+    if (e.type !== addType && e.type !== removeType) continue;
+    if (!e.playerId) continue;
+    const prev = latest.get(e.playerId);
+    if (!prev || e.ts >= prev.ts) {
+      latest.set(e.playerId, { add: e.type === addType, ts: e.ts });
+    }
+  }
+  return Array.from(latest.entries())
+    .filter(([, v]) => v.add)
+    .map(([id]) => id);
+}
+
+/** Convocados atuais, projetados de `squadEvents` — ver `deriveMembership`. */
+export function deriveConvocadoIds(events: MatchEvent[]): string[] {
+  return deriveMembership(events, "convocado_add", "convocado_remove");
+}
+
+/**
+ * Cinco inicial (pré-apito) atual, projetado de `squadEvents` — ver
+ * `deriveMembership`. Alimenta `state.onCourt` ANTES do apito; depois do
+ * apito, `onCourt` passa a ser gerido só por eventos reais de jogo
+ * (substituição, cartão vermelho — ver `goLive`/`doSub`), nunca mais por
+ * `squadEvents`.
+ */
+export function deriveTitularIds(events: MatchEvent[]): string[] {
+  return deriveMembership(events, "titular_add", "titular_remove");
+}
+
+export function toggleConvocado(state: LiveMatchState, playerId: string, nowMs: number): LiveMatchState {
+  const adding = !state.convocadoIds.includes(playerId);
+  const ev = createEvent(adding ? "convocado_add" : "convocado_remove", playerId, 0, state.period, nowMs);
+  const squadEvents = [...state.squadEvents, ev];
+  return { ...state, squadEvents, convocadoIds: deriveConvocadoIds(squadEvents) };
 }
 
 /** Só antes do jogo começar — depois de "started", troca de titular é sempre uma substituição registada. */
-export function toggleTitular(state: LiveMatchState, playerId: string): LiveMatchState {
+export function toggleTitular(state: LiveMatchState, playerId: string, nowMs: number): LiveMatchState {
   if (state.started) return state;
-  const has = state.onCourt.includes(playerId);
-  if (has) return { ...state, onCourt: state.onCourt.filter((id) => id !== playerId) };
-  if (state.onCourt.length >= 5) return state;
-  return { ...state, onCourt: [...state.onCourt, playerId] };
+  const adding = !state.onCourt.includes(playerId);
+  if (adding && state.onCourt.length >= 5) return state;
+  const ev = createEvent(adding ? "titular_add" : "titular_remove", playerId, 0, state.period, nowMs);
+  const squadEvents = [...state.squadEvents, ev];
+  return { ...state, squadEvents, onCourt: deriveTitularIds(squadEvents) };
 }
 
 export function goLive(state: LiveMatchState): LiveMatchState {

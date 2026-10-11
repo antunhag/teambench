@@ -19,16 +19,27 @@ e `period` em `1` quando criado antes do apito (sem relógio ainda), já que
 não são usados por estes tipos; `ts` (timestamp de parede) é o campo que
 importa, usado no merge (ver research.md Decisão 2).
 
-## `LiveMatchState` (packages/engine/src/liveMatch.ts) — campos existentes, agora derivados
+## `LiveMatchState` (packages/engine/src/liveMatch.ts) — 1 campo novo, 2 campos existentes agora derivados
 
-- **`convocadoIds: string[]`** — já existe; passa a ser recalculado (não
-  mutado direto) a partir de todos os eventos `convocado_add`/
-  `convocado_remove` conhecidos, aplicando "o `ts` mais recente vence" por
-  `playerId`.
-- **`titularIds: string[]`** — já existe; mesma lógica, a partir de
-  `titular_add`/`titular_remove`. Congelado assim que `state.started` vira
-  `true` (nenhum evento novo destes tipos é produzido depois disso — a
-  guarda de `toggleTitular` já impede).
+- **`squadEvents: MatchEvent[]`** — NOVO. Eventos de escalação, separados de
+  `events` de propósito (ver research.md Decisão 3, revista durante a
+  implementação) — `events` continua só ações em quadra, lido direto por
+  ~10 funções/telas que não esperam eventos de escalação ali.
+- **`convocadoIds: string[]`** — já existia; passa a ser recalculado (não
+  mutado direto) a partir de `squadEvents` (`convocado_add`/
+  `convocado_remove`), aplicando "o `ts` mais recente vence" por `playerId`
+  (`deriveConvocadoIds`).
+- **`onCourt: string[]`** (pré-apito) — já existia; mesma lógica, a partir
+  de `squadEvents` (`titular_add`/`titular_remove`, `deriveTitularIds`).
+  Depois do apito, `onCourt` passa a ser gerido só por eventos reais de
+  jogo (substituição, cartão vermelho) — `squadEvents` para de importar
+  pra este campo a partir daí. `titularIds` continua exatamente como hoje:
+  uma cópia congelada de `onCourt` tirada por `goLive()` no instante do
+  apito, nunca mais tocada depois.
+
+`SQUAD_EVENT_TYPES` (`packages/engine/src/types.ts`) — constante com os 4
+valores acima, usada por qualquer consulta ao Supabase que precise excluir
+eventos de escalação do que mostra como registo cronológico/timeline.
 
 ## `match_formats` — 1 coluna nova
 

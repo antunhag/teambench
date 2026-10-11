@@ -34,7 +34,28 @@ export type EventType =
   | "fim_pausa"
   | "lesao_inicio"
   | "lesao_fim"
-  | "substituicao";
+  | "substituicao"
+  // Seleção de convocados/titulares (specs/007-convocados-sync/) — ao
+  // contrário dos demais tipos acima, não representam algo que aconteceu EM
+  // QUADRA; são metadados de escalação, nunca aparecem na timeline/relatório
+  // do jogo. Existem como eventos de verdade (não um campo solto) só pra
+  // reaproveitar a fila de sincronização offline-safe já existente — ver
+  // research.md Decisão 1.
+  | "convocado_add"
+  | "convocado_remove"
+  | "titular_add"
+  | "titular_remove";
+
+/**
+ * Os 4 tipos de evento de escalação (ver `EventType` acima) — nunca vivem em
+ * `LiveMatchState.events` (reservado a ações em quadra; ver
+ * `LiveMatchState.squadEvents`), mas continuam na MESMA tabela
+ * `match_events` do Supabase (reaproveitando a fila de sincronização).
+ * Qualquer consulta que busque eventos pra exibir como registo
+ * cronológico/timeline/relatório do jogo precisa excluir estes tipos — usar
+ * esta constante em vez de repetir a lista em cada sítio.
+ */
+export const SQUAD_EVENT_TYPES: readonly EventType[] = ["convocado_add", "convocado_remove", "titular_add", "titular_remove"];
 
 export interface MatchEvent {
   id: string;

@@ -62,42 +62,74 @@ são tipicamente a MESMA pessoa (ex.: telemóvel ficou sem bateria, mudou pro
 tablet) — bloquear o próprio treinador de continuar noutro aparelho seria
 pior do que o problema que resolve.
 
-## Decisão 3: `convocadoIds`/`titularIds` passam a ser projeção pura dos eventos, não campos mutados direto
+## Decisão 3 (revista durante a implementação): `squadEvents` é um campo À PARTE de `events` — nunca misturado
 
-**Decisão**: Os campos `convocadoIds`/`titularIds` em `LiveMatchState`
-continuam a existir com a mesma forma (array de ids) — mas deixam de ser
-mutados diretamente por `toggleConvocado`/`toggleTitular`. Em vez disso,
-essas duas funções passam a: (a) criar o `MatchEvent` correspondente
-(`convocado_add`/`convocado_remove`/`titular_add`/`titular_remove`); (b)
-recalcular `convocadoIds`/`titularIds` aplicando a Decisão 2 sobre
-`state.events` já incluindo o evento novo. `toggleTitular` mantém a guarda
-`if (state.started) return state` exatamente como hoje — intocada.
+**Histórico**: A versão original desta decisão (escrita no planeamento)
+propunha derivar `convocadoIds`/`titularIds` direto de `state.events` — a
+MESMA lista usada por ações em quadra. A implementação revelou que isso
+seria um erro real: `state.events` é lido DIRETO por cerca de 10 funções
+puras e ficheiros de UI que só esperam ações de jogo (`describeEvents`,
+`buildTimelineData`, `foulsInPeriod`, `timeoutUsedInPeriod`, `exportText`,
+`buildEventsExport`, a lista editável da aba Registo em
+`MatchEventEditor.tsx`, o registo cronológico em `LiveMatch.tsx` e
+`MatchSummary.tsx`, `ReadOnlyMatch.tsx`...). Misturar eventos de escalação
+ali exigiria auditar e filtrar em cada um desses ~10 sítios — um risco real
+de um evento `convocado_add` aparecer como "convocado_add — #6 Felipe" no
+registo cronológico do jogo se um único sítio fosse esquecido.
 
-**Rationale**: Mantém a MESMA interface pros consumidores existentes
-(`PreMatch.tsx`, `LiveMatch.tsx`, `MatchSummary.tsx`, `useRecentMinutes.ts`,
-etc. já leem `state.convocadoIds`/`state.titularIds` como array simples) —
-nenhum desses ficheiros muda. Só a FONTE da verdade muda (de "campo mutável"
-pra "projeção de eventos"), mesmo padrão já usado pro resto do
-`LiveMatchState` (clock, score, `onCourt` — tudo deriva de `state.events` via
-replay). `toggleConvocado`/`toggleTitular` passam a usar `apply()` (que já
-empilha undo e já enfileira no outbox) em vez do `setState` direto que hoje
-os mantém fora dessa pilha.
+**Decisão**: `LiveMatchState` ganha um campo novo, `squadEvents:
+MatchEvent[]`, separado de `events` — `toggleConvocado`/`toggleTitular`
+só tocam `squadEvents`, nunca `events`. `convocadoIds` continua a existir
+com a mesma forma (array de ids), agora projetado de `squadEvents` via
+`deriveConvocadoIds`. `titularIds` continua congelado por `goLive()` a
+partir de `onCourt` exatamente como hoje — mas antes do apito, `onCourt` em
+si passa a ser projetado de `squadEvents` via `deriveTitularIds` (o campo
+que `toggleTitular` sempre mutou, mesmo antes desta feature). Os 4 tipos de
+evento continuam na MESMA tabela `match_events`/fila de sincronização
+(Decisão 1 não muda) — só o campo em memória onde vivem é que é outro.
+Qualquer consulta direta ao Supabase que alimente timeline/registo/relatório
+(`checkRemote` em `useLiveMatch.ts`, `useLiveMatchPoint.ts`,
+`ReadOnlyMatch.tsx`, `MatchEventEditor.tsx`) passa a excluir os 4 tipos via
+a constante nova `SQUAD_EVENT_TYPES` (`types.ts`), em vez de confiar em
+filtrar depois de já estarem misturados.
 
-**Alternatives considered**: Guardar só os eventos e recalcular
-`convocadoIds` sob demanda em cada leitura (sem campo cacheado) — rejeitado
-por custo de legibilidade (todo consumidor teria que chamar uma função em
-vez de ler um campo) sem ganho real, já que recalcular a cada `apply()` é
-barato (poucas dezenas de eventos, no máximo).
+**Rationale**: Separar por construção é mais seguro do que filtrar em N
+sítios — elimina a classe inteira de bug "esqueci de filtrar aqui" em vez
+de só reduzir a chance dela acontecer. O "custo" é 4 consultas precisarem
+de um `.not("type", "in", (...))` a mais — pequeno e localizado, contra um
+risco de poluição visível espalhado por toda a app.
+
+**Alternatives considered**: A ideia original (derivar de `state.events`
+direto) — descartada pelo motivo acima, descoberta só ao mapear TODOS os
+consumidores reais de `state.events` durante a implementação, não durante o
+planeamento. Guardar `convocadoIds`/`titularIds` sem nenhum campo de
+eventos cacheado (recalcular sob demanda) — descartada por custo de
+legibilidade sem ganho real (poucas dezenas de eventos no máximo).
 
 ## Decisão 4: Sincronizar seleções de outro aparelho exige um "merge ativo", não só o `checkRemote` que já existe
 
 **Decisão**: Novo efeito em `useLiveMatch.ts`, ativo só enquanto
-`!state.started` (pré-apito): a cada ~10s, busca no Supabase os eventos
-`convocado_*`/`titular_*` desse jogo que ainda não estão em `state.events`
-(por `client_event_id`), funde-os no estado local (Decisão 2/3), e os
-IGNORA pra fins de disparar sincronização de volta (já vieram do servidor,
-não precisam voltar pra lá). Mesmo padrão de poll leve e só-leitura já usado
-por `useLiveMatchPoint.ts` (specs/006-live-rotation-replan/).
+`!state.started` (pré-apito): a cada ~10s (e já na primeira execução, sem
+esperar o 1º intervalo — mesmo padrão de `useLiveMatchPoint.ts`), busca no
+Supabase os eventos de escalação (`SQUAD_EVENT_TYPES`) desse jogo que ainda
+não estão em `state.squadEvents` local (por `client_event_id`), funde-os
+(Decisão 2/3), e os IGNORA pra fins de disparar sincronização de volta (já
+vieram do servidor, não precisam voltar pra lá). Este efeito é o ÚNICO
+responsável por popular `squadEvents` a partir do Supabase — `checkRemote`
+(abaixo) não duplica essa responsabilidade, mesmo cobrindo também o caso
+"aparelho nunca tocou neste jogo" (a 1ª execução do poll já resolve isso,
+sem precisar de um caminho separado só pra essa situação).
+
+`checkRemote` (o efeito que já existia, reconstrói via `replayEvents`
+quando `state.events` local está vazio) continua a cuidar só de jogos que
+JÁ TÊM eventos de jogo de verdade (pós-apito) — ganhou só o ajuste de
+excluir `SQUAD_EVENT_TYPES` do que passa pra `replayEvents` (pra não
+poluir `state.events`, ver Decisão 3) e de UNIR o heurístico de sempre
+(todo id que aparece em `playerId`/`outId`/`lineup` dos eventos de jogo)
+com `deriveConvocadoIds` sobre os `squadEvents` que vierem junto — isso
+preserva compatibilidade com jogos de ANTES desta feature (sem nenhum
+`squadEvents`, só o heurístico resolve) sem perder precisão nos jogos
+novos.
 
 **Rationale**: O `checkRemote` que já existe em `useLiveMatch.ts` só roda
 UMA VEZ, ao montar, e só se `state.events.length === 0` — ou seja, só serve

@@ -328,10 +328,14 @@ export function MatchEventEditor({ teamId, matchId, opponent, onClose, canDelete
 
   async function load() {
     setStatus("loading");
+    // Exclui eventos de escalação (convocado/titular, specs/007-convocados-sync/)
+    // — são metadados de seleção pré-jogo, nunca ações em quadra; não fazem
+    // sentido como linha editável/apagável nesta tela de correção do registo.
     const { data, error } = await supabase
       .from("match_events")
       .select("id, period, ms, payload")
       .eq("match_id", matchId)
+      .not("type", "in", `(${(engine.SQUAD_EVENT_TYPES as string[]).join(",")})`)
       .order("period", { ascending: true })
       .order("ms", { ascending: true });
     if (error) {

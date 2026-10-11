@@ -74,11 +74,19 @@ export function useLiveMatch(matchId: string, teamId: string, format: engine.Mat
   // começado voltaria a mostrar a tela de escolher o cinco inicial, o que
   // não faz sentido para um jogo que já aconteceu.
   //
-  // `convocadoIds` nunca chega a ser sincronizado à parte (só o motor local
-  // sabe quem foi convocado) — aqui é reconstruído como todo mundo que
-  // aparece em algum evento (jogador, quem saiu, ou o cinco inicial do
-  // apito). Quem foi convocado mas nunca chegou a entrar em campo não
-  // aparece nessa lista; é uma limitação conhecida deste caminho.
+  // `convocadoIds` reconstruído de duas fontes, unidas: o heurístico de
+  // sempre (todo mundo que aparece em algum evento de jogo — jogador, quem
+  // saiu, ou o cinco inicial do apito; quem foi convocado mas nunca chegou a
+  // entrar em campo não aparece aqui, limitação conhecida já existente) MAIS
+  // `squadEvents` já sincronizados (specs/007-convocados-sync/), que cobrem
+  // exatamente esse buraco pra jogos novos. Jogos antigos (sem nenhum
+  // `squadEvents`, de antes desta feature) continuam a funcionar só com o
+  // heurístico — nada regride.
+  //
+  // IMPORTANTE: eventos de escalação são excluídos daqui antes de chamar
+  // `replayEvents` — `state.events` é só ações em quadra (ver
+  // `LiveMatchState.squadEvents`); misturar os dois poluiria o registo
+  // cronológico/timeline exibidos noutras telas.
   const [checkingRemote, setCheckingRemote] = useState(true);
   useEffect(() => {
     let cancelled = false;
@@ -95,11 +103,18 @@ export function useLiveMatch(matchId: string, teamId: string, format: engine.Mat
         .order("ms", { ascending: true });
       if (cancelled) return;
       if (!error && data && data.length > 0) {
-        const events = data.map((row) => row.payload as engine.MatchEvent);
-        const convocadoIds = Array.from(
-          new Set(events.flatMap((e) => [e.playerId, e.outId, ...(e.lineup ?? [])].filter((x): x is string => !!x)))
-        );
-        setState(engine.replayEvents(convocadoIds, events, format));
+        const all = data.map((row) => row.payload as engine.MatchEvent);
+        const squadEvents = all.filter((e) => (engine.SQUAD_EVENT_TYPES as string[]).includes(e.type));
+        const gameEvents = all.filter((e) => !(engine.SQUAD_EVENT_TYPES as string[]).includes(e.type));
+        if (gameEvents.length > 0) {
+          const heuristicIds = gameEvents.flatMap((e) => [e.playerId, e.outId, ...(e.lineup ?? [])].filter((x): x is string => !!x));
+          const convocadoIds = Array.from(new Set([...heuristicIds, ...engine.deriveConvocadoIds(squadEvents)]));
+          setState({ ...engine.replayEvents(convocadoIds, gameEvents, format), squadEvents });
+        }
+        // Sem nenhum evento de jogo ainda (gameEvents vazio): o jogo não
+        // começou neste aparelho — fica por conta do efeito de merge ativo
+        // logo abaixo (ativo enquanto !state.started), que já faz esse
+        // primeiro carregamento de squadEvents sozinho, sem duplicar aqui.
       }
       setCheckingRemote(false);
     }
@@ -109,6 +124,61 @@ export function useLiveMatch(matchId: string, teamId: string, format: engine.Mat
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [matchId]);
+
+  // Merge ativo de convocados/titulares com outros aparelhos (specs/007-convocados-sync/
+  // US1/FR-010) — ativo só antes do apito. Primeira execução cobre tanto "este
+  // aparelho nunca tocou neste jogo" (squadEvents local vazio) quanto "outro
+  // aparelho marcou algo enquanto este já estava aberto" (polls seguintes).
+  // NUNCA reenfileira o que busca — já veio do servidor, reenviar seria redundante
+  // (o upsert por client_event_id até seria inofensivo, mas desperdiça fila/rede).
+  useEffect(() => {
+    if (state.started) return;
+    let cancelled = false;
+    async function mergeSquad() {
+      const { data, error } = await supabase
+        .from("match_events")
+        .select("payload")
+        .eq("match_id", matchId)
+        .in("type", engine.SQUAD_EVENT_TYPES as string[]);
+      if (cancelled || error || !data) return;
+      setState((s) => {
+        const known = new Set(s.squadEvents.map((e) => e.clientEventId ?? e.id));
+        const fresh = data.map((row) => row.payload as engine.MatchEvent).filter((e) => !known.has(e.clientEventId ?? e.id));
+        if (fresh.length === 0) return s;
+        const squadEvents = [...s.squadEvents, ...fresh];
+        return {
+          ...s,
+          squadEvents,
+          convocadoIds: engine.deriveConvocadoIds(squadEvents),
+          onCourt: s.started ? s.onCourt : engine.deriveTitularIds(squadEvents),
+        };
+      });
+    }
+    mergeSquad();
+    const interval = setInterval(mergeSquad, 10_000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [matchId, state.started]);
+
+  function enqueueNewEvents(newEvents: engine.MatchEvent[]) {
+    for (const ev of newEvents) {
+      enqueue({
+        client_event_id: ev.clientEventId ?? ev.id,
+        match_id: matchId,
+        team_id: teamId,
+        type: ev.type,
+        player_id: ev.playerId,
+        payload: ev as unknown as Record<string, unknown>,
+        ms: ev.ms,
+        min: ev.min,
+        sec: ev.sec,
+        period: ev.period,
+      });
+    }
+  }
 
   // Cada ação empilha o estado ANTERIOR antes de aplicar a mudança — desfazer
   // é simplesmente voltar ao topo da pilha. Suficiente para correções em
@@ -125,20 +195,22 @@ export function useLiveMatch(matchId: string, teamId: string, format: engine.Mat
       setCanUndo(true);
       const result = next(s);
       if (result.events.length > s.events.length) {
-        for (const ev of result.events.slice(s.events.length)) {
-          enqueue({
-            client_event_id: ev.clientEventId ?? ev.id,
-            match_id: matchId,
-            team_id: teamId,
-            type: ev.type,
-            player_id: ev.playerId,
-            payload: ev as unknown as Record<string, unknown>,
-            ms: ev.ms,
-            min: ev.min,
-            sec: ev.sec,
-            period: ev.period,
-          });
-        }
+        enqueueNewEvents(result.events.slice(s.events.length));
+      }
+      return result;
+    });
+  }
+
+  // Mesma ideia de `apply()` (enfileira os eventos novos pra sincronização),
+  // mas SEM entrar na pilha de undo — convocado/titular continuam sendo
+  // ajustes de pré-jogo, não ações "ao vivo" que o treinador precise
+  // desfazer (specs/007-convocados-sync/). Opera sobre `squadEvents`, nunca
+  // `events` (ver LiveMatchState.squadEvents).
+  function applySquad(next: (s: engine.LiveMatchState) => engine.LiveMatchState) {
+    setState((s) => {
+      const result = next(s);
+      if (result.squadEvents.length > s.squadEvents.length) {
+        enqueueNewEvents(result.squadEvents.slice(s.squadEvents.length));
       }
       return result;
     });
@@ -232,10 +304,15 @@ export function useLiveMatch(matchId: string, teamId: string, format: engine.Mat
     manual,
     manualElapsedMs,
     setManualElapsedMs: (ms: number) => setManualElapsedMsState(Math.max(0, ms)),
-    // toggleConvocado/toggleTitular ficam fora da pilha de undo — são ajustes
-    // de pré-jogo, não ações "ao vivo" que o treinador precise desfazer.
-    toggleConvocado: (id: string) => setState((s) => engine.toggleConvocado(s, id)),
-    toggleTitular: (id: string) => setState((s) => engine.toggleTitular(s, id)),
+    // toggleConvocado/toggleTitular ficam fora da pilha de undo (ver
+    // applySquad acima) — são ajustes de pré-jogo, não ações "ao vivo" que o
+    // treinador precise desfazer. `ts` usa sempre Date.now() (nunca `now()`,
+    // que em modo manual devolveria `manualElapsedMs` — um número pequeno de
+    // tempo de jogo, não um instante de parede real) porque é isso que o
+    // merge entre aparelhos (última ação vence) precisa pra comparar
+    // corretamente qual marcação é mais recente de verdade.
+    toggleConvocado: (id: string) => applySquad((s) => engine.toggleConvocado(s, id, Date.now())),
+    toggleTitular: (id: string) => applySquad((s) => engine.toggleTitular(s, id, Date.now())),
     goLive: () => setState((s) => engine.goLive(s)),
     // Na primeira vez (ainda não "started"), tira o retrato dos titulares
     // imediatamente antes do relógio arrancar de verdade — é só aí que se

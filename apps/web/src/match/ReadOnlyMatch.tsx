@@ -50,7 +50,10 @@ export function ReadOnlyMatch({ matchId, opponent, roster, format, ourLabel }: P
         setErrorMessage(error.message);
         return;
       }
-      setEvents((data ?? []).map((row) => row.payload as engine.MatchEvent));
+      // Exclui eventos de escalação (convocado/titular, specs/007-convocados-sync/)
+      // — nunca ações em quadra, poluiriam o placar/faltas/registo cronológico abaixo.
+      const squadTypes = engine.SQUAD_EVENT_TYPES as string[];
+      setEvents((data ?? []).map((row) => row.payload as engine.MatchEvent).filter((e) => !squadTypes.includes(e.type)));
       setStatus("ready");
     }
 

@@ -27,9 +27,10 @@ implementável e testável de forma independente.
 **Purpose**: Nenhuma inicialização de projeto nova — feature inteira dentro do
 monorepo já existente, reaproveitando o toolchain já configurado.
 
-- [ ] T001 Confirmar branch `007-convocados-sync` criada/checked out. Nenhuma
+- [X] T001 Confirmar branch `007-convocados-sync` criada/checked out. Nenhuma
       dependência nova, nenhuma configuração de build nova — `packages/engine` e
-      `apps/web` continuam exatamente como estão.
+      `apps/web` continuam exatamente como estão. Trabalho feito direto em `main`
+      (convenção já estabelecida do projeto — sem branches de feature na prática).
 
 ---
 
@@ -42,56 +43,76 @@ Decisões 1-3).
 
 **⚠️ CRITICAL**: Nenhuma User Story começa antes desta fase.
 
-- [ ] T002 Adicionar 4 valores novos a `EventType` em `packages/engine/src/types.ts`:
+- [X] T002 Adicionar 4 valores novos a `EventType` em `packages/engine/src/types.ts`:
       `"convocado_add"`, `"convocado_remove"`, `"titular_add"`, `"titular_remove"`
-      (ver data-model.md).
+      (ver data-model.md). Também acrescentada a constante `SQUAD_EVENT_TYPES`
+      (desvio do plano original, ver nota em T006).
 
 ### Tests for Foundational ⚠️
 
 > Escrever estes testes PRIMEIRO, confirmar que falham antes de implementar.
 
-- [ ] T003 [P] Testes em `packages/engine/test/liveMatch.test.ts` para a derivação
+- [X] T003 [P] Testes em `packages/engine/test/liveMatch.test.ts` para a derivação
       por "última ação vence" (research.md Decisão 2): dado uma lista de
       `MatchEvent`, `deriveConvocadoIds`/`deriveTitularIds` devolvem o conjunto
       correto; eventos fora de ordem (ts decrescente na lista) ainda produzem o
       resultado correto; `add` seguido de `remove` do mesmo atleta remove; `remove`
       seguido de `add` adiciona; eventos de outros tipos são ignorados; lista vazia
-      devolve `[]`.
-- [ ] T004 [P] Testes em `packages/engine/test/liveMatch.test.ts` para
+      devolve `[]`. 6 testes novos, todos passando.
+- [X] T004 [P] Testes em `packages/engine/test/liveMatch.test.ts` para
       `toggleConvocado(state, playerId, nowMs)` e `toggleTitular(state, playerId,
       nowMs)` (nova assinatura, com `nowMs`): cada chamada acrescenta exatamente um
       `MatchEvent` do tipo certo a `state.events`; `convocadoIds`/`titularIds`
       resultantes batem com a derivação de T003; `toggleTitular` continua bloqueado
       quando `state.started` (comportamento já existente, não pode regredir);
       `toggleConvocado` funciona tanto com `state.started === false` quanto `true`
-      (nunca teve essa guarda — não pode ganhar uma por engano).
+      (nunca teve essa guarda — não pode ganhar uma por engano). 3 testes novos.
+      **Desvio**: os eventos vão pra `state.squadEvents`, não `state.events` — ver
+      nota em T006.
 
 ### Implementation for Foundational
 
-- [ ] T005 Implementar `deriveConvocadoIds(events: MatchEvent[]): string[]` e
+- [X] T005 Implementar `deriveConvocadoIds(events: MatchEvent[]): string[]` e
       `deriveTitularIds(events: MatchEvent[]): string[]` em
       `packages/engine/src/liveMatch.ts` (depende de T002; T003 deve falhar antes,
       passar depois). Nomes distintos da função já existente
       `titularIdsFromEvents` (que deriva do `lineup` do `kickoff`, uso diferente,
       ver research.md Decisão 7/data-model.md) — não confundir nem reaproveitar uma
       pela outra.
-- [ ] T006 Mudar a assinatura de `toggleConvocado`/`toggleTitular` em
+- [X] T006 Mudar a assinatura de `toggleConvocado`/`toggleTitular` em
       `packages/engine/src/liveMatch.ts` para `(state, playerId, nowMs)`: cada
-      chamada cria o `MatchEvent` certo via `createEvent` (já existe em
-      `events.ts`) com `ms=0, period=1` quando `!state.started` (sem relógio ainda)
-      ou `matchElapsedMs(state, nowMs)`/`state.period` quando já em jogo (US2),
-      acrescenta a `state.events`, e recalcula `convocadoIds`/`titularIds` via T005
-      (depende de T005; T004 deve falhar antes, passar depois). `toggleTitular`
-      mantém a guarda `if (state.started) return state` exatamente como hoje.
-- [ ] T007 Em `apps/web/src/match/useLiveMatch.ts`: (a) atualizar as chamadas de
-      `toggleConvocado`/`toggleTitular` pra passar `now()` como `nowMs` (nova
-      assinatura de T006); (b) fazer os eventos novos resultantes entrarem na fila
-      de sincronização (`enqueue`, mesma lógica já usada dentro de `apply()`) SEM
-      entrar na pilha de undo — extrair a parte de "enfileirar eventos novos" de
-      `apply()` pra uma função auxiliar partilhada, reaproveitada tanto por
-      `apply()` (com undo) quanto por um novo wrapper só pra estas duas ações (sem
-      undo) — preserva o comentário/intenção já existente no ficheiro ("ficam fora
-      da pilha de undo — são ajustes de pré-jogo"). Depende de T006.
+      chamada cria o `MatchEvent` certo via `createEvent`, e recalcula
+      `convocadoIds`/`onCourt` via T005. `toggleTitular` mantém a guarda
+      `if (state.started) return state` exatamente como hoje.
+      **Desvio do plano original** (ver research.md Decisão 3, revista): os
+      eventos NÃO entram em `state.events` — `LiveMatchState` ganhou um campo
+      novo, `squadEvents: MatchEvent[]`, separado por construção. Descoberto ao
+      mapear os consumidores reais de `state.events` durante a implementação:
+      ~10 funções/telas (describeEvents, buildTimelineData, foulsInPeriod,
+      exportText, a aba Registo, os registos cronológicos de LiveMatch/
+      MatchSummary/ReadOnlyMatch) leem `events` direto esperando só ações em
+      quadra — misturar eventos de escalação ali exigiria filtrar em cada um
+      desses sítios, um risco real de um deles aparecer como linha no registo
+      do jogo. Separar evita essa classe de bug por construção, não só reduz a
+      chance. `toggleTitular` recalcula `onCourt` (não `titularIds` — esse
+      continua congelado por `goLive()`, intocado).
+- [X] T007 Em `apps/web/src/match/useLiveMatch.ts`: `toggleConvocado`/
+      `toggleTitular` passam a usar `Date.now()` (nunca `now()`, que em modo
+      manual devolveria tempo de jogo, não um instante de parede real — o merge
+      por `ts` precisa de um instante real) e um novo `applySquad()` (paralelo a
+      `apply()`, opera sobre `squadEvents`) — enfileira os eventos novos na
+      fila de sincronização SEM entrar na pilha de undo, preservando a
+      intenção já documentada no ficheiro. A lógica de enfileirar foi extraída
+      pra `enqueueNewEvents()`, partilhada por `apply()` e `applySquad()`.
+      **Trabalho adicional não previsto no plano original**: os 4 pontos que já
+      liam `match_events` direto do Supabase (`checkRemote` neste ficheiro,
+      `useLiveMatchPoint.ts`, `ReadOnlyMatch.tsx`, `MatchEventEditor.tsx`)
+      precisaram excluir `SQUAD_EVENT_TYPES` das suas consultas, pra não deixar
+      eventos de escalação vazarem pro registo cronológico/timeline/Registo
+      dessas telas (mesmo motivo do desvio de T006). `checkRemote` também
+      passou a unir o heurístico de sempre com `deriveConvocadoIds` sobre
+      `squadEvents` — preserva jogos de antes desta feature (sem nenhum
+      `squadEvents`) continuando a funcionar só com o heurístico.
 
 **Checkpoint**: Fundação pronta — convocado/titular já são eventos sincronizados de
 verdade neste aparelho. User Stories podem começar.
@@ -109,15 +130,33 @@ Cenário 4 (duas abas do mesmo utilizador convergindo).
 
 ### Implementation for User Story 1
 
-- [ ] T008 [US1] Novo efeito em `apps/web/src/match/useLiveMatch.ts`, ativo só
-      enquanto `!state.started`: a cada ~10s, busca em `match_events` (Supabase) os
-      eventos `convocado_add`/`convocado_remove`/`titular_add`/`titular_remove`
-      deste `matchId` cujo `client_event_id` ainda não está em `state.events`,
-      acrescenta-os ao estado local, e recalcula `convocadoIds`/`titularIds` via
-      T005 — nunca reenfileira estes eventos de volta (já vieram do servidor).
-      Mesmo padrão de poll leve e só-leitura já usado por `useLiveMatchPoint.ts`
-      (specs/006-live-rotation-replan/). Depende de T005, T007.
-- [ ] T009 [US1] Verificação manual: Cenário 1 e Cenário 4 de `quickstart.md`.
+- [X] T008 [US1] Novo efeito em `apps/web/src/match/useLiveMatch.ts`, ativo só
+      enquanto `!state.started`: a cada ~10s (já na 1ª execução, sem esperar o
+      intervalo), busca em `match_events` (Supabase, filtrado por
+      `SQUAD_EVENT_TYPES`) os eventos deste `matchId` cujo `client_event_id`
+      ainda não está em `state.squadEvents`, acrescenta-os, e recalcula
+      `convocadoIds`/`onCourt` via T005 — nunca reenfileira (já vieram do
+      servidor). Mesmo padrão de poll já usado por `useLiveMatchPoint.ts`.
+      Implementado JUNTO com o ajuste de `checkRemote` em T007 (ambos tocam a
+      mesma área do ficheiro) — ver research.md Decisão 4.
+- [X] T009 [US1] Verificação manual: Cenário 1 de `quickstart.md`, contra um
+      jogo de teste novo (`teste5`, scheduled, criado só pra esta verificação).
+      Confirmado via leitura direta do Supabase: 5 marcações de convocado
+      sincronizaram corretamente; depois de simular "trocar de aparelho"
+      (limpar `localStorage` de `teambench.liveMatch.*`/`teambench.outbox` e
+      recarregar), a seleção de 5 convocados reapareceu idêntica — a causa raiz
+      do incidente real está corrigida. Confirmado também que a aba Registo/o
+      registo cronológico ao vivo mostra só o evento de `kickoff` (1), nunca os
+      5 `convocado_add` — a separação `squadEvents`/`events` (T006) funciona
+      na prática, não só em teste unitário.
+      **Cenário 4 (duas abas) NÃO verificado ao vivo**: `localStorage` é
+      partilhado entre abas da mesma origem no mesmo navegador, então duas
+      abas não simulam dois aparelhos de verdade (teriam o mesmo estado local
+      sempre) — simular isso exigiria um 2º perfil de navegador/incógnito.
+      A correção do merge concorrente (última ação vence por `ts`, incluindo
+      fora de ordem) já está coberta por teste unitário dedicado (T003); o
+      caminho de busca+fusão em si (T008) já foi verificado funcionando contra
+      o Supabase real no Cenário 1. Risco residual considerado baixo.
 
 **Checkpoint**: User Story 1 funcional e testável de forma independente — a causa
 raiz do incidente real está corrigida.
