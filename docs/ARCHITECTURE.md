@@ -98,7 +98,11 @@ com um evento incongruente. (2) validação na origem — nova função pura
 de "quem estava em quadra antes/depois de cada evento", reaproveitada tanto
 por `describeEvents` quanto pela Registo: salvar ou adicionar uma substituição
 cujo "entra" já está em quadra, ou cujo "sai" não está, mostra um aviso
-explícito e desativa o botão — nunca mais entra como dado incongruente.
+explícito e desativa o botão — nunca mais entra como dado incongruente. A
+mesma `onCourtTimeline` também filtra os seletores de jogador da Registo:
+"Entra" só oferece quem NÃO está em quadra naquele instante, "Sai" só quem
+está — a opção incongruente nem aparece pra escolher, não é só um aviso
+depois.
 
 Isso é o que permite o app funcionar **offline** (um aparelho sem rede continua
 registando localmente; sincroniza quando a rede volta, via `apps/web/src/sync/`)
@@ -118,6 +122,23 @@ até limpar o cache à mão. Corrigido: pra um jogo `finished`, `checkRemote`
 ignora o cache local e confia sempre no Supabase — seguro porque um jogo
 `finished` nunca mais recebe uma ação local legítima por esse caminho (só a
 Registo mexe nele a partir daí).
+
+**Pausa só desconta minutos quando é pedido de tempo de verdade** — `pause()`/
+`endPause()` (`packages/engine/src/liveMatch.ts`) nunca param o relógio da
+parte (ver comentário na própria função); em vez disso, ao fechar a pausa,
+descontavam a duração do tempo em quadra de todo mundo que estava dentro, pra
+compensar o tempo "morto" sem bola rolando. Isso é certo pra "Pedido de
+Tempo" (ninguém jogou mesmo). Mas a mesma `pause()` também serve pra "Outro
+motivo" (atendimento médico, árbitro, etc. — só o `reasonId` muda), e nesse
+caso estava errado: quem fica em quadra durante um atendimento continua em
+quadra, só não há bola rolando por um instante — não deveria perder minutos.
+Corrigido com `isTimeoutPause(reasonId)` (só `tempo_nos`/`tempo_advers`
+descontam), aplicado nos três lugares que reproduziam esse desconto:
+`endPause` (ao vivo), `replayEvents` (reconstrução a partir dos eventos) e
+`buildTimelineData` (`packages/engine/src/timeline.ts`, o "buraco" visual na
+barra da Timeline). A faixa visual que já distinguia os dois tipos de pausa
+na timeline exportada (`pause-band` vs `pause-band.other`, cor diferente) não
+mudou — só a contabilidade de minutos é que estava uniforme demais.
 
 ### Seleção de convocados/titulares — também event-sourced, mas separada do registo de jogo
 

@@ -16,7 +16,7 @@
 // nenhuma lógica extra para isso.
 import { markOnSince, settleAll, settlePlayer } from "./clock";
 import { isLastPeriod } from "./matchFormat";
-import { createLiveMatchState, foulsInPeriod, titularIdsFromEvents } from "./liveMatch";
+import { createLiveMatchState, foulsInPeriod, isTimeoutPause, titularIdsFromEvents } from "./liveMatch";
 import type { LiveMatchState } from "./liveMatch";
 import { recomputeScoreFor } from "./events";
 import type { MatchEvent, MatchFormat } from "./types";
@@ -92,13 +92,17 @@ export function replayEvents(convocadoIds: string[], events: MatchEvent[], forma
         break;
       }
       case "fim_pausa": {
+        // Só pedido de tempo de verdade desconta (ver isTimeoutPause) — outro
+        // motivo (atendimento, árbitro...) não tira minutos de quem ficou em quadra.
         if (activePause) {
-          const durMs = Math.max(0, atMs - activePause.startedAtMs);
-          onCourt.forEach((id) => {
-            if (clockAcc.onCourtSince[id] != null) {
-              clockAcc = { ...clockAcc, onCourtSince: { ...clockAcc.onCourtSince, [id]: clockAcc.onCourtSince[id] + durMs } };
-            }
-          });
+          if (isTimeoutPause(activePause.reasonId)) {
+            const durMs = Math.max(0, atMs - activePause.startedAtMs);
+            onCourt.forEach((id) => {
+              if (clockAcc.onCourtSince[id] != null) {
+                clockAcc = { ...clockAcc, onCourtSince: { ...clockAcc.onCourtSince, [id]: clockAcc.onCourtSince[id] + durMs } };
+              }
+            });
+          }
           activePause = null;
         }
         break;
@@ -113,12 +117,14 @@ export function replayEvents(convocadoIds: string[], events: MatchEvent[], forma
       }
       case "fim_periodo": {
         if (activePause) {
-          const durMs = Math.max(0, atMs - activePause.startedAtMs);
-          onCourt.forEach((id) => {
-            if (clockAcc.onCourtSince[id] != null) {
-              clockAcc = { ...clockAcc, onCourtSince: { ...clockAcc.onCourtSince, [id]: clockAcc.onCourtSince[id] + durMs } };
-            }
-          });
+          if (isTimeoutPause(activePause.reasonId)) {
+            const durMs = Math.max(0, atMs - activePause.startedAtMs);
+            onCourt.forEach((id) => {
+              if (clockAcc.onCourtSince[id] != null) {
+                clockAcc = { ...clockAcc, onCourtSince: { ...clockAcc.onCourtSince, [id]: clockAcc.onCourtSince[id] + durMs } };
+              }
+            });
+          }
           activePause = null;
         }
         clockAcc = settleAll(clockAcc, onCourt, atMs);

@@ -21,6 +21,19 @@ export interface ActivePause {
   reasonId?: string;
 }
 
+/**
+ * Só "pedido de tempo" de verdade (tempo_nos/tempo_advers — 1 por equipa por
+ * parte, regra do futsal) desconta o tempo em quadra de quem estava dentro:
+ * é a única pausa em que o jogo realmente não corre para ninguém. Qualquer
+ * outro motivo (atendimento médico, árbitro, etc. — ver PAUSE_REASONS em
+ * LiveMatch.tsx) NÃO desconta: quem está em quadra continua a contar os
+ * minutos durante essa pausa, porque continua em quadra mesmo que o jogo
+ * tenha parado um instante por outra razão.
+ */
+export function isTimeoutPause(reasonId?: string | null): boolean {
+  return reasonId === "tempo_nos" || reasonId === "tempo_advers";
+}
+
 export interface LiveMatchState {
   convocadoIds: string[];
   onCourt: string[];
@@ -48,7 +61,8 @@ export interface LiveMatchState {
    * da parte (ver pause()/endPause()): o risco de esquecer de retomar um
    * relógio parado é maior do que o benefício de o parar de verdade. Em vez
    * disso, endPause() desconta a duração da pausa do tempo em quadra de
-   * quem estava em campo.
+   * quem estava em campo — mas só quando é um pedido de tempo de verdade
+   * (ver isTimeoutPause); outro motivo (atendimento, árbitro...) não desconta.
    */
   activePause: ActivePause | null;
   periodFouls: number;
@@ -189,19 +203,25 @@ export function pause(state: LiveMatchState, nowMs: number, label: string, reaso
 
 /**
  * Fecha a pausa em curso. O relógio nunca parou, então não há nada para
- * "retomar" ali — em vez disso, desconta a duração da pausa do tempo em
- * quadra de quem estava em campo, empurrando pra frente o instante "em
- * campo desde" de cada um (equivalente a subtrair, reusando a mesma
- * contabilidade de clock.ts).
+ * "retomar" ali — em vez disso, SE for pedido de tempo de verdade (ver
+ * isTimeoutPause), desconta a duração da pausa do tempo em quadra de quem
+ * estava em campo, empurrando pra frente o instante "em campo desde" de
+ * cada um (equivalente a subtrair, reusando a mesma contabilidade de
+ * clock.ts). Qualquer outro motivo (atendimento, árbitro...) só regista o
+ * evento pro histórico/timeline — ninguém perde minutos por isso, porque
+ * continuaram em quadra, o jogo só não teve bola rolando por um instante.
  */
 export function endPause(state: LiveMatchState, nowMs: number): LiveMatchState {
   if (!state.activePause) return state;
   const atMs = matchElapsedMs(state, nowMs);
   const durMs = Math.max(0, atMs - state.activePause.startedAtMs);
-  const onCourtSince = { ...state.clockAcc.onCourtSince };
-  state.onCourt.forEach((id) => {
-    if (onCourtSince[id] != null) onCourtSince[id] += durMs;
-  });
+  let onCourtSince = state.clockAcc.onCourtSince;
+  if (isTimeoutPause(state.activePause.reasonId)) {
+    onCourtSince = { ...onCourtSince };
+    state.onCourt.forEach((id) => {
+      if (onCourtSince[id] != null) onCourtSince[id] += durMs;
+    });
+  }
   const ev = createEvent("fim_pausa", null, atMs, state.period, nowMs, {
     label: state.activePause.label,
     reasonId: state.activePause.reasonId,

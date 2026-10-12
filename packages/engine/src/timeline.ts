@@ -3,6 +3,7 @@
 // grelha manual de minutos), quem esteve em quadra minuto a minuto em cada
 // parte, com golos/cartões/faltas marcados no segundo exato.
 import { tipoGoloLabel } from "./goalTypes";
+import { isTimeoutPause } from "./liveMatch";
 import { periodLabel } from "./matchFormat";
 import { fmtMinSec } from "./time";
 import type { MatchEvent, Player } from "./types";
@@ -111,6 +112,9 @@ export function buildTimelineData(events: MatchEvent[], playersList: Player[], t
     // "pausa" e só reabre no "fim_pausa", criando o buraco na barra visual e
     // tirando esse trecho da soma de minutos — sem isto, a timeline mostrava
     // mais minutos do que o Resumo principal (que já descontava via clockAcc).
+    // Isso só vale pra pedido de tempo de verdade (ver isTimeoutPause) — outro
+    // motivo (atendimento, árbitro...) não corta a barra: quem ficou em
+    // quadra continua contando os minutos, só a faixa de aviso é mostrada.
     let paused = false;
     let pauseStart = 0;
     let pauseLabel: string | null = null;
@@ -120,24 +124,30 @@ export function buildTimelineData(events: MatchEvent[], playersList: Player[], t
     evs.forEach((e) => {
       const sec = (e.ms || 0) / 1000;
       if (e.type === "pausa") {
-        paused = true;
+        const isTimeout = isTimeoutPause(e.reasonId);
+        paused = isTimeout;
         pauseStart = sec;
         pauseLabel = e.label ?? null;
         pauseReasonId = e.reasonId ?? null;
-        onCourtSet.forEach((id) => {
-          if (openStart.has(id)) {
-            const arr = intervals.get(id) || [];
-            arr.push([openStart.get(id)!, sec]);
-            intervals.set(id, arr);
-            openStart.delete(id);
-          }
-        });
+        if (isTimeout) {
+          onCourtSet.forEach((id) => {
+            if (openStart.has(id)) {
+              const arr = intervals.get(id) || [];
+              arr.push([openStart.get(id)!, sec]);
+              intervals.set(id, arr);
+              openStart.delete(id);
+            }
+          });
+        }
       } else if (e.type === "fim_pausa") {
+        const wasTimeout = paused;
         paused = false;
         pauses.push({ start: pauseStart, end: sec, label: pauseLabel, reasonId: pauseReasonId });
-        onCourtSet.forEach((id) => {
-          if (!openStart.has(id)) openStart.set(id, sec);
-        });
+        if (wasTimeout) {
+          onCourtSet.forEach((id) => {
+            if (!openStart.has(id)) openStart.set(id, sec);
+          });
+        }
       } else if (e.type === "substituicao") {
         const inId = e.playerId!;
         const outId = e.outId ?? null;
@@ -397,7 +407,7 @@ export function buildTimelineHtml(
       // minutos à direita).
       const pauseBandsHtml = half.pauses
         .map((p) => {
-          const isTimeout = p.reasonId === "tempo_nos" || p.reasonId === "tempo_advers";
+          const isTimeout = isTimeoutPause(p.reasonId);
           const title = p.label ? `${esc(p.label)} — ` : "Pausa — ";
           return `<div class="pause-band${isTimeout ? "" : " other"}" style="left:${pct2(p.start, half.durSec)};width:${pct2(
             Math.max(0, p.end - p.start),

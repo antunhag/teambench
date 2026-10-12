@@ -79,6 +79,19 @@ describe("buildTimelineData", () => {
     expect(salvadorBar.totalSec).toBe(540); // 600 - 60 de pausa
   });
 
+  it("NÃO desconta uma pausa por outro motivo (atendimento, árbitro...) — quem está em quadra continua contando", () => {
+    const events: MatchEvent[] = [
+      createEvent("pausa", null, 200_000, 1, 0, { label: "Outro motivo (lesão, árbitro, etc.)", reasonId: "outro" }),
+      createEvent("fim_pausa", null, 260_000, 1, 0, { duracaoSec: 60 }),
+      createEvent("fim_periodo", null, 600_000, 1, 0, { duracaoSec: 600 }),
+    ];
+    const halves = buildTimelineData(events, roster, [salvador.id]);
+    const salvadorBar = halves[0].players.find((p) => p.id === salvador.id)!;
+    // Sem buraco na barra — a pausa é só visual (ver half.pauses), não corta o intervalo.
+    expect(salvadorBar.intervals).toEqual([[0, 600]]);
+    expect(salvadorBar.totalSec).toBe(600);
+  });
+
   it("quem entra durante um pedido de tempo em curso só começa a contar tempo depois do fim_pausa", () => {
     const events: MatchEvent[] = [
       createEvent("pausa", null, 200_000, 1, 0, { reasonId: "tempo_nos" }),

@@ -192,6 +192,21 @@ describe("liveMatch — relógio, golos, cartões", () => {
     expect(playerCurrentSeconds(s, salvador, 90_000)).toBe(30);
   });
 
+  it("pausa por outro motivo (atendimento, árbitro...) NÃO desconta o tempo em quadra — só o pedido de tempo desconta", () => {
+    let s = createLiveMatchState([salvador]);
+    s = toggleTitular(s, salvador, 0);
+    s = goLive(s);
+    s = resumeOrStart(s, 0);
+    s = pause(s, 30_000, "Outro motivo (lesão, árbitro, etc.)", "outro");
+    expect(playerCurrentSeconds(s, salvador, 60_000)).toBe(60); // continua contando durante a pausa
+
+    s = endPause(s, 90_000); // pausa "durou" 60s, mas não é pedido de tempo — ninguém perde minutos
+    expect(s.activePause).toBeNull();
+    expect(s.events.at(-1)?.type).toBe("fim_pausa");
+    // 90s decorridos, SEM desconto (ao contrário do pedido de tempo) — continua contando os 90s inteiros.
+    expect(playerCurrentSeconds(s, salvador, 90_000)).toBe(90);
+  });
+
   it("endPause é idempotente sem pausa em curso, e endPeriod fecha sozinho uma pausa esquecida aberta", () => {
     let s = createLiveMatchState([salvador]);
     s = toggleTitular(s, salvador, 0);

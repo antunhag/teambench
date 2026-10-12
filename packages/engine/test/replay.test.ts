@@ -5,7 +5,9 @@ import {
   doFoul,
   doGoal,
   doSub,
+  endPause,
   endPeriod,
+  pause,
   playerCurrentSeconds,
   resumeOrStart,
 } from "../src/liveMatch";
@@ -55,6 +57,18 @@ describe("replayEvents", () => {
     expect(replayed.clock.running).toBe(false);
     expect(replayed.clock.elapsedMs).toBe(15_000);
     expect(replayed.score.nos).toBe(1);
+  });
+
+  it("REGRESSÃO — pausa por outro motivo (atendimento, árbitro...) não desconta tempo em quadra no replay, só pedido de tempo desconta", () => {
+    let live = createLiveMatchState(convocados);
+    live = { ...live, onCourt: [p1] };
+    live = resumeOrStart(live, 0);
+    live = pause(live, 30_000, "Atendimento", "outro");
+    live = endPause(live, 90_000); // "pausa" de 60s, mas reasonId "outro" — não desconta
+
+    const replayed = replayEvents(convocados, live.events, SUB15);
+    expect(playerCurrentSeconds(replayed, p1, 90_000)).toBeCloseTo(playerCurrentSeconds(live, p1, 90_000), 3);
+    expect(playerCurrentSeconds(replayed, p1, 90_000)).toBe(90); // sem desconto nenhum
   });
 
   it("sem nenhum evento, devolve o estado vazio de sempre (jogo nunca começou)", () => {
