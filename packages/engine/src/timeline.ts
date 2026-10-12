@@ -48,7 +48,7 @@ export interface TimelinePause {
   start: number;
   end: number;
   label: string | null;
-  /** "tempo_nos"/"tempo_advers" = pedido de tempo de verdade; qualquer outro valor (ex.: "outro") é pausa por outro motivo (lesão, árbitro, etc.) — distingue o estilo visual da faixa, já que nem toda pausa é um pedido de tempo. */
+  /** "tempo_nos"/"tempo_advers" = pedido de tempo de verdade; qualquer outro valor (ex.: "outro", ou "atendimento" — este sintetizado a partir de lesao_inicio/lesao_fim, nunca grava um evento "pausa" de verdade) é pausa por outro motivo — distingue o estilo visual da faixa, já que nem toda pausa é um pedido de tempo. */
   reasonId: string | null;
 }
 
@@ -120,6 +120,15 @@ export function buildTimelineData(events: MatchEvent[], playersList: Player[], t
     let pauseLabel: string | null = null;
     let pauseReasonId: string | null = null;
     const pauses: TimelinePause[] = [];
+    // Atendimento médico (lesao_inicio/lesao_fim) é um mecanismo separado da
+    // "pausa" genérica (ver LiveMatch.tsx — botão próprio "Iniciar/Terminar
+    // atendimento" por atleta, nunca passa por pause()/endPause()), mas pro
+    // propósito da timeline é a mesma coisa visual: uma faixa de "jogo parado
+    // por outro motivo" (reasonId "atendimento", mesmo estilo de "outro" —
+    // ver isTimeoutPause). Nunca corta a barra de ninguém (ver liveMatch.ts
+    // isTimeoutPause): quem fica em quadra continua contando os minutos.
+    let treatmentStart: number | null = null;
+    let treatmentPlayerId: string | null = null;
 
     evs.forEach((e) => {
       const sec = (e.ms || 0) / 1000;
@@ -179,6 +188,21 @@ export function buildTimelineData(events: MatchEvent[], playersList: Player[], t
       } else if (e.type === "falta_sofrida") {
         foulsSofridas++;
         fouls.push({ sec, playerId: e.playerId!, kind: "sofrida", count: foulsSofridas });
+      } else if (e.type === "lesao_inicio") {
+        treatmentStart = sec;
+        treatmentPlayerId = e.playerId ?? null;
+      } else if (e.type === "lesao_fim") {
+        if (treatmentStart != null) {
+          const p = treatmentPlayerId ? byId.get(treatmentPlayerId) : undefined;
+          pauses.push({
+            start: treatmentStart,
+            end: sec,
+            label: p ? `Atendimento — #${p.num} ${p.name}` : "Atendimento",
+            reasonId: "atendimento",
+          });
+        }
+        treatmentStart = null;
+        treatmentPlayerId = null;
       } else if (e.type === "golo" || e.type === "golo_sofrido") {
         if (e.type === "golo") runningNos++;
         else runningAdv++;

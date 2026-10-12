@@ -92,6 +92,22 @@ describe("buildTimelineData", () => {
     expect(salvadorBar.totalSec).toBe(600);
   });
 
+  it("REGRESSÃO — atendimento (lesao_inicio/lesao_fim) aparece em half.pauses como pausa por outro motivo, mesmo sem nenhum evento 'pausa'", () => {
+    const events: MatchEvent[] = [
+      createEvent("lesao_inicio", salvador.id, 200_000, 1, 0),
+      createEvent("lesao_fim", salvador.id, 260_000, 1, 0, { durSec: 60 }),
+      createEvent("fim_periodo", null, 600_000, 1, 0, { duracaoSec: 600 }),
+    ];
+    const halves = buildTimelineData(events, roster, [salvador.id]);
+    expect(halves[0].pauses).toEqual([
+      { start: 200, end: 260, label: "Atendimento — #30 Salvador Silva Gonçalves", reasonId: "atendimento" },
+    ]);
+    // Nem o atendido perde minutos — a faixa é só visual, igual à pausa por outro motivo.
+    const salvadorBar = halves[0].players.find((p) => p.id === salvador.id)!;
+    expect(salvadorBar.intervals).toEqual([[0, 600]]);
+    expect(salvadorBar.totalSec).toBe(600);
+  });
+
   it("quem entra durante um pedido de tempo em curso só começa a contar tempo depois do fim_pausa", () => {
     const events: MatchEvent[] = [
       createEvent("pausa", null, 200_000, 1, 0, { reasonId: "tempo_nos" }),
