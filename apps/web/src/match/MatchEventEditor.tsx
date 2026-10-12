@@ -585,6 +585,86 @@ export function MatchEventEditor({ teamId, matchId, opponent, onClose, canDelete
   // ser escolhido de novo como assistência/quem sai — a mesma regra que o jogo ao vivo já aplica.
   const pickerCurrentPlayerId = picker ? (pickerIsNew ? newPlayerId : (drafts[picker.rowId]?.playerId ?? null)) : null;
 
+  // "Em quadra" de cada golo (e a validação de substituições abaixo) recalculado do zero a
+  // partir da ordem cronológica de TODAS as linhas, já com as edições ainda não salvas
+  // aplicadas — nunca do valor gravado em cada evento, que fica desatualizado assim que uma
+  // substituição muda de tempo.
+  function previewEventFor(row: EventRow): engine.MatchEvent {
+    const d = drafts[row.id] ?? draftFromRow(row);
+    return {
+      ...(row.payload as unknown as engine.MatchEvent),
+      // Sobrescreve o id do evento (interno, do payload) pelo id da linha no
+      // Supabase — é essa chave que describeEvents/onCourtTimeline devolvem
+      // e que o resto deste componente usa pra tudo (drafts, validação, etc).
+      id: row.id,
+      ms: parseMinSec(d.time) ?? row.ms,
+      period: parseInt(d.period, 10) || row.period,
+      playerId: d.playerId,
+      assistId: d.assistId,
+      outId: d.outId,
+      tipo: d.tipo,
+      zona: d.zona,
+      transicaoNumeros: d.transicaoNumeros,
+      transicaoBalizaDeserta: d.transicaoBalizaDeserta,
+      lineup: d.lineup ?? undefined,
+      reasonId: d.reasonId ?? undefined,
+      label: d.label || undefined,
+    };
+  }
+
+  const previewEvents = (rows ?? []).map(previewEventFor);
+  const timeline = engine.onCourtTimeline(previewEvents);
+
+  /**
+   * Avaliação explícita pedida pelo treinador: "não podemos permitir dados
+   * incongruentes" — uma substituição só faz sentido se quem entra AINDA
+   * NÃO estava em quadra, e quem sai (se preenchido) JÁ estava. Sem isto, a
+   * Registo deixava criar exatamente o tipo de erro que corrompia os
+   * minutos de um atleta em silêncio (ver research/ARCHITECTURE — achado
+   * real no jogo do Modicus). Devolve null quando está tudo certo.
+   */
+  function substituicaoProblem(ev: engine.MatchEvent): string | null {
+    if (ev.type !== "substituicao") return null;
+    const before = timeline.get(ev.id)?.before ?? [];
+    if (ev.playerId && before.includes(ev.playerId)) {
+      return `${playerLabel(ev.playerId)} já estava em quadra nesse instante — não dá pra "entrar" de novo.`;
+    }
+    if (ev.outId && !before.includes(ev.outId)) {
+      return `${playerLabel(ev.outId)} não estava em quadra nesse instante — não dá pra "sair".`;
+    }
+    return null;
+  }
+
+  // Mesma validação pro formulário "+ Adicionar evento esquecido", simulando o evento novo
+  // dentro da linha do tempo completa (ordem cronológica, não a posição em que foi digitado).
+  function newSubstituicaoProblem(): string | null {
+    if (newType !== "substituicao") return null;
+    const ms = parseMinSec(newTime);
+    const period = parseInt(newPeriod, 10);
+    if (ms == null || !Number.isFinite(period)) return null;
+    const synthetic: engine.MatchEvent = {
+      id: "__preview_new__",
+      clientEventId: undefined,
+      type: "substituicao",
+      playerId: newPlayerId,
+      outId: newOutId,
+      ms,
+      min: Math.floor(ms / 60000),
+      sec: Math.floor((ms % 60000) / 1000),
+      period,
+      ts: Number.MAX_SAFE_INTEGER, // desempate: entre eventos com o mesmo ms, o que está sendo adicionado agora é o mais recente
+    };
+    const combinedTimeline = engine.onCourtTimeline([...previewEvents, synthetic]);
+    const before = combinedTimeline.get(synthetic.id)?.before ?? [];
+    if (synthetic.playerId && before.includes(synthetic.playerId)) {
+      return `${playerLabel(synthetic.playerId)} já estava em quadra nesse instante — não dá pra "entrar" de novo.`;
+    }
+    if (synthetic.outId && !before.includes(synthetic.outId)) {
+      return `${playerLabel(synthetic.outId)} não estava em quadra nesse instante — não dá pra "sair".`;
+    }
+    return null;
+  }
+
   return (
     <div>
       <button type="button" className="btn sm ghost" onClick={onClose} style={{ marginBottom: 12 }}>
@@ -631,15 +711,23 @@ export function MatchEventEditor({ teamId, matchId, opponent, onClose, canDelete
           </div>
         </div>
         <div style={{ marginTop: 8 }}>{newDetailButtons()}</div>
-        <button
-          type="button"
-          className="btn primary"
-          disabled={!newEventValid() || addStatus === "saving"}
-          onClick={addEvent}
-          style={{ marginTop: 8 }}
-        >
-          {addStatus === "saving" ? "A adicionar..." : "Adicionar"}
-        </button>
+        {(() => {
+          const problem = newSubstituicaoProblem();
+          return (
+            <>
+              {problem && <p className="banner error" style={{ marginTop: 8 }}>⚠️ {problem}</p>}
+              <button
+                type="button"
+                className="btn primary"
+                disabled={!newEventValid() || addStatus === "saving" || !!problem}
+                onClick={addEvent}
+                style={{ marginTop: 8 }}
+              >
+                {addStatus === "saving" ? "A adicionar..." : "Adicionar"}
+              </button>
+            </>
+          );
+        })()}
         {addStatus === "error" && <p className="banner error" style={{ marginTop: 8 }}>{addError}</p>}
       </div>
 
@@ -659,36 +747,12 @@ export function MatchEventEditor({ teamId, matchId, opponent, onClose, canDelete
             </thead>
             <tbody>
               {(() => {
-                // "Em quadra" de cada golo recalculado do zero a partir da ordem
-                // cronológica de TODAS as linhas (já com as edições ainda não
-                // salvas aplicadas) — nunca do valor gravado em cada evento, que
-                // fica desatualizado assim que uma substituição muda de tempo.
-                function previewEventFor(row: EventRow): engine.MatchEvent {
-                  const d = drafts[row.id] ?? draftFromRow(row);
-                  return {
-                    ...(row.payload as unknown as engine.MatchEvent),
-                    // Sobrescreve o id do evento (interno, do payload) pelo id da
-                    // linha no Supabase — é essa chave que describeEvents devolve
-                    // e que o resto deste componente usa pra tudo (drafts, etc).
-                    id: row.id,
-                    ms: parseMinSec(d.time) ?? row.ms,
-                    period: parseInt(d.period, 10) || row.period,
-                    playerId: d.playerId,
-                    assistId: d.assistId,
-                    outId: d.outId,
-                    tipo: d.tipo,
-                    zona: d.zona,
-                    transicaoNumeros: d.transicaoNumeros,
-                    transicaoBalizaDeserta: d.transicaoBalizaDeserta,
-                    lineup: d.lineup ?? undefined,
-                    reasonId: d.reasonId ?? undefined,
-                    label: d.label || undefined,
-                  };
-                }
-                const descriptions = engine.describeEvents(rows.map(previewEventFor), byId);
+                const descriptions = engine.describeEvents(previewEvents, byId);
                 return rows.map((r) => {
                 const draft = drafts[r.id] ?? draftFromRow(r);
                 const dirty = !draftsEqual(draft, draftFromRow(r));
+                const preview = previewEventFor(r);
+                const problem = substituicaoProblem(preview);
                 return (
                   <tr key={r.id}>
                     <td>
@@ -712,12 +776,13 @@ export function MatchEventEditor({ teamId, matchId, opponent, onClose, canDelete
                     <td className="d">
                       <div>{descriptions.get(r.id)}</div>
                       <div style={{ marginTop: 4 }}>{detailButtons(r, draft)}</div>
+                      {problem && <p className="banner error" style={{ marginTop: 4, fontSize: 12 }}>⚠️ {problem}</p>}
                     </td>
                     <td style={{ whiteSpace: "nowrap", verticalAlign: "top" }}>
                       <button
                         type="button"
                         className="btn sm"
-                        disabled={!dirty || savingId === r.id}
+                        disabled={!dirty || savingId === r.id || !!problem}
                         onClick={() => saveRow(r)}
                       >
                         {savingId === r.id ? "..." : savedIds.has(r.id) && !dirty ? "✅" : "Salvar"}

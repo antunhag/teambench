@@ -131,4 +131,26 @@ describe("replayEvents", () => {
     expect(playerCurrentSeconds(replayed, q6, 999_999)).toBeCloseTo(1500 - 100, 0);
     expect(playerCurrentSeconds(replayed, q7, 999_999)).toBeCloseTo(1500 - 100, 0);
   });
+
+  it(
+    "REGRESSÃO (jogo do Modicus) — um evento de 'entra' duplicado pra alguém já em quadra " +
+      "(ex.: corrigido à mão na Registo por engano) nunca apaga o tempo já creditado desde a entrada real",
+    () => {
+      let live = createLiveMatchState(convocados);
+      live = { ...live, onCourt: [p1, p2] };
+      live = resumeOrStart(live, 0); // p1 entra em quadra aos 0s
+      live = doGoal(live, p1, null, 300_000); // p1 marca aos 5min — só confirma que ele está em quadra até aqui
+
+      // Evento espúrio: "entra p1" de novo, sem ninguém sair, 10 min depois do kickoff —
+      // p1 nunca saiu de quadra, isto é um duplicado/engano, não uma substituição de verdade.
+      const entradaFantasma = createEvent("substituicao", p1, 600_000, 1, Date.now(), { outId: null });
+      live = { ...live, events: [...live.events, entradaFantasma] };
+      live = endPeriod(live, SUB15, 25 * 60_000); // fim da parte, 1500s
+
+      const replayed = replayEvents(convocados, live.events, SUB15);
+      // p1 esteve em quadra a parte INTEIRA (0 a 1500s) — a entrada fantasma aos 600s não pode
+      // ter reiniciado a contagem dele, perdendo os primeiros 600s.
+      expect(playerCurrentSeconds(replayed, p1, 999_999)).toBeCloseTo(1500, 0);
+    }
+  );
 });

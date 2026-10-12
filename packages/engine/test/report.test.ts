@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createEvent } from "../src/events";
-import { buildEventsExport, describeEvent, describeEvents, exportText } from "../src/report";
+import { buildEventsExport, describeEvent, describeEvents, exportText, onCourtTimeline } from "../src/report";
 import type { MatchEvent, MatchRow, Player } from "../src/types";
 
 const salvador: Player = { id: "athlete-salvador", num: "30", name: "Salvador Silva Gonçalves", pos: "Ala Esquerda" };
@@ -60,6 +60,55 @@ describe("describeEvents", () => {
     // Depois de inserir a substituição das 6:21, o golo das 7:34 deve refletir p3 em quadra, não mais p2.
     expect(comCorrecao.get(golo.id)).toContain("em quadra: 1,3");
     expect(comCorrecao.get(golo.id)).not.toContain("em quadra: 1,2");
+  });
+
+  it(
+    "REGRESSÃO (jogo do Modicus) — uma 'entrada' sem o 'sai' correspondente (dado incongruente) " +
+      "nunca deixa o 'em quadra' de um golo seguinte crescer além de 5",
+    () => {
+      const p4: Player = { id: "p4", num: "4", name: "Quatro", pos: "Ala Esquerda" };
+      const p5: Player = { id: "p5", num: "5", name: "Cinco", pos: "Ala Esquerda" };
+      const p6: Player = { id: "p6", num: "6", name: "Seis", pos: "Ala Esquerda" };
+      const roster5 = [...roster3, p4, p5, p6];
+      const byId5 = (id: string) => roster5.find((p) => p.id === id);
+
+      const kickoff = createEvent("kickoff", null, 0, 1, 0, { lineup: [p1.id, p2.id, p3.id, p4.id, p5.id] });
+      // Evento incongruente: p6 "entra" mas outId nunca foi preenchido (ninguém marcado como saindo) —
+      // exatamente o tipo de erro que a Registo permite hoje sem nenhum aviso.
+      const entradaSemSaida = createEvent("substituicao", p6.id, 100_000, 1, 0, { outId: null });
+      const golo = createEvent("golo", p1.id, 200_000, 1, 0, {});
+
+      const descriptions = describeEvents([kickoff, entradaSemSaida, golo], byId5);
+      // "em quadra" nunca pode ter mais que 5 nomes, mesmo com o dado incongruente.
+      const emQuadra = descriptions.get(golo.id)!.match(/em quadra: ([\d,]+)/)?.[1] ?? "";
+      expect(emQuadra.split(",").length).toBeLessThanOrEqual(5);
+    }
+  );
+});
+
+describe("onCourtTimeline", () => {
+  it("'before' de uma substituição é quem estava em quadra IMEDIATAMENTE ANTES dela, não depois", () => {
+    const kickoff = createEvent("kickoff", null, 0, 1, 0, { lineup: [p1.id, p2.id] });
+    const sub = createEvent("substituicao", p3.id, 100_000, 1, 0, { outId: p2.id });
+    const timeline = onCourtTimeline([kickoff, sub]);
+    expect(timeline.get(sub.id)?.before.sort()).toEqual([p1.id, p2.id].sort());
+    expect(timeline.get(sub.id)?.after.sort()).toEqual([p1.id, p3.id].sort());
+  });
+
+  it("detecta 'entra' alguém que já está em 'before' (dado incongruente) — útil pra validar antes de salvar", () => {
+    const kickoff = createEvent("kickoff", null, 0, 1, 0, { lineup: [p1.id, p2.id] });
+    // p1 "entra" de novo sem nunca ter saído — a Registo permite isto hoje sem aviso nenhum.
+    const entradaDuplicada = createEvent("substituicao", p1.id, 100_000, 1, 0, { outId: null });
+    const timeline = onCourtTimeline([kickoff, entradaDuplicada]);
+    expect(timeline.get(entradaDuplicada.id)?.before).toContain(p1.id); // já estava — "entra" não faz sentido
+  });
+
+  it("detecta 'sai' alguém que NÃO está em 'before' (dado incongruente)", () => {
+    const kickoff = createEvent("kickoff", null, 0, 1, 0, { lineup: [p1.id, p2.id] });
+    // p3 nunca entrou — marcar que ele "sai" não faz sentido.
+    const saidaSemEntrada = createEvent("substituicao", p1.id, 100_000, 1, 0, { outId: p3.id });
+    const timeline = onCourtTimeline([kickoff, saidaSemEntrada]);
+    expect(timeline.get(saidaSemEntrada.id)?.before).not.toContain(p3.id);
   });
 });
 

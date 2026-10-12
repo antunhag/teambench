@@ -82,6 +82,24 @@ placar, minutos por atleta) é sempre recalculado a partir do registo cronológi
 via `replayEvents` (`packages/engine/src/replay.ts`), nunca guardado como estado
 mutável por si só.
 
+**Integridade de "quem está em quadra" — achado real, corrigido** (correção
+manual de um jogo real expôs isto): a Registo (`MatchEventEditor.tsx`) deixava
+gravar uma substituição logicamente impossível — "entra" alguém que já estava
+em quadra, ou "sai" alguém que não estava — sem nenhum aviso. Isso tinha uma
+consequência silenciosa real: `markOnSince` (`packages/engine/src/clock.ts`)
+sobrescrevia incondicionalmente `onCourtSince` de quem "entrava" de novo,
+apagando sem aviso o tempo já creditado desde a entrada verdadeira. Corrigido
+em duas camadas: (1) defesa no motor — `replayEvents` e `doSub` agora só
+chamam `markOnSince` se o atleta AINDA NÃO estiver em `onCourt`, nunca
+reiniciando um relógio já em marcha; `describeEvents` ganhou o mesmo teto de 5
+que `replayEvents` já tinha, pra nunca inflar o "em quadra" exibido num golo
+com um evento incongruente. (2) validação na origem — nova função pura
+`onCourtTimeline` (`packages/engine/src/report.ts`), única fonte de verdade
+de "quem estava em quadra antes/depois de cada evento", reaproveitada tanto
+por `describeEvents` quanto pela Registo: salvar ou adicionar uma substituição
+cujo "entra" já está em quadra, ou cujo "sai" não está, mostra um aviso
+explícito e desativa o botão — nunca mais entra como dado incongruente.
+
 Isso é o que permite o app funcionar **offline** (um aparelho sem rede continua
 registando localmente; sincroniza quando a rede volta, via `apps/web/src/sync/`)
 e o que torna possível reconstruir a Timeline/Resumo de forma consistente mesmo

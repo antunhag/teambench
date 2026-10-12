@@ -109,6 +109,35 @@ export function describeEvent(e: MatchEvent, playerById: PlayerLookup, format?: 
 }
 
 /**
+ * Reconstrói quem está em quadra evento a evento, na ordem cronológica —
+ * pra cada evento, guarda tanto o "antes" (onCourt no instante imediatamente
+ * anterior a este evento, o que importa pra decidir se uma substituição faz
+ * sentido: quem entra não pode já estar lá, quem sai tem que estar) quanto o
+ * "depois" (já com este evento aplicado, o que importa pra exibir ao lado de
+ * um golo). Mesmo teto de 5 que `replay.ts` usa — nunca deixa o array
+ * crescer além disso, mesmo com um evento incongruente (ex.: um "entra" sem
+ * o "sai" correspondente). Única fonte de verdade desta reconstrução —
+ * `describeEvents` (abaixo) e a validação da Registo (MatchEventEditor)
+ * reaproveitam esta função em vez de cada um repetir a própria lógica.
+ */
+export function onCourtTimeline(events: MatchEvent[]): Map<string, { before: string[]; after: string[] }> {
+  const sorted = [...events].sort((a, b) => (a.period - b.period) || (eventMs(a) - eventMs(b)) || (a.ts - b.ts));
+  let onCourt: string[] = [];
+  const result = new Map<string, { before: string[]; after: string[] }>();
+  for (const e of sorted) {
+    const before = onCourt;
+    if (e.type === "kickoff" && e.lineup) onCourt = e.lineup;
+    if (e.type === "substituicao") {
+      if (e.outId) onCourt = onCourt.filter((id) => id !== e.outId);
+      if (e.playerId && !onCourt.includes(e.playerId) && onCourt.length < 5) onCourt = [...onCourt, e.playerId];
+    }
+    if (e.type === "cartao_vermelho" && e.playerId) onCourt = onCourt.filter((id) => id !== e.playerId);
+    result.set(e.id, { before, after: onCourt });
+  }
+  return result;
+}
+
+/**
  * Descreve TODOS os eventos de um jogo de uma vez, recalculando quem estava
  * em quadra em cada golo a partir da ordem cronológica ATUAL dos eventos —
  * nunca confiando no `lineup` gravado dentro do próprio evento no momento em
@@ -120,17 +149,11 @@ export function describeEvent(e: MatchEvent, playerById: PlayerLookup, format?: 
  * não) só precisar de events.map(e => mapa.get(e.id)).
  */
 export function describeEvents(events: MatchEvent[], playerById: PlayerLookup, format?: MatchFormat): Map<string, string> {
-  const sorted = [...events].sort((a, b) => (a.period - b.period) || (eventMs(a) - eventMs(b)) || (a.ts - b.ts));
-  let onCourt: string[] = [];
+  const timeline = onCourtTimeline(events);
   const result = new Map<string, string>();
-  for (const e of sorted) {
-    if (e.type === "kickoff" && e.lineup) onCourt = e.lineup;
-    if (e.type === "substituicao") {
-      if (e.outId) onCourt = onCourt.filter((id) => id !== e.outId);
-      if (e.playerId && !onCourt.includes(e.playerId)) onCourt = [...onCourt, e.playerId];
-    }
-    if (e.type === "cartao_vermelho" && e.playerId) onCourt = onCourt.filter((id) => id !== e.playerId);
-    const forDisplay = e.type === "golo" || e.type === "golo_sofrido" ? { ...e, lineup: onCourt.slice() } : e;
+  for (const e of events) {
+    const after = timeline.get(e.id)?.after ?? [];
+    const forDisplay = e.type === "golo" || e.type === "golo_sofrido" ? { ...e, lineup: after.slice() } : e;
     result.set(e.id, describeEvent(forDisplay, playerById, format));
   }
   return result;

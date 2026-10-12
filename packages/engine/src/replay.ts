@@ -69,7 +69,14 @@ export function replayEvents(convocadoIds: string[], events: MatchEvent[], forma
       }
       case "substituicao": {
         if (ev.outId) clockAcc = settlePlayer(clockAcc, ev.outId, atMs);
-        if (ev.playerId) clockAcc = markOnSince(clockAcc, ev.playerId, atMs);
+        // Só marca "em quadra desde" se ele AINDA NÃO estava — achado real
+        // (dados incongruentes num jogo corrigido à mão): `markOnSince`
+        // sobrescreve `onCourtSince` incondicionalmente; uma 2ª "entrada" dele
+        // já em quadra (evento duplicado/errado, ex. corrigido pela Registo)
+        // reiniciava o relógio dele dali, apagando sem aviso o tempo já
+        // creditado entre a entrada real e essa entrada fantasma. Nunca deve
+        // ser possível perder minutos de um atleta só por um evento redundante.
+        if (ev.playerId && !onCourt.includes(ev.playerId)) clockAcc = markOnSince(clockAcc, ev.playerId, atMs);
         // Sai ANTES de entrar: numa substituição normal (5 em quadra) o "onCourt.length < 5"
         // só é verdade depois de abrir a vaga de quem saiu. Testar antes disso barrava
         // silenciosamente quem entrava sempre que o quadro já estivesse cheio — o efeito

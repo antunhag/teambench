@@ -314,7 +314,11 @@ export function doSub(state: LiveMatchState, outId: string, inId: string, nowMs:
   let clockAcc = state.clockAcc;
   if (state.clock.running) {
     clockAcc = settlePlayer(clockAcc, outId, atMs);
-    clockAcc = markOnSince(clockAcc, inId, atMs);
+    // Defesa extra (a tela ao vivo já só oferece quem está no banco como
+    // "quem entra", nunca alguém já em quadra) — mesmo princípio de
+    // replay.ts: nunca reiniciar o relógio de alguém que já estava em
+    // quadra, mesmo que esta função um dia seja chamada de outro lugar.
+    if (!state.onCourt.includes(inId)) clockAcc = markOnSince(clockAcc, inId, atMs);
   }
   const onCourt = [...state.onCourt.filter((id) => id !== outId), inId];
   const ev = createEvent("substituicao", inId, atMs, state.period, nowMs, { outId });
