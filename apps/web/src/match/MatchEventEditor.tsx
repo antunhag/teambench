@@ -665,6 +665,36 @@ export function MatchEventEditor({ teamId, matchId, opponent, onClose, canDelete
     return null;
   }
 
+  /**
+   * Quem estava em quadra IMEDIATAMENTE ANTES do evento que o picker atual
+   * está editando (linha existente ou o formulário de adicionar) — usado
+   * pra filtrar "Entra"/"Sai" e nem OFERECER uma escolha que não faz
+   * sentido, em vez de só avisar depois de escolhida (ver
+   * substituicaoProblem/newSubstituicaoProblem acima).
+   */
+  function pickerBeforeOnCourt(): string[] {
+    if (!picker) return [];
+    if (pickerIsNew) {
+      const ms = parseMinSec(newTime);
+      const period = parseInt(newPeriod, 10);
+      if (ms == null || !Number.isFinite(period)) return [];
+      const synthetic: engine.MatchEvent = {
+        id: "__preview_new__",
+        type: "substituicao",
+        playerId: null,
+        outId: null,
+        ms,
+        min: Math.floor(ms / 60000),
+        sec: Math.floor((ms % 60000) / 1000),
+        period,
+        ts: Number.MAX_SAFE_INTEGER,
+      };
+      const combinedTimeline = engine.onCourtTimeline([...previewEvents, synthetic]);
+      return combinedTimeline.get(synthetic.id)?.before ?? [];
+    }
+    return pickerRow ? timeline.get(pickerRow.id)?.before ?? [] : [];
+  }
+
   return (
     <div>
       <button type="button" className="btn sm ghost" onClick={onClose} style={{ marginBottom: 12 }}>
@@ -823,12 +853,24 @@ export function MatchEventEditor({ teamId, matchId, opponent, onClose, canDelete
       )}
       {errorMessage && status === "ready" && <p className="banner error" style={{ marginTop: 8 }}>{errorMessage}</p>}
 
-      {picker && (pickerRow || pickerIsNew) && (picker.kind === "player" || picker.kind === "scorer" || picker.kind === "in") && (
+      {picker && (pickerRow || pickerIsNew) && (picker.kind === "player" || picker.kind === "scorer") && (
         <Sheet title="Escolher jogador" onClose={() => setPicker(null)}>
           <div className="pgrid">
             {roster.map((p: PlayerRow) => (
               <PlayerChip key={p.id} p={p} onClick={() => applyPickerField("playerId", p.id)} />
             ))}
+          </div>
+        </Sheet>
+      )}
+
+      {picker && (pickerRow || pickerIsNew) && picker.kind === "in" && (
+        <Sheet title="Quem entrou?" onClose={() => setPicker(null)}>
+          <div className="pgrid">
+            {roster
+              .filter((p) => !pickerBeforeOnCourt().includes(p.id)) // só quem NÃO estava em quadra nesse instante
+              .map((p: PlayerRow) => (
+                <PlayerChip key={p.id} p={p} onClick={() => applyPickerField("playerId", p.id)} />
+              ))}
           </div>
         </Sheet>
       )}
@@ -853,6 +895,7 @@ export function MatchEventEditor({ teamId, matchId, opponent, onClose, canDelete
           <div className="pgrid">
             {roster
               .filter((p) => p.id !== pickerCurrentPlayerId) // quem entra não pode ser também quem sai
+              .filter((p) => pickerBeforeOnCourt().includes(p.id)) // só quem ESTAVA em quadra nesse instante
               .map((p: PlayerRow) => (
                 <PlayerChip key={p.id} p={p} onClick={() => applyPickerField("outId", p.id)} />
               ))}
