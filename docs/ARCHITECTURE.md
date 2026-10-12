@@ -167,6 +167,23 @@ mesmo gate de `claim_live_match`/`release_live_match`
 (`has_team_role(['team_admin', 'data_entry'])`), não a policy de UPDATE
 direto.
 
+**Achado real, muito mais sério, encontrado e corrigido durante
+specs/007-convocados-sync/**: `start_live_match`/`finish_live_match` (e,
+numa severidade menor, `release_live_match`/`release_resource_lock`) eram
+chamados como `supabase.rpc(...)` solto, sem `await`/`.then()`. No
+supabase-js, o valor devolvido por `.rpc()` é um *thenable* preguiçoso — o
+pedido HTTP só é mesmo enviado quando esse thenable é consumido. Uma
+chamada solta, descartada, NUNCA disparava pedido nenhum. Na prática,
+`matches.status` nunca saiu de `'scheduled'` sozinho, pra NENHUM jogo,
+desde que a migração `0020` existe — só `claim_live_match` (já `await`ado
+em `useMatchLock.ts`) de facto funcionava. Ficou invisível porque
+`status` só decidia um rótulo cosmético no Calendário, até a aba "Registo"
+do `MatchHub` passar a depender dele (`status !== 'scheduled'`) — foi isso
+que expôs o problema: um jogo real já jogado, com o registo inteiro
+sincronizado, nunca ganhava a aba de correção. Corrigido acrescentando
+`.then(() => {})` às 4 chamadas soltas — mesmo espírito "melhor esforço"
+de antes, só consumindo o thenable de verdade.
+
 ### Trava de edição nas telas de gestão
 
 Generaliza a trava do jogo (acima) pras 3 telas de gestão que podem ter dois

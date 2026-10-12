@@ -47,7 +47,12 @@ export function useMatchLock(matchId: string) {
     function release() {
       if (releasedRef.current) return;
       releasedRef.current = true;
-      supabase.rpc("release_live_match", { p_match_id: matchId });
+      // .then() consome o thenable devolvido pelo supabase-js — sem isso o
+      // pedido de rede nunca é enviado de verdade (achado real, ver
+      // useLiveMatch.ts). Aqui a trava só se autocorrige pelo heartbeat de
+      // 45s do lado do servidor, nunca travada pra sempre — mas liberar de
+      // verdade no fecho da aba evita esse atraso sempre que der.
+      supabase.rpc("release_live_match", { p_match_id: matchId }).then(() => {});
     }
     window.addEventListener("beforeunload", release);
 

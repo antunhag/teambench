@@ -251,9 +251,21 @@ export function useLiveMatch(matchId: string, teamId: string, format: engine.Mat
   // falhar agora (sem rede), tenta de novo da próxima vez que este hook
   // montar com o jogo já terminado — RPC, não update direto, ver migração
   // 0019 (a policy de UPDATE direto em matches só permite team_admin).
+  //
+  // BUG REAL ENCONTRADO E CORRIGIDO (specs/007-convocados-sync/, achado
+  // durante verificação): `supabase.rpc(...)` do supabase-js só dispara o
+  // pedido de rede de verdade quando o thenable devolvido é consumido
+  // (`.then()`/`await`) — chamar e descartar, como aqui antes, NUNCA
+  // enviava o pedido, silenciosamente. Confirmado ao vivo: nenhum destes
+  // dois RPCs jamais apareceu na rede em meses de uso — `matches.status`
+  // nunca saiu de 'scheduled' sozinho pra NENHUM jogo, só via
+  // `claim_live_match` (que já é `await`ado em useMatchLock.ts, por isso
+  // sempre funcionou). `.then(() => {})` basta pra consumir o thenable e
+  // disparar o pedido, mantendo o espírito "melhor esforço" (sem bloquear
+  // nem tratar erro aqui).
   useEffect(() => {
     if (!state.finished) return;
-    supabase.rpc("finish_live_match", { p_match_id: matchId });
+    supabase.rpc("finish_live_match", { p_match_id: matchId }).then(() => {});
   }, [state.finished, matchId]);
 
   // Assim que o jogo realmente começa (state.started, puro — fica true só
@@ -267,7 +279,7 @@ export function useLiveMatch(matchId: string, teamId: string, format: engine.Mat
   // ninguém ter começado de verdade.
   useEffect(() => {
     if (!state.started) return;
-    supabase.rpc("start_live_match", { p_match_id: matchId });
+    supabase.rpc("start_live_match", { p_match_id: matchId }).then(() => {});
   }, [state.started, matchId]);
 
   const now = () => (manual ? manualElapsedMs : Date.now());

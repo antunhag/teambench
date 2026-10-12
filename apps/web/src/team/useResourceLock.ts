@@ -69,7 +69,10 @@ export function useResourceLock(teamId: string, resourceType: ResourceLockType, 
     function release() {
       if (releasedRef.current) return;
       releasedRef.current = true;
-      supabase.rpc("release_resource_lock", { p_team_id: teamId, p_resource_type: resourceType });
+      // .then() consome o thenable devolvido pelo supabase-js — sem isso o
+      // pedido de rede nunca é enviado de verdade (achado real, ver
+      // apps/web/src/match/useLiveMatch.ts).
+      supabase.rpc("release_resource_lock", { p_team_id: teamId, p_resource_type: resourceType }).then(() => {});
     }
     window.addEventListener("beforeunload", release);
 
