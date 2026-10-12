@@ -16,6 +16,8 @@ interface Props {
   matchId: string;
   opponent: string | null;
   formatId: string | null;
+  /** 'scheduled' | 'live' | 'finished' — vem direto de matches.status. Ver matchStatus abaixo. */
+  status: string;
   onExit: () => void;
   sync: ReturnType<typeof useOutboxSync>;
 }
@@ -24,7 +26,7 @@ interface Props {
 // equipa nunca chegou a configurar nenhum — nunca fica sem duração nenhuma.
 const FALLBACK_FORMAT: MatchFormat = { periodCount: 2, periodMinutes: 25, overtimePeriodCount: 0, overtimeMinutes: 0 };
 
-export function MatchFlow({ teamId, matchId, opponent, formatId, onExit, sync }: Props) {
+export function MatchFlow({ teamId, matchId, opponent, formatId, status: matchStatus, onExit, sync }: Props) {
   const { players, status } = usePlayers(teamId);
   const { formats } = useMatchFormats(teamId);
   const ourLabel = useClubLabel(teamId);
@@ -68,6 +70,7 @@ export function MatchFlow({ teamId, matchId, opponent, formatId, onExit, sync }:
           opponent={opponent}
           format={format}
           minConvocados={minConvocados}
+          matchStatus={matchStatus}
           activeRoster={activeRoster}
           ourLabel={ourLabel}
         />
@@ -82,6 +85,7 @@ function MatchFlowEditor({
   opponent,
   format,
   minConvocados,
+  matchStatus,
   activeRoster,
   ourLabel,
 }: {
@@ -90,10 +94,11 @@ function MatchFlowEditor({
   opponent: string | null;
   format: MatchFormat;
   minConvocados: number | null;
+  matchStatus: string;
   activeRoster: PlayerRow[];
   ourLabel: string;
 }) {
-  const live = useLiveMatch(matchId, teamId, format);
+  const live = useLiveMatch(matchId, teamId, format, matchStatus);
   const [showSummary, setShowSummary] = useState(false);
   // Confirmar o pré-jogo só leva à tela do jogo — não inicia o relógio
   // sozinho. O cinco inicial pode continuar incompleto até ali: o cronómetro

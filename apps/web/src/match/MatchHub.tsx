@@ -65,7 +65,7 @@ export function MatchHub({ teamId, matchId, opponent, formatId, status, canManag
       </nav>
 
       {tab === "jogo" && (
-        <MatchFlow teamId={teamId} matchId={matchId} opponent={opponent} formatId={formatId} onExit={onExit} sync={sync} />
+        <MatchFlow teamId={teamId} matchId={matchId} opponent={opponent} formatId={formatId} status={status} onExit={onExit} sync={sync} />
       )}
       {tab === "rotacoes" && showRotacoes && (
         <RotationPlanner teamId={teamId} matchId={matchId} opponent={opponent} formatId={formatId} status={status} onClose={onExit} />

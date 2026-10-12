@@ -30,7 +30,7 @@ function loadState(matchId: string): engine.LiveMatchState {
 
 const UNDO_LIMIT = 25;
 
-export function useLiveMatch(matchId: string, teamId: string, format: engine.MatchFormat) {
+export function useLiveMatch(matchId: string, teamId: string, format: engine.MatchFormat, dbStatus?: string) {
   const [state, setState] = useState<engine.LiveMatchState>(() => loadState(matchId));
   const [tick, setTick] = useState(0); // força re-render a cada segundo enquanto o relógio corre, só para o display
   const historyRef = useRef<engine.LiveMatchState[]>([]);
@@ -87,11 +87,23 @@ export function useLiveMatch(matchId: string, teamId: string, format: engine.Mat
   // `replayEvents` — `state.events` é só ações em quadra (ver
   // `LiveMatchState.squadEvents`); misturar os dois poluiria o registo
   // cronológico/timeline exibidos noutras telas.
+  //
+  // BUG REAL ENCONTRADO E CORRIGIDO: a guarda `state.events.length > 0` só
+  // olha pro cache local deste aparelho — uma vez que ele tem QUALQUER
+  // progresso salvo, nunca mais volta a consultar o Supabase, mesmo que o
+  // jogo já tenha sido corrigido depois (ex.: via aba Registo, que grava
+  // direto no Supabase sem nunca tocar nesse cache local). Resultado real:
+  // corrigir um jogo terminado pela aba Registo e reabrir a aba Jogo no
+  // MESMO aparelho continuava a mostrar a versão antiga, poluída, até
+  // limpar o cache à mão. Um jogo `finished` nunca mais recebe uma ação
+  // local legítima por este caminho (só a Registo mexe nele a partir
+  // daí) — por isso, pra esse caso, SEMPRE confia no Supabase por cima do
+  // que estiver em cache, nunca o contrário.
   const [checkingRemote, setCheckingRemote] = useState(true);
   useEffect(() => {
     let cancelled = false;
     async function checkRemote() {
-      if (state.events.length > 0) {
+      if (state.events.length > 0 && dbStatus !== "finished") {
         setCheckingRemote(false);
         return;
       }

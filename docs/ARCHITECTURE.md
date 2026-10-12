@@ -87,6 +87,20 @@ registando localmente; sincroniza quando a rede volta, via `apps/web/src/sync/`)
 e o que torna possível reconstruir a Timeline/Resumo de forma consistente mesmo
 depois de correções feitas noutro aparelho.
 
+**Achado real, encontrado e corrigido durante specs/007-convocados-sync/**: a
+frase acima ("mesmo depois de correções feitas noutro aparelho") só era
+verdade pra um aparelho que NUNCA tinha cache local nenhum deste jogo —
+`useLiveMatch.ts`'s `checkRemote` só ia buscar a versão nova no Supabase
+quando `state.events` local estava vazio; uma vez com qualquer progresso em
+cache, nunca mais voltava a verificar, mesmo que o jogo tivesse sido
+corrigido depois pela aba Registo (que grava direto no Supabase, sem tocar
+nesse cache). Na prática: corrigir um jogo `finished` pela Registo e reabrir
+a aba Jogo no MESMO aparelho continuava a mostrar a versão antiga, poluída,
+até limpar o cache à mão. Corrigido: pra um jogo `finished`, `checkRemote`
+ignora o cache local e confia sempre no Supabase — seguro porque um jogo
+`finished` nunca mais recebe uma ação local legítima por esse caminho (só a
+Registo mexe nele a partir daí).
+
 ### Seleção de convocados/titulares — também event-sourced, mas separada do registo de jogo
 
 A lista de convocados (quem está disponível pra jogar) e titulares (cinco
