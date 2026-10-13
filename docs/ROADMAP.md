@@ -5,7 +5,7 @@
 > [constituição](../.specify/memory/constitution.md), Princípio III) antes de
 > qualquer código — este documento só regista a intenção e a prioridade.
 >
-> Última revisão: 2026-10-13 (endurecimento do UPDATE em `match_events`).
+> Última revisão: 2026-10-13 (upgrade de `vite`/`vitest` — 0 vulnerabilidades).
 
 ## Agora
 
@@ -20,10 +20,21 @@
 - Verificar domínio de envio no Resend (resend.com/domains) — hoje bloqueia
   qualquer convite de chegar por email pra quem não é o dono da conta
   ([docs/SECURITY.md](SECURITY.md)).
-- Resolver a vulnerabilidade crítica em dependências de dev (`vitest`/`vite`)
-  — exige upgrade maior, avaliar com calma antes de forçar.
-
 ## Feito recentemente
+
+- **Resolver as vulnerabilidades em dependências de dev (`vitest`/`vite`)**
+  (2026-10-13) — `npm audit` apontava 6 achados (1 crítico — prototype
+  pollution/RCE no `tinypool`, usado pelo `vitest`; 1 moderado — CORS
+  indevido no `esbuild`, usado pelo `vite`). `npm audit fix --force` queria
+  saltar direto pra `vite@8`/`vitest@5` (breaking change, e `vitest@5` exige
+  Node ≥22.12 — acima do Node 20 fixado no CI). Investigação nas próprias
+  advisories mostrou que o `tinypool` vulnerável é corrigido a partir de
+  `2.1.2`, e `vitest@4` já não depende mais de `tinypool` (removido do
+  próprio pacote) — então `vite@6`/`vitest@4` já bastam, e ambos continuam
+  compatíveis com Node 20. Upgrade aplicado nessa combinação menor;
+  `vite-plugin-pwa`/`@preact/preset-vite` não precisaram mudar (já suportam
+  vite 6). `npm audit` → 0 achados. Suite inteira (183 testes, incluindo o
+  `packages/db-tests` novo), typecheck, build e dev server conferidos depois.
 
 - **Trigger de consistência de `team_id` denormalizado** (2026-10-09) —
   achado do `security-auditor` ao revisar a migração `0022`: nenhuma tabela

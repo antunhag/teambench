@@ -300,9 +300,14 @@ rejeitada.
   menos amigável numa das duas transações. Não corrigido — exigiria lógica
   de retry/mensagem especial pra um caso extremamente improvável num clube
   com poucos Admins.
-- **Dependências de desenvolvimento** (`vite`/`vitest`, nunca enviadas pro
-  bundle de produção — `npm audit --omit=dev` dá 0 achados) têm 6
-  vulnerabilidades conhecidas, incluindo uma crítica (RCE via poluição de
-  protótipo no `tinypool`, usado pelo `vitest`), só corrigíveis com upgrade
-  maior (`vite` 5→8, `vitest` 4→5) — adiado deliberadamente pra não arriscar
-  quebrar a suite de testes/build sem verificação cuidadosa primeiro.
+**Resolvido (2026-10-13)**: as 6 vulnerabilidades de `vite`/`vitest` (nunca
+enviadas pro bundle de produção — `npm audit --omit=dev` já dava 0 achados
+mesmo antes) foram corrigidas sem precisar do upgrade maior que `npm audit
+fix --force` sugeria (`vite` 8/`vitest` 5 — este último exige Node ≥22.12,
+acima do Node 20 do CI). As próprias advisories mostraram que `tinypool`
+(RCE via poluição de protótipo) é corrigido a partir de `2.1.2`, e
+`vitest@4` já não depende mais dele; `vite@6` já traz `esbuild` ≥0.25.0
+(corrige o CORS indevido). Upgrade aplicado nessa combinação menor —
+`vite@6`/`vitest@4`, ambos compatíveis com Node 20 — sem precisar mudar
+`vite-plugin-pwa`/`@preact/preset-vite`. `npm audit` → 0 achados. Detalhe em
+[docs/ROADMAP.md](ROADMAP.md).
