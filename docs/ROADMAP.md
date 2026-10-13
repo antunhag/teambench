@@ -5,7 +5,7 @@
 > [constituição](../.specify/memory/constitution.md), Princípio III) antes de
 > qualquer código — este documento só regista a intenção e a prioridade.
 >
-> Última revisão: 2026-10-09 (geração automática de plano de rotação).
+> Última revisão: 2026-10-13 (endurecimento do UPDATE em `match_events`).
 
 ## Agora
 
@@ -20,8 +20,6 @@
 - Verificar domínio de envio no Resend (resend.com/domains) — hoje bloqueia
   qualquer convite de chegar por email pra quem não é o dono da conta
   ([docs/SECURITY.md](SECURITY.md)).
-- Endurecer `match_events` contra UPDATE fora do resync idempotente
-  (achado da auditoria, adiado por exigir desenho cuidadoso de trigger).
 - Resolver a vulnerabilidade crítica em dependências de dev (`vitest`/`vite`)
   — exige upgrade maior, avaliar com calma antes de forçar.
 - **Trigger de consistência de `team_id` denormalizado** — achado do
@@ -35,6 +33,17 @@
   compartilhado pras três tabelas, revisada pelo `security-auditor`.
 
 ## Feito recentemente
+
+- **Endurecer `match_events` contra UPDATE fora do resync idempotente**
+  (2026-10-13) — achado da primeira auditoria de segurança (2026-10-07):
+  a policy de UPDATE só checava quem editava, nunca o quê, deixando um
+  `data_entry` reescrever qualquer campo de um evento histórico e contornar
+  o DELETE admin-only por outra via. Corrigido com a trigger
+  `guard_match_events_update` (migração `0026`): só deixa passar um reenvio
+  idêntico (resync de verdade) ou um UPDATE cujo payload traga
+  `correcao: true` (a Registo passou a sempre incluir essa flag ao salvar).
+  Revisado pelo `security-auditor` antes de aplicar — confirmado seguro,
+  sem achados. Detalhe completo em [docs/SECURITY.md](SECURITY.md).
 
 - **Geração automática de plano de rotação completo** (2026-10-09) — spec
   completa em [specs/004-rotation-plan-generation/spec.md](../specs/004-rotation-plan-generation/spec.md).

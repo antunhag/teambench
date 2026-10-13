@@ -1,6 +1,15 @@
 // Fila de sincronização — cada evento do jogo entra aqui assim que acontece
 // (junto com ser gravado no estado local, que continua sendo a fonte de
 // verdade). Guardada em localStorage: sobrevive a fechar/reabrir a app.
+//
+// INVARIANTE IMPORTANTE: um item, uma vez enfileirado, nunca é recalculado —
+// cada retry de flush() (useOutboxSync.ts) reenvia exatamente este mesmo
+// objeto, até sincronizar com sucesso e sair daqui. A trigger
+// match_events_update_guard (migração 0026) depende disto pra reconhecer um
+// reenvio de verdade (dado idêntico ao já gravado); se algum dia este objeto
+// passar a ser reconstruído a cada retry (ex.: um campo recalculado na hora),
+// o reenvio passaria a ser rejeitado pela trigger — ficaria preso na fila
+// pra sempre, em vez de sincronizar.
 const KEY = "teambench.outbox";
 
 export interface OutboxItem {

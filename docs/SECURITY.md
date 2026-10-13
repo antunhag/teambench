@@ -246,15 +246,37 @@ faz upsert pela própria chave `(match_id, player_id, slot_type)` com os
 mesmos valores de FK), então o trigger não quebra nenhum fluxo existente.
 Revisão: sem achados.
 
+## Endurecimento do UPDATE em `match_events` — migração 0026
+
+Achado na primeira auditoria de segurança (2026-10-07, ver histórico desta
+seção): `match_events_update_sync` (migração 0005) só checava QUEM fazia o
+UPDATE (`team_admin`/`data_entry`), nunca O QUE mudava. A policy existia só
+pra destravar o reenvio idempotente da fila offline (`useOutboxSync.ts`: o
+`upsert()`/`onConflict` vira UPDATE aos olhos do Postgres) — o comentário da
+própria 0005 já assumia "o cliente sempre reenvia os mesmos dados", mas nunca
+impunha isso. Na prática, qualquer conta `data_entry`/`team_admin` conseguia,
+via UPDATE direto na API (por fora da tela "Corrigir registo"), reescrever
+silenciosamente qualquer campo de qualquer evento já registado — contornando
+a restrição de DELETE (admin-only, migração 0011) por outra via: não
+precisava apagar pra apagar a verdade, bastava sobrescrever.
+
+Corrigido com uma trigger (`guard_match_events_update`, `before update`) que
+só deixa um UPDATE passar quando (a) os campos que importam pro jogo
+(`match_id`, `team_id`, `type`, `player_id`, `payload`, `ms`, `min`, `sec`,
+`period`) ficam idênticos ao que já existia — reenvio de verdade, já que o
+outbox local (`outbox.ts`) guarda o mesmo objeto e nunca o recalcula entre
+tentativas (invariante agora documentada ali, da qual a segurança desta
+trigger depende) — ou (b) o novo `payload` traz `correcao: true`, flag que a
+Registo (`MatchEventEditor.tsx`) agora sempre inclui ao salvar uma correção.
+Qualquer outra mudança é rejeitada. Isto não distingue "pela tela da Registo"
+de "por fora dela" (RLS/triggers nunca conseguem isso — quem tem o papel
+certo tem a mesma API de qualquer jeito); só exige que toda mudança real se
+autodeclare como correção, fechando a reescrita silenciosa e sem marca
+nenhuma. Revisão do `security-auditor`: sem achados — confirmou que nenhum
+outro caminho de escrita existente na app quebra com a trigger.
+
 ## O que ainda não está endurecido (próximos candidatos a `security-auditor`)
 
-- **`match_events` confia que o cliente só reenvia dados idênticos num
-  resync** (migração 0005) — nada na RLS impede um `data_entry` de alterar
-  qualquer campo de um evento histórico via UPDATE direto, o que contorna a
-  restrição de DELETE (admin-only, migração 0011) por outra via. Precisa de
-  um trigger que só aceite UPDATE quando os campos de jogo não mudaram —
-  adiado por exigir desenho cuidadoso pra não quebrar o resync offline de
-  verdade (Princípio I da constituição).
 - Domínio de email não verificado no Resend (ver acima) — bloqueia onboarding
   real, não é falha de isolamento de dados, mas é o item aberto mais visível hoje.
 - Sem testes automatizados de RLS (os testes de `packages/engine` nunca tocam

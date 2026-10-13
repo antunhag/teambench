@@ -394,6 +394,11 @@ export function MatchEventEditor({ teamId, matchId, opponent, onClose, canDelete
       lineup: draft.lineup,
       reasonId: draft.reasonId,
       label: draft.label,
+      // Toda gravação por aqui é, por definição, uma correção feita depois do
+      // registo original — exigido pela trigger match_events_update_guard
+      // (migração 0026): um UPDATE que muda dado sem essa flag é rejeitado,
+      // pra fechar a porta de reescrever o histórico sem deixar marca.
+      correcao: true,
     };
     // .select() confirma que a linha foi mesmo atualizada — sem ele, um
     // UPDATE bloqueado pela RLS devolveria "sucesso" mesmo sem mudar nada
