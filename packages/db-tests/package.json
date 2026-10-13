@@ -1,0 +1,16 @@
+{
+  "name": "@teambench/db-tests",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.9",
+    "@types/node": "^20.14.0",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.4"
+  }
+}

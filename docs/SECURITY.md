@@ -275,13 +275,23 @@ autodeclare como correção, fechando a reescrita silenciosa e sem marca
 nenhuma. Revisão do `security-auditor`: sem achados — confirmou que nenhum
 outro caminho de escrita existente na app quebra com a trigger.
 
+Primeiro teste automatizado desta trigger em `packages/db-tests`
+(`matchEventsUpdateGuard.test.ts`, PGlite — ver `docs/ARCHITECTURE.md` e
+Princípio IV da constituição, emendado em 2026-10-13 pra permitir exatamente
+isto): carrega o arquivo real da migração `0026` e cobre os 3 casos — reenvio
+idêntico aceito, correção com `correcao: true` aceita, qualquer outra mudança
+rejeitada.
+
 ## O que ainda não está endurecido (próximos candidatos a `security-auditor`)
 
 - Domínio de email não verificado no Resend (ver acima) — bloqueia onboarding
   real, não é falha de isolamento de dados, mas é o item aberto mais visível hoje.
 - Sem testes automatizados de RLS (os testes de `packages/engine` nunca tocam
   Supabase) — toda garantia de RLS hoje é leitura manual da policy, não
-  verificação executável.
+  verificação executável. `packages/db-tests` (acima) cobre a trigger de
+  `match_events`, mas não testa nenhuma policy de RLS em si (PGlite não tem
+  `auth.uid()`/contexto de sessão — testar RLS de verdade precisaria do
+  Supabase CLI local, ainda não configurado neste projeto).
 - **Remover/despromover os 2 últimos Admins de uma equipa ao mesmo tempo**
   (duas transações simultâneas, caso raríssimo) produz um erro de deadlock
   do Postgres em vez da mensagem traduzida "é o único Admin" — a trava

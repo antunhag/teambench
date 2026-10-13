@@ -22,6 +22,14 @@ mesmo com um único clube em uso.
   Relógio de jogo, replay de eventos, resumo/exportações, timeline, plano de rotação.
   Testado com Vitest (`packages/engine/test/`) — é a camada com cobertura de testes
   automatizados real do projeto; `apps/web` não tem testes automatizados hoje.
+- **`packages/db-tests`** (2026-10-13) — primeiro teste automatizado de SQL/trigger do
+  projeto, contra PGlite (Postgres embutido via WASM, zero Docker, zero rede, nunca o
+  Supabase real — ver Princípio IV da constituição, emendado pra permitir isto). Carrega
+  o ARQUIVO real da migração sob teste (`fs.readFileSync`, nunca uma cópia retranscrita)
+  contra um esquema mínimo (só as tabelas que a trigger referencia por FK) — se a
+  migração for editada depois, o teste passa a testar o arquivo editado automaticamente.
+  Primeiro caso: `guard_match_events_update` (migração `0026`, ver nota em
+  `docs/SECURITY.md`).
 - **`apps/web`** — Preact + Vite + TypeScript, é a única interface (SPA, PWA com
   service worker via `vite-plugin-pwa`). Sem framework de componentes pesado de
   propósito — o domínio já fica isolado em `packages/engine`.
