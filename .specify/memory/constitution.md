@@ -1,19 +1,22 @@
 <!--
 Sync Impact Report
-Version change: 1.0.0 → 1.1.0
-Rationale: MINOR — Princípio III reformulado (mesma intenção, mais preciso: "hoje" em vez
-  de absoluto, evita fechar portas caras de reabrir) + Princípio VI novo (documentação
-  viva) + gate (5) novo na secção de Portões. Nenhum princípio foi removido ou teve a
-  regra original invertida.
+Version change: 1.1.0 → 1.2.0
+Rationale: MINOR — Princípio IV reformulado (mesma intenção de fundo, regra mais precisa:
+  a propriedade não-negociável é "nunca rede, nunca o Supabase real", não literalmente
+  "nunca testar SQL" — passa a permitir explicitamente um pacote dedicado de teste de
+  migração/trigger contra Postgres local embutido, ex. PGlite, sem Docker/servidor/rede)
+  + gate (1) da secção de Portões passa a cobrir esse pacote novo quando existir. Nenhum
+  princípio foi removido; a garantia original (testes nunca tocam dado real) não foi
+  afrouxada — ficou mais explícita sobre qual é o critério real.
 Modified principles:
-  - III. "Escopo pragmático — sem construir pra uma escala que não existe"
-    → "Escopo pragmático, hoje mono-clube — mas sem fechar portas baratas de manter abertas"
-Added sections:
-  - Principle VI. Documentação viva do sistema
+  - IV. "Testes nunca tocam dados reais de produção" — mesmo título e intenção, regra
+    reescrita (ver corpo do princípio).
+Added sections: none
 Removed sections: none
 Deferred TODOs:
-  - Criar docs/ARCHITECTURE.md e docs/SECURITY.md (referenciados pelo Princípio VI) —
-    próxima ação, fora do escopo desta emenda (só constituição é alterada aqui).
+  - Criar o pacote `packages/db-tests` (PGlite) com o teste da trigger
+    `guard_match_events_update` (migração 0026) — próxima ação, fora do escopo desta
+    emenda (só a constituição é alterada aqui).
 -->
 
 # Teambench Constitution
@@ -54,13 +57,20 @@ mais. Toda proposta de arquitetura maior (ex.: o módulo de cortes de vídeo) pa
 primeiro pelo `/speckit-specify` + `/speckit-plan`, nunca é implementada ad-hoc direto.
 
 ### IV. Testes nunca tocam dados reais de produção
-Já aconteceu dados de aptidão de jogadores reais ficarem corrompidos por automação
-de testes a correr contra o Supabase de produção sem querer. Testes automatizados
-vivem em `packages/engine/test/` (Vitest, sem rede, sem Supabase). Qualquer
-verificação manual no navegador contra dados reais (ex.: conferir uma correção na
-Timeline) é só LEITURA ou usa um registo de teste claramente marcado como tal
-(ex.: email `*.debug.test@example.com`, jogo "teste"), nunca escreve em cima de um
-jogo ou atleta real sem confirmação explícita do treinador.
+Já aconteceu dados de aptidão de jogadores reais ficarem corrompidos por automação de
+testes a correr contra o Supabase de produção sem querer. A regra não-negociável é a
+propriedade de fundo, não o nome da ferramenta: testes automatizados NUNCA tocam rede
+e NUNCA se conectam a um projeto Supabase real (produção ou qualquer outro, local ou
+remoto). `packages/engine/test/` (Vitest, TypeScript puro, zero dependências, zero
+rede) continua sendo o lar padrão dos testes de lógica de domínio. Testar SQL de
+migração/trigger (ex.: RLS, guards de integridade) contra um Postgres totalmente
+local e embutido (ex.: PGlite — sem Docker, sem servidor, sem socket de rede nenhum)
+é permitido num pacote dedicado separado, desde que esse Postgres nunca se conecte a
+nenhum projeto Supabase real. Qualquer verificação manual no navegador contra dados
+reais (ex.: conferir uma correção na Timeline) é só LEITURA ou usa um registo de
+teste claramente marcado como tal (ex.: email `*.debug.test@example.com`, jogo
+"teste"), nunca escreve em cima de um jogo ou atleta real sem confirmação explícita
+do treinador.
 
 ### V. Simplicidade pra quem não é técnico
 Quem usa o Teambench de verdade é o treinador em quadra, não um programador. Toda
@@ -96,12 +106,14 @@ nunca presumidos como automáticos.
 Todo `git push` para `main` vai DIRETO para produção (GitHub Pages, sem staging,
 sem gate de CI além do próprio build) — é imediatamente visível pro clube real.
 Por isso, antes de qualquer push: (1) `npm test --workspace packages/engine` tem
-de passar; (2) `npx tsc --noEmit` na app afetada tem de estar limpo; (3)
-`npm run build --workspace apps/web` tem de compilar sem erro; (4) qualquer mudança
-visível na UI é conferida no navegador contra o fluxo real antes de ser dada como
-pronta — nunca só "o código parece certo"; (5) se a mudança alterou arquitetura ou
-o modelo de segurança/RLS, `docs/ARCHITECTURE.md` e/ou `docs/SECURITY.md` (ver
-Princípio VI) foram atualizados antes do push, não depois.
+de passar, e também o pacote dedicado de teste de SQL/migrações (ex.:
+`packages/db-tests`, ver Princípio IV), quando existir; (2) `npx tsc --noEmit` na
+app afetada tem de estar limpo; (3) `npm run build --workspace apps/web` tem de
+compilar sem erro; (4) qualquer mudança visível na UI é conferida no navegador
+contra o fluxo real antes de ser dada como pronta — nunca só "o código parece
+certo"; (5) se a mudança alterou arquitetura ou o modelo de segurança/RLS,
+`docs/ARCHITECTURE.md` e/ou `docs/SECURITY.md` (ver Princípio VI) foram
+atualizados antes do push, não depois.
 
 ## Governance
 
@@ -116,4 +128,4 @@ documentada conforme o Princípio VI, antes de ser aplicada em produção — na
 ausência de revisão de equipa, essa verificação é feita explicitamente invocando o
 subagente relevante, não assumida.
 
-**Version**: 1.1.0 | **Ratified**: 2026-10-07 | **Last Amended**: 2026-10-07
+**Version**: 1.2.0 | **Ratified**: 2026-10-07 | **Last Amended**: 2026-10-13
