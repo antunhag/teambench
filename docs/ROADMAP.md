@@ -22,17 +22,19 @@
   ([docs/SECURITY.md](SECURITY.md)).
 - Resolver a vulnerabilidade crítica em dependências de dev (`vitest`/`vite`)
   — exige upgrade maior, avaliar com calma antes de forçar.
-- **Trigger de consistência de `team_id` denormalizado** — achado do
-  `security-auditor` ao revisar a migração `0022` (2026-10-09): nenhuma
-  tabela que denormaliza `team_id` (`player_aptitudes`, `rotation_plan_stints`,
-  `rotation_plan_weights`) valida que esse `team_id` bate com o time real do
-  registo pai (`match_id`/`player_id`), nem as policies de UPDATE impedem
-  reatribuir `team_id` pra outra equipa do mesmo admin (mesma classe de bug
-  já corrigida pra `teams.club_id` na migração `0015`). Risco baixo hoje
-  (mono-admin por equipa), mas vale uma migração dedicada com trigger
-  compartilhado pras três tabelas, revisada pelo `security-auditor`.
 
 ## Feito recentemente
+
+- **Trigger de consistência de `team_id` denormalizado** (2026-10-09) —
+  achado do `security-auditor` ao revisar a migração `0022`: nenhuma tabela
+  que denormaliza `team_id` (`player_aptitudes`, `rotation_plan_stints`,
+  `rotation_plan_weights`) validava que esse `team_id` batia com o time real
+  do registo pai, nem as policies de UPDATE impediam reatribuir `team_id`
+  pra outra equipa do mesmo admin (mesma classe de bug já corrigida pra
+  `teams.club_id` na migração `0015`). Corrigido com `guard_denormalized_team_id`
+  (migrações `0023`/`0024`), revisado pelo `security-auditor`. Detalhe
+  completo em [docs/SECURITY.md](SECURITY.md). (Este item ficou esquecido na
+  fila "Agora" depois de já corrigido — corrigido agora, 2026-10-13.)
 
 - **Endurecer `match_events` contra UPDATE fora do resync idempotente**
   (2026-10-13) — achado da primeira auditoria de segurança (2026-10-07):
