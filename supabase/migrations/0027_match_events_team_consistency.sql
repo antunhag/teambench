@@ -1,0 +1,105 @@
+-- Fecha a lacuna caracterizada em packages/db-tests/test/
+-- matchEventsTeamConsistency.test.ts: até aqui, nada impedia que
+-- match_events.team_id ficasse dessincronizado do team_id real do jogo
+-- (matches.team_id) referenciado por match_id — nem no INSERT (não havia
+-- nenhuma trigger), nem no UPDATE com correcao:true (0026 só exige a flag,
+-- nunca valida o valor novo de match_id/team_id). player_aptitudes/
+-- rotation_plan_stints/rotation_plan_weights já tinham proteção equivalente
+-- desde 0023/0024 (guard_denormalized_team_id) — match_events nunca a
+-- recebeu, apesar do comentário da própria 0023 a citar como o padrão
+-- original.
+--
+-- Also fechado aqui (decisão de produto confirmada para este lote): mover um
+-- jogo já com eventos para outra equipa (UPDATE matches SET team_id = ...)
+-- deixaria exatamente a mesma inconsistência pela porta oposta — por isso a
+-- proteção tem de valer nos dois sentidos, não só em escritas de
+-- match_events.
+--
+-- DECISÃO DE DESENHO: FK composta em vez de trigger dedicada.
+-- Comparado com uma trigger BEFORE INSERT/UPDATE em match_events (que
+-- precisaria de um SELECT em matches para validar, e de uma segunda trigger
+-- BEFORE UPDATE em matches fazendo um SELECT em match_events para proteger o
+-- sentido inverso), uma FK composta (match_id, team_id) -> matches(id,
+-- team_id):
+--   - usa o mecanismo de bloqueio da própria FK do Postgres (lock de
+--     referência sobre a linha-pai) em vez de um "SELECT depois decide" em
+--     PL/pgSQL — não há janela de corrida entre o SELECT de uma trigger e o
+--     COMMIT de outra transação a inserir/mover algo entretanto;
+--   - dá, de graça, a proteção nos DOIS sentidos (INSERT/UPDATE em
+--     match_events E UPDATE de matches.team_id) com uma única constraint,
+--     em vez de duas triggers a manter sincronizadas;
+--   - interage corretamente com 0026: a trigger BEFORE UPDATE de 0026 corre
+--     primeiro (pode rejeitar logo, ex.: mudança sem correcao:true); só
+--     depois de ela deixar passar é que a FK (mecanismo interno do Postgres,
+--     não uma trigger de utilizador) valida o valor final — por isso uma
+--     correção com correcao:true que mude pra outra equipa continua
+--     corretamente bloqueada, agora pela FK, não pelo guard de 0026.
+-- Custo e bloqueios da aplicação desta migration: ADD CONSTRAINT ... UNIQUE
+-- em matches precisa de construir um índice, o que exige um lock de escrita
+-- em matches durante esse tempo. NÃO presumir que será sempre breve: a
+-- duração depende do volume de linhas em matches, da carga do sistema nesse
+-- momento, e de quanto tempo transações já em curso levarem a libertar locks
+-- conflitantes nessa tabela. ADD CONSTRAINT ... FOREIGN KEY ... NOT VALID
+-- evita o scan completo de match_events (não precisa de validar as linhas já
+-- existentes), mas ainda precisa de obter locks de escrita nas DUAS tabelas
+-- envolvidas (matches e match_events) só para registar a constraint — a
+-- espera por esses locks está sujeita às mesmas variáveis (volume, carga,
+-- transações concorrentes em curso), não só o passo de criar o índice único.
+--
+-- DADOS ANTIGOS: esta migration NÃO assume que os dados já existentes em
+-- match_events são consistentes, e NÃO os corrige. A FK é adicionada
+-- NOT VALID: novas inserções, e qualquer UPDATE que altere match_id ou
+-- team_id, ficam sujeitas à verificação da FK a partir de agora. Um UPDATE
+-- que preserve os valores de match_id/team_id (ex.: uma correção a outro
+-- campo, com correcao:true) NÃO é verificado pela FK — se a linha já estava
+-- inconsistente, uma alteração assim pode mantê-la inconsistente, como
+-- demonstrado no teste "UPDATE de campo fora da FK... na linha legada
+-- inconsistente SUCEDE" em matchEventsTeamConsistency.test.ts. Linhas já
+-- existentes NÃO são escaneadas nem validadas por esta migration — a
+-- validação global dos dados existentes continua pendente até uma validação
+-- dedicada (`alter table match_events validate constraint
+-- match_events_match_team_fk`, ou um levantamento de dados) ser feita
+-- separadamente, fora deste lote.
+--
+-- NÃO usa ON UPDATE CASCADE: mudar matches.team_id nunca reescreve
+-- match_events.team_id automaticamente. Em vez disso, se existir pelo menos
+-- um evento JÁ CONSISTENTE (team_id da linha igual ao team_id ATUAL do jogo)
+-- a referenciar o jogo, a mudança de equipa do jogo é REJEITADA — um jogo
+-- sem eventos consistentes pode mudar de equipa livremente (sujeito às
+-- permissões/policies já existentes, inalteradas aqui); um jogo com pelo
+-- menos um evento consistente fica preso à sua equipa atual até uma
+-- funcionalidade dedicada de transferência de histórico (fora deste lote)
+-- decidir como tratar isso.
+--
+-- LIMITE DESTA PROTEÇÃO CONFIRMADO POR TESTE (ver secção "legado" em
+-- matchEventsTeamConsistency.test.ts): a restrição acima só enxerga linhas
+-- cujo (match_id, team_id) bate com a chave ATUAL do jogo. Um jogo cujo
+-- ÚNICO evento associado já estava inconsistente ANTES desta migration (e
+-- continua por validar, por ser NOT VALID) NÃO fica protegido contra uma
+-- nova mudança de equipa — essa linha legada nunca correspondeu à chave do
+-- jogo, logo o mecanismo de restrição da FK não a encontra e não bloqueia a
+-- mudança. Não afirmar que todo jogo com qualquer evento antigo associado
+-- está igualmente protegido enquanto existirem linhas legadas não validadas
+-- em match_events — a proteção é tão boa quanto os dados que já eram
+-- consistentes antes desta migration existir.
+-- Usa ON DELETE CASCADE — mantém exatamente o comportamento já existente
+-- (match_id references matches(id) on delete cascade, 0001): apagar um jogo
+-- continua a apagar os seus eventos, sem mudança de comportamento aqui.
+--
+-- FORA DO ÂMBITO (deliberado): player_id/players.team_id não é tocado por
+-- esta migration — fica como lacuna caracterizada e pendente de decisão de
+-- produto sobre transferência de atletas entre equipas (ver teste "D" em
+-- matchEventsTeamConsistency.test.ts). RLS não é alterada.
+
+-- Unicidade necessária no lado referenciado para suportar a FK composta
+-- abaixo. matches.id já é PRIMARY KEY (único por si só) — esta constraint
+-- não rejeita nenhuma linha existente, é automaticamente satisfeita; só
+-- cria o índice que uma FK composta exige sobre exatamente estas colunas.
+alter table matches
+  add constraint matches_id_team_id_key unique (id, team_id);
+
+alter table match_events
+  add constraint match_events_match_team_fk
+  foreign key (match_id, team_id) references matches (id, team_id)
+  on delete cascade
+  not valid;
