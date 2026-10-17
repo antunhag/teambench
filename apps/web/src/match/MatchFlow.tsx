@@ -20,13 +20,15 @@ interface Props {
   status: string;
   onExit: () => void;
   sync: ReturnType<typeof useOutboxSync>;
+  /** session.user.id — isolamento por proprietário da fila (ver outbox.ts). */
+  ownerId: string;
 }
 
 // Usado só enquanto os formatos da equipa ainda não carregaram, ou se a
 // equipa nunca chegou a configurar nenhum — nunca fica sem duração nenhuma.
 const FALLBACK_FORMAT: MatchFormat = { periodCount: 2, periodMinutes: 25, overtimePeriodCount: 0, overtimeMinutes: 0 };
 
-export function MatchFlow({ teamId, matchId, opponent, formatId, status: matchStatus, onExit, sync }: Props) {
+export function MatchFlow({ teamId, matchId, opponent, formatId, status: matchStatus, onExit, sync, ownerId }: Props) {
   const { players, status } = usePlayers(teamId);
   const { formats } = useMatchFormats(teamId);
   const ourLabel = useClubLabel(teamId);
@@ -73,6 +75,7 @@ export function MatchFlow({ teamId, matchId, opponent, formatId, status: matchSt
           matchStatus={matchStatus}
           activeRoster={activeRoster}
           ourLabel={ourLabel}
+          ownerId={ownerId}
         />
       )}
     </div>
@@ -88,6 +91,7 @@ function MatchFlowEditor({
   matchStatus,
   activeRoster,
   ourLabel,
+  ownerId,
 }: {
   teamId: string;
   matchId: string;
@@ -97,8 +101,9 @@ function MatchFlowEditor({
   matchStatus: string;
   activeRoster: PlayerRow[];
   ourLabel: string;
+  ownerId: string;
 }) {
-  const live = useLiveMatch(matchId, teamId, format, matchStatus);
+  const live = useLiveMatch(matchId, teamId, ownerId, format, matchStatus);
   const [showSummary, setShowSummary] = useState(false);
   // Confirmar o pré-jogo só leva à tela do jogo — não inicia o relógio
   // sozinho. O cinco inicial pode continuar incompleto até ali: o cronómetro
@@ -116,6 +121,12 @@ function MatchFlowEditor({
 
   return (
     <>
+      {live.enqueueFailed && (
+        <div className="banner error" style={{ marginBottom: 12 }}>
+          Não foi possível guardar um evento deste jogo neste aparelho (armazenamento cheio ou indisponível). Tente
+          noutro aparelho ou liberte espaço antes de continuar — o registo deste evento pode não estar seguro.
+        </div>
+      )}
       {live.state.started && !showSummary && (
         <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
           <button type="button" className="btn sm" onClick={() => setShowSummary(true)}>📋 Resumo</button>

@@ -30,11 +30,17 @@ function loadState(matchId: string): engine.LiveMatchState {
 
 const UNDO_LIMIT = 25;
 
-export function useLiveMatch(matchId: string, teamId: string, format: engine.MatchFormat, dbStatus?: string) {
+export function useLiveMatch(matchId: string, teamId: string, ownerId: string, format: engine.MatchFormat, dbStatus?: string) {
   const [state, setState] = useState<engine.LiveMatchState>(() => loadState(matchId));
   const [tick, setTick] = useState(0); // força re-render a cada segundo enquanto o relógio corre, só para o display
   const historyRef = useRef<engine.LiveMatchState[]>([]);
   const [canUndo, setCanUndo] = useState(false);
+  // Fica true só quando um evento não coube NEM na fila principal NEM na
+  // quarentena (outbox.ts) — caso raro e grave (localStorage indisponível
+  // ou esgotado em ambos). Aviso persistente de propósito: não se limpa
+  // sozinho, porque o evento em causa continua por garantir até alguém
+  // resolver o espaço/estado do armazenamento deste aparelho.
+  const [enqueueFailed, setEnqueueFailed] = useState(false);
 
   // Modo manual: para reconstruir/corrigir uma parte depois do jogo (ex.:
   // revendo o vídeo, ou por ter perdido o registo ao vivo por algum erro) —
@@ -177,7 +183,7 @@ export function useLiveMatch(matchId: string, teamId: string, format: engine.Mat
 
   function enqueueNewEvents(newEvents: engine.MatchEvent[]) {
     for (const ev of newEvents) {
-      enqueue({
+      const result = enqueue(ownerId, {
         client_event_id: ev.clientEventId ?? ev.id,
         match_id: matchId,
         team_id: teamId,
@@ -189,6 +195,12 @@ export function useLiveMatch(matchId: string, teamId: string, format: engine.Mat
         sec: ev.sec,
         period: ev.period,
       });
+      // "quarantined" não é mostrado aqui: fica visível no aviso global de
+      // sync (useOutboxSync), que já expõe quarantinedCount por proprietário
+      // — não é específico deste jogo. Só o caso "failed" (nem a quarentena
+      // aceitou) justifica um aviso dedicado neste ecrã, porque é o único
+      // em que o evento pode mesmo não ter sido guardado em lado nenhum.
+      if (result.status === "failed") setEnqueueFailed(true);
     }
   }
 
@@ -239,7 +251,7 @@ export function useLiveMatch(matchId: string, teamId: string, format: engine.Mat
     const removedIds = state.events
       .filter((e) => !prev.events.some((pe) => pe.id === e.id))
       .map((e) => e.clientEventId ?? e.id);
-    removeByClientEventIds(removedIds);
+    removeByClientEventIds(ownerId, removedIds);
     setCanUndo(historyRef.current.length > 0);
     setState(prev);
   }
@@ -319,6 +331,7 @@ export function useLiveMatch(matchId: string, teamId: string, format: engine.Mat
 
   return {
     upcomingSubAlert,
+    enqueueFailed,
     state,
     elapsedMs,
     format,

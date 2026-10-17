@@ -19,6 +19,8 @@ interface Props {
   canTrackLive: boolean;
   ourLabel: string;
   sync: ReturnType<typeof useOutboxSync>;
+  /** session.user.id — isolamento por proprietário da fila (ver outbox.ts). */
+  ownerId: string;
   onExit: () => void;
 }
 
@@ -35,7 +37,7 @@ interface Props {
  * jogo como registo de calendário (data/adversário/local), não ações sobre
  * o jogo em si — ver docs/ROADMAP.md.
  */
-export function MatchHub({ teamId, matchId, opponent, formatId, status, canManage, canTrackLive, ourLabel, sync, onExit }: Props) {
+export function MatchHub({ teamId, matchId, opponent, formatId, status, canManage, canTrackLive, ourLabel, sync, ownerId, onExit }: Props) {
   const [tab, setTab] = useState<Tab>("jogo");
 
   // "Registo" só faz sentido depois de o jogo ter sido aberto ao vivo pelo
@@ -65,7 +67,16 @@ export function MatchHub({ teamId, matchId, opponent, formatId, status, canManag
       </nav>
 
       {tab === "jogo" && (
-        <MatchFlow teamId={teamId} matchId={matchId} opponent={opponent} formatId={formatId} status={status} onExit={onExit} sync={sync} />
+        <MatchFlow
+          teamId={teamId}
+          matchId={matchId}
+          opponent={opponent}
+          formatId={formatId}
+          status={status}
+          onExit={onExit}
+          sync={sync}
+          ownerId={ownerId}
+        />
       )}
       {tab === "rotacoes" && showRotacoes && (
         <RotationPlanner teamId={teamId} matchId={matchId} opponent={opponent} formatId={formatId} status={status} onClose={onExit} />

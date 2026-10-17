@@ -100,8 +100,10 @@ function AuthenticatedApp({ session }: { session: Session }) {
   const club = useCurrentClub(session);
   const userTeams = useUserTeams(session);
   // Roda em segundo plano assim que há sessão — independente de qual tela
-  // está aberta, e sobrevive a trocar de tela/clube/equipa.
-  const sync = useOutboxSync();
+  // está aberta, e sobrevive a trocar de tela/clube/equipa. Isolado por
+  // session.user.id (ver outbox.ts/useOutboxSync.ts): uma troca de conta
+  // neste aparelho nunca vê nem sincroniza a fila da conta anterior.
+  const sync = useOutboxSync(session.user.id);
 
   function dismissInvite() {
     clearInviteFromUrl();
@@ -192,6 +194,7 @@ function TeamApp({
           canTrackLive={canTrackLive}
           ourLabel={ourLabel}
           sync={sync}
+          ownerId={session.user.id}
           onExit={() => setOpenMatch(null)}
         />
       ) : (
@@ -243,6 +246,25 @@ function TeamApp({
 
           {sync.pending > 0 && (
             <p className="hint">{sync.syncing ? "A sincronizar..." : `${sync.pending} evento(s) por sincronizar`}</p>
+          )}
+          {sync.corrupted && (
+            <div className="banner error" style={{ marginBottom: 12 }}>
+              A fila de sincronização deste aparelho ficou corrompida e não pode ser lida. Eventos novos estão a ser
+              guardados à parte (ver aviso de quarentena, se aparecer) — contacte o suporte antes de limpar os dados
+              deste aparelho.
+            </div>
+          )}
+          {sync.quarantinedCount > 0 && (
+            <div className="banner warn" style={{ marginBottom: 12 }}>
+              {sync.quarantinedCount} evento(s) deste aparelho não puderam entrar na fila normal de sincronização e
+              estão guardados à parte, sem envio automático. Contacte o suporte para os recuperar.
+            </div>
+          )}
+          {sync.hasLegacyData && (
+            <div className="banner warn" style={{ marginBottom: 12 }}>
+              Há dados de sincronização antigos neste aparelho, de antes desta atualização, sem proprietário
+              identificado. Não foram apagados nem atribuídos a esta conta — contacte o suporte se precisar deles.
+            </div>
           )}
 
           <Nav role={team.role} activeScreen={activeScreen} onSelect={setActiveScreen} />
