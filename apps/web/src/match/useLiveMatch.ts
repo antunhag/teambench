@@ -358,6 +358,22 @@ export function useLiveMatch(matchId: string, teamId: string, format: engine.Mat
         const withTitulars = s.started ? s : engine.goLive(s);
         return engine.resumeOrStart(withTitulars, 0);
       }),
+    // Sai do modo manual DE VOLTA pro tempo real, sem fechar a parte — ao
+    // contrário de resumeOrStart/manualResumeOrStart, não cria nenhum
+    // evento novo (não é um apito), só reancora o relógio: preserva o
+    // tempo decorrido até aqui (o `manualElapsedMs` atual) como base e
+    // volta a avançar com o relógio de parede dali em diante. Antes disto
+    // não havia NENHUMA forma de sair do modo manual no meio de uma parte
+    // — só terminando-a — o que prendia quem tocasse em "Registar com
+    // vídeo" sem querer pelo resto da parte inteira (bug real reportado:
+    // perdeu a 2ª parte toda presa nesse modo).
+    exitManualMode: () =>
+      apply((s) => {
+        const isManual = s.clock.running && s.clock.startTs === 0;
+        if (!isManual) return s;
+        const atMs = engine.matchElapsedMs(s, manualElapsedMs);
+        return { ...s, clock: { running: true, elapsedMs: atMs, startTs: Date.now() } };
+      }),
     pause: (label: string, reasonId?: string) => apply((s) => engine.pause(s, now(), label, reasonId)),
     endPause: () => apply((s) => engine.endPause(s, now())),
     // `atNowMs` deixa quem chama fixar o instante do golo no momento em que
