@@ -4,7 +4,7 @@ import { MatchEventEditor } from "./MatchEventEditor";
 import { MatchFlow } from "./MatchFlow";
 import { RotationPlanner } from "./RotationPlanner";
 
-type Tab = "jogo" | "rotacoes" | "registo";
+type Tab = "jogo" | "consola" | "rotacoes" | "registo";
 
 interface Props {
   teamId: string;
@@ -47,6 +47,11 @@ export function MatchHub({ teamId, matchId, opponent, formatId, status, canManag
   // aparecendo sempre, mesmo num jogo futuro sem nada ainda para corrigir.
   const showRegisto = canTrackLive && status !== "scheduled";
   const showRotacoes = canManage;
+  // Consola (specs/009-captura-detalhada/): segunda tela de registo ao vivo,
+  // ao lado do "Jogo" — mesma condição de quem pode registar o jogo. Só uma
+  // das duas abas monta MatchFlow de cada vez, por isso nunca há dois
+  // useLiveMatch do mesmo jogo ativos neste aparelho.
+  const showConsola = canTrackLive;
 
   return (
     <div>
@@ -54,6 +59,11 @@ export function MatchHub({ teamId, matchId, opponent, formatId, status, canManag
         <button type="button" className={`nav-tab${tab === "jogo" ? " active" : ""}`} onClick={() => setTab("jogo")}>
           Jogo
         </button>
+        {showConsola && (
+          <button type="button" className={`nav-tab${tab === "consola" ? " active" : ""}`} onClick={() => setTab("consola")}>
+            Consola
+          </button>
+        )}
         {showRotacoes && (
           <button type="button" className={`nav-tab${tab === "rotacoes" ? " active" : ""}`} onClick={() => setTab("rotacoes")}>
             Rotações
@@ -76,6 +86,20 @@ export function MatchHub({ teamId, matchId, opponent, formatId, status, canManag
           onExit={onExit}
           sync={sync}
           ownerId={ownerId}
+        />
+      )}
+      {tab === "consola" && showConsola && (
+        <MatchFlow
+          teamId={teamId}
+          matchId={matchId}
+          opponent={opponent}
+          formatId={formatId}
+          status={status}
+          onExit={onExit}
+          sync={sync}
+          ownerId={ownerId}
+          view="consola"
+          onLeave={() => setTab("jogo")}
         />
       )}
       {tab === "rotacoes" && showRotacoes && (

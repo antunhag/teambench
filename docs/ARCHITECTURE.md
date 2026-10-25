@@ -193,6 +193,30 @@ ser verificada — o app assume posse local e só reivindica a trava quando a
 rede volta (decisão consciente: priorizar conseguir registar o jogo sobre
 bloquear por uma trava inconsultável em campo).
 
+### Consola — segunda tela de registo ao vivo (specs/009-captura-detalhada/)
+
+Aba "Consola" no `MatchHub`, ao lado de "Jogo", visível com a mesma condição
+(`canTrackLive`). Monta o MESMO `MatchFlow` com `view="consola"`, por isso usa
+a mesma trava (`useMatchLock`), o mesmo `useLiveMatch`, o mesmo localStorage e
+a mesma fila de sincronização; só a tela final muda (`Consola.tsx` em vez de
+`LiveMatch.tsx`, que fica intocado). As duas abas nunca estão montadas ao
+mesmo tempo. Etapa 1 (atual): só ações que o "Jogo ao vivo" já usa — nenhum
+tipo de evento novo, nenhuma alteração no motor nem na base de dados.
+
+- Uma linha por jogador em quadra com as ações na própria linha; a posição de
+  cada linha é estado de UI (`consola/flows.ts` `reconcileSlots`, guardado em
+  `teambench.consola.slots.<matchId>`), porque o motor guarda `onCourt` como
+  lista e põe quem entra no fim. Quem entra herda a linha de quem sai; um
+  vermelho deixa a linha vaga na mesma posição.
+- Substituição e reposição de vaga são uma máquina de estados pura
+  (`consola/flows.ts` `stepFlow`): cancelar e concluir são transições
+  distintas; a reposição de uma vaga exige escolha + confirmação.
+- Tamanho dos botões 48–64 px escolhido por `consola/layout.ts` a partir da
+  altura medida da lista; a Consola ocupa o ecrã inteiro (camada fixa abaixo
+  das folhas), fora da `.page` de 760 px.
+- "Desfazer" usa o `undo()` de sempre; desativado a meio de um fluxo e quando o
+  último evento é um limite de parte (o relógio nunca recua).
+
 ### Ciclo de vida de `matches.status`
 
 `matches.status` (`scheduled` → `live` → `finished`) é só de apresentação
@@ -382,6 +406,7 @@ apps/web/src/
   auth/     # Login.tsx (link mágico + senha)
   team/     # Plantel, convites, clube/equipa, AcceptInvite, useUserTeams (todas as equipas do utilizador)
   match/    # fluxo ao vivo, Resumo, Timeline, corretor pós-jogo, planeador de rotação
+    Consola.tsx, consola/   # segunda tela de registo ao vivo (specs/009); layout.ts/flows.ts puros com testes
   sync/     # fila de sincronização offline → Supabase
 
 supabase/migrations/   # histórico completo do esquema — ver docs/SECURITY.md pro resumo do modelo de RLS

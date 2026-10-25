@@ -845,3 +845,499 @@ textarea.exportbox {
   background: color-mix(in srgb, var(--red) 10%, var(--surface));
   color: var(--red);
 }
+
+/* ---------- Consola (specs/009-captura-detalhada/) ----------
+   Camada de ecrã inteiro, abaixo das folhas (.overlay, z-index 50). O
+   tamanho dos botões vem de --cbtn (48–64 px), calculado em consola/layout.ts;
+   o espaço extra de cada linha tem de bater com rowChrome() desse ficheiro
+   (iPhone vertical 30 px; restantes 10 px). Sem hover, sem desativar zoom. */
+.consola {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: var(--bg);
+  color: var(--ink);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: calc(6px + env(safe-area-inset-top, 0px)) calc(8px + env(safe-area-inset-right, 0px))
+    calc(6px + env(safe-area-inset-bottom, 0px)) calc(8px + env(safe-area-inset-left, 0px));
+  overflow: hidden;
+  touch-action: manipulation;
+}
+.consola .cbtn {
+  min-width: 48px;
+  min-height: 48px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--ink);
+  font: 600 14px/1.1 "Work Sans", system-ui, sans-serif;
+  padding: 4px 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  hyphens: manual;
+  word-break: keep-all;
+  overflow-wrap: normal;
+  cursor: pointer;
+}
+.consola .cbtn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.consola .cbtn .cnt {
+  font-size: 11.5px;
+  font-weight: 500;
+  opacity: 0.8;
+  font-variant-numeric: tabular-nums;
+}
+.consola .cbtn.goal,
+.consola .cbtn.kick {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+.consola .cbtn.opp {
+  border: 2px solid var(--red);
+  color: var(--red);
+}
+.consola .cbtn.sai {
+  flex: 1 1 auto;
+  background: var(--red);
+  border-color: var(--red);
+  color: #fff;
+  font-size: 17px;
+  letter-spacing: 0.04em;
+}
+.consola .cbtn.warn {
+  background: var(--yellow);
+  border-color: var(--yellow);
+  color: #141414;
+}
+.consola .cbtn.yellow,
+.consola .cbtn.red {
+  font-size: 20px;
+}
+.consola .cbtn.selected {
+  outline: 3px solid var(--accent);
+  outline-offset: -1px;
+}
+
+.consola-head {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  grid-template-areas: "a c b" "s s s";
+  align-items: center;
+  gap: 2px 8px;
+}
+.consola-head .score:first-child {
+  grid-area: a;
+}
+.consola-head .clock {
+  grid-area: c;
+}
+.consola-head .score:nth-child(3) {
+  grid-area: b;
+  text-align: right;
+}
+.consola-head .side {
+  grid-area: s;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12.5px;
+}
+.consola-head .score {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.consola-head .lbl {
+  font-size: 11.5px;
+  color: var(--ink-dim);
+  overflow-wrap: anywhere;
+}
+.consola-head .val {
+  font: 700 26px/1 "Oswald", system-ui, sans-serif;
+}
+.consola-head .clock {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.consola-head .time {
+  font: 700 28px/1 "Oswald", system-ui, sans-serif;
+}
+.consola-head .fouls.warn {
+  color: var(--red);
+  font-weight: 700;
+}
+.consola-head .sync.pending {
+  color: var(--ink-dim);
+}
+
+.consola-team {
+  display: flex;
+  gap: 6px;
+}
+.consola-team .cbtn {
+  flex: 1 1 0;
+  min-height: var(--cbtn, 48px);
+}
+
+.consola-last {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 52px;
+  flex: 0 0 auto;
+  background: var(--surface-2);
+  border-radius: 10px;
+  padding: 2px 4px 2px 10px;
+}
+.consola-last.flow {
+  background: var(--yellow);
+  color: #141414;
+}
+.consola-last .txt {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 13.5px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.consola-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 4px 4px 10px;
+  border-radius: 10px;
+  background: var(--surface-2);
+  font-size: 13.5px;
+}
+.consola-banner.done {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+.consola-banner.error {
+  background: var(--red);
+  color: #fff;
+  padding: 8px 10px;
+}
+
+.consola-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.consola-rows {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+.consola-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 190px) 1fr;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 0;
+  box-shadow: inset 0 -1px 0 var(--line);
+}
+.consola-who {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.15;
+}
+.consola-who .n {
+  font-weight: 700;
+  font-size: 13px;
+}
+.consola-who .nm {
+  font-weight: 600;
+  font-size: 15px;
+  overflow-wrap: anywhere;
+}
+.consola-who .meta {
+  font-size: 12px;
+  color: var(--ink-dim);
+}
+.consola-row.gr .consola-who .n,
+.consola-row.gr .consola-who .nm {
+  color: var(--gr);
+}
+.consola-row.treat {
+  background: color-mix(in srgb, var(--red) 10%, transparent);
+}
+.consola-row.vacant .consola-who .nm {
+  color: var(--red);
+}
+.consola-vacant-hint {
+  flex: 1;
+  height: var(--cbtn, 48px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px dashed var(--line);
+  border-radius: 10px;
+  font-size: 13px;
+  color: var(--ink-dim);
+}
+.consola-actions {
+  display: flex;
+  gap: 6px;
+  min-width: 0;
+}
+.consola-actions .cbtn {
+  flex: 1 1 0;
+  height: var(--cbtn, 48px);
+}
+.consola-actions .cbtn.more {
+  flex: 0 0 var(--cbtn, 48px);
+  font-size: 22px;
+}
+
+.consola-bench-title {
+  font: 600 13px "Oswald", system-ui, sans-serif;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+.consola-bench-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.consola-bench-list .cbtn.bench {
+  flex: 1 1 140px;
+  flex-direction: row;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 4px 10px;
+}
+.consola .cbtn.bench.gr {
+  color: var(--gr);
+}
+.consola .cbtn.bench.entra {
+  border: 2px solid var(--accent);
+}
+.sheet .consola-bench-list .cbtn {
+  min-height: 48px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--ink);
+  font: 600 14px "Work Sans", system-ui, sans-serif;
+}
+.sheet .consola-bench-list .cbtn.selected {
+  outline: 3px solid var(--accent);
+}
+.consola-confirm {
+  min-height: 52px;
+}
+
+/* iPhone vertical: nome por cima, ações numa fila (rowChrome = 30 px). */
+.consola--iphone-v .consola-row {
+  grid-template-columns: 1fr;
+  gap: 0;
+  padding: 4px 0;
+}
+.consola--iphone-v .consola-who {
+  flex-direction: row;
+  align-items: baseline;
+  gap: 6px;
+  height: 22px;
+  overflow: hidden;
+}
+.consola--iphone-v .consola-who .nm {
+  overflow-wrap: normal;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.consola--iphone-v .consola-who .meta {
+  margin-left: auto;
+  white-space: nowrap;
+}
+.consola--iphone-v .consola-actions .cbtn {
+  font-size: 13px;
+}
+.consola-dock {
+  display: flex;
+  gap: 6px;
+}
+.consola-dock .cbtn {
+  flex: 1 1 0;
+}
+.consola-dock .cbtn:last-child {
+  flex: 0 0 52px;
+  font-size: 20px;
+}
+
+/* iPhone horizontal: sem barra; cabeçalho e último evento numa só faixa;
+   coluna lateral com equipa/banco/resumo; rowChrome = 6 px. */
+.consola-top {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.consola-top .consola-head {
+  flex: 0 0 auto;
+}
+.consola-top .consola-last {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.consola--iphone-h .consola-row {
+  padding: 3px 0;
+}
+.consola--iphone-h .consola-head {
+  grid-template-columns: auto auto auto 1fr;
+  grid-template-areas: "a c b s";
+}
+.consola--iphone-h .consola-head .side {
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0;
+}
+.consola--iphone-h .consola-head .val,
+.consola--iphone-h .consola-head .time {
+  font-size: 24px;
+}
+.consola--iphone-h .consola-body {
+  flex-direction: row;
+}
+.consola--iphone-h .consola-row {
+  grid-template-columns: 120px 1fr;
+}
+.consola--iphone-h .consola-who {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 4px;
+}
+.consola--iphone-h .consola-who .nm {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  overflow-wrap: normal;
+}
+.consola--iphone-h .consola-who .meta {
+  grid-column: 1 / -1;
+}
+.consola-side {
+  flex: 0 0 150px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.consola-side .cbtn {
+  flex: 1 1 0;
+}
+
+/* Tablet: cronómetro maior; banco sempre visível. */
+.consola--tablet-v .consola-head,
+.consola--tablet-h .consola-head {
+  grid-template-columns: 1fr auto 1fr auto;
+  grid-template-areas: "a c b s";
+}
+.consola--tablet-v .consola-head .side,
+.consola--tablet-h .consola-head .side {
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  font-size: 14px;
+}
+.consola--tablet-v .consola-head .time,
+.consola--tablet-h .consola-head .time {
+  font-size: 40px;
+}
+.consola--tablet-v .consola-head .val,
+.consola--tablet-h .consola-head .val {
+  font-size: 34px;
+}
+.consola--tablet-v .consola-team,
+.consola--tablet-h .consola-team {
+  flex-wrap: wrap;
+}
+.consola--tablet-v .consola-team .cbtn {
+  flex: 1 1 30%;
+}
+.consola--tablet-v .consola-bench {
+  flex: 0 0 auto;
+  max-height: 30%;
+  overflow-y: auto;
+}
+.consola--tablet-h .consola-body {
+  flex-direction: row;
+}
+.consola--tablet-h .consola-bench {
+  flex: 0 0 240px;
+  overflow-y: auto;
+}
+.consola--tablet-h .consola-bench .cbtn.bench {
+  flex-basis: 100%;
+}
+
+/* Grelha de zonas de referência: quadra deitada, nossa baliza à esquerda. */
+.consola-zones-legend {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11.5px;
+  color: var(--ink-dim);
+  margin-bottom: 4px;
+}
+.consola-zones-court {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  padding: 6px;
+  border: 2px solid var(--line);
+  border-radius: 10px;
+}
+.consola-zones-col {
+  display: grid;
+  grid-template-rows: repeat(3, 1fr);
+  gap: 6px;
+}
+.consola-zones-col.mid-left {
+  padding-right: 6px;
+  border-right: 2px dashed var(--ink-dim);
+}
+.consola-zones-col .zbtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 52px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  color: var(--ink);
+  font-weight: 700;
+  font-size: 16px;
+  cursor: pointer;
+}
+.consola-summary {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.consola-summary th,
+.consola-summary td {
+  padding: 8px 4px;
+  border-bottom: 1px solid var(--line);
+  text-align: right;
+}
+.consola-summary th:first-child,
+.consola-summary td:first-child {
+  text-align: left;
+}

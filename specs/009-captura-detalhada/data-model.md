@@ -57,6 +57,9 @@ Contagem "parte atual · total" = eventos efetivos com `period` igual à parte a
 
 ## Estado de UI (não persistido no servidor)
 
-- `fluxo`: `null` \| `{pick-out, inId}` \| `{pick-in, outId}` \| `{vacancy, slot, inId}` (research Decisão 7).
+- `fluxo`: `null` \| `{pick-out, inId}` \| `{pick-in, outId}` \| `{vacancy, inId}` (research Decisão 7).
+- `slots`: posição de cada linha (`(string | null)[]`, `null` = vaga), derivada de `onCourt` por
+  `reconcileSlots` e guardada em `localStorage` (`teambench.consola.slots.<matchId>`); a vaga
+  fica na posição de quem saiu, por isso o fluxo de vaga não precisa de guardar a posição.
 - `zonaPendente`: `{clientEventId}` do último evento com envio adiado (research Decisão 3).
 - `densidade`: `B` (defeito) \| `A`; `tamanhoBotao`: 48-64 px calculado.

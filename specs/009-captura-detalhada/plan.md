@@ -81,10 +81,11 @@ apps/web/src/match/
 │   ├── ConsolaRow.tsx       # linha por jogador (densidade B/A; GR com remates deles na Etapa 2)
 │   ├── TeamBar.tsx          # barra de equipa (contadores; "−" na Etapa 2)
 │   ├── ZonePanel.tsx        # Etapa 2: zona rápida não modal (grelha de referência)
+│   ├── GoalSheet.tsx        # folha do golo/golo sofrido (campos existentes) + ZoneGrid (grelha de referência)
 │   ├── SummarySheet.tsx     # Resumo rápido
 │   ├── layout.ts            # lógica pura: modo por viewport, tamanho de botão "o maior que cabe"
 │   ├── layout.test.ts       # testes (ambiente node)
-│   ├── flows.ts             # lógica pura: fluxos de substituição/vaga (cancelar ≠ concluir)
+│   ├── flows.ts             # lógica pura: fluxos de substituição/vaga (cancelar ≠ concluir) + reconcileSlots (posição fixa das linhas)
 │   └── flows.test.ts
 ├── useLiveMatch.ts          # Etapa 2: enfileiramento adiado do último evento com zona pendente (Decisão 3)
 └── LiveMatch.tsx            # inalterado

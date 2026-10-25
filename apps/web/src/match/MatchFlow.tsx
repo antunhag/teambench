@@ -4,6 +4,7 @@ import type { useOutboxSync } from "../sync/useOutboxSync";
 import { useClubLabel } from "../team/useClubLabel";
 import { useMatchFormats } from "../team/useMatchFormats";
 import { usePlayers, type PlayerRow } from "../team/usePlayers";
+import { Consola } from "./Consola";
 import { LiveMatch } from "./LiveMatch";
 import { MatchSummary } from "./MatchSummary";
 import { PreMatch } from "./PreMatch";
@@ -22,13 +23,17 @@ interface Props {
   sync: ReturnType<typeof useOutboxSync>;
   /** session.user.id — isolamento por proprietário da fila (ver outbox.ts). */
   ownerId: string;
+  /** Tela de registo: "live" = "Jogo ao vivo" (por omissão); "consola" = Consola (specs/009-captura-detalhada/). Mesma trava e mesmo useLiveMatch nas duas. */
+  view?: "live" | "consola";
+  /** Só na Consola: sair dela (MatchHub volta à aba "Jogo"). */
+  onLeave?: () => void;
 }
 
 // Usado só enquanto os formatos da equipa ainda não carregaram, ou se a
 // equipa nunca chegou a configurar nenhum — nunca fica sem duração nenhuma.
 const FALLBACK_FORMAT: MatchFormat = { periodCount: 2, periodMinutes: 25, overtimePeriodCount: 0, overtimeMinutes: 0 };
 
-export function MatchFlow({ teamId, matchId, opponent, formatId, status: matchStatus, onExit, sync, ownerId }: Props) {
+export function MatchFlow({ teamId, matchId, opponent, formatId, status: matchStatus, onExit, sync, ownerId, view = "live", onLeave = onExit }: Props) {
   const { players, status } = usePlayers(teamId);
   const { formats } = useMatchFormats(teamId);
   const ourLabel = useClubLabel(teamId);
@@ -76,6 +81,9 @@ export function MatchFlow({ teamId, matchId, opponent, formatId, status: matchSt
           activeRoster={activeRoster}
           ourLabel={ourLabel}
           ownerId={ownerId}
+          view={view}
+          sync={sync}
+          onLeave={onLeave}
         />
       )}
     </div>
@@ -92,6 +100,9 @@ function MatchFlowEditor({
   activeRoster,
   ourLabel,
   ownerId,
+  view,
+  sync,
+  onLeave,
 }: {
   teamId: string;
   matchId: string;
@@ -102,6 +113,9 @@ function MatchFlowEditor({
   activeRoster: PlayerRow[];
   ourLabel: string;
   ownerId: string;
+  view: "live" | "consola";
+  sync: ReturnType<typeof useOutboxSync>;
+  onLeave: () => void;
 }) {
   const live = useLiveMatch(matchId, teamId, ownerId, format, matchStatus);
   const [showSummary, setShowSummary] = useState(false);
@@ -144,6 +158,17 @@ function MatchFlowEditor({
         />
       ) : showPreMatch ? (
         <PreMatch live={live} roster={activeRoster} opponent={opponent} minConvocados={minConvocados} onConfirm={() => setConfirmed(true)} />
+      ) : view === "consola" ? (
+        <Consola
+          live={live}
+          roster={activeRoster}
+          opponent={opponent}
+          onViewSummary={() => setShowSummary(true)}
+          ourLabel={ourLabel}
+          sync={sync}
+          onLeave={onLeave}
+          matchId={matchId}
+        />
       ) : (
         <LiveMatch live={live} roster={activeRoster} opponent={opponent} onViewSummary={() => setShowSummary(true)} ourLabel={ourLabel} />
       )}
