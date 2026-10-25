@@ -1,71 +1,62 @@
-# Data Model: Captura detalhada de estatísticas
+# Data Model: Captura detalhada de estatísticas (revisto 2026-10-25)
 
-Nenhuma tabela nova, nenhuma migração. Dez novos valores de `EventType` e
-cinco novos campos opcionais em `MatchEvent`, reaproveitando `match_events`
-por inteiro (ver research.md Decisão 1).
+Nenhuma tabela nova, nenhuma migração (research.md Decisão 1). Os eventos continuam em
+`match_events` (`type`, `player_id`, `payload` jsonb, tempo de jogo, `client_event_id`).
 
-## `EventType` (packages/engine/src/types.ts) — 10 valores novos
+## Etapa 1 — sem alterações ao modelo
 
-| Valor | Campos relevantes | O que representa |
-|---|---|---|
-| `remate` | `playerId`, `desfecho`, `zona?`, `tipo?` | Remate de um jogador de linha que NÃO resultou em golo (golo continua a ser o evento `golo` já existente, intacto) |
-| `perda` | `playerId?` | Perda de bola — atribuição a jogador opcional |
-| `recuperacao` | `playerId?` | Recuperação de bola — atribuição a jogador opcional |
-| `transicao` | `direcao`, `resultado`, `transicaoNumeros` | Transição de equipa — os 3 campos são obrigatórios pra confirmar o evento; NUNCA tem `playerId` |
-| `defesa` | `playerId` (guarda-redes), `zona?` | Defesa do guarda-redes com sucesso (o reverso de `golo_sofrido`) |
-| `saida` | `playerId` (guarda-redes), `resultado` | Situação de 1x1 do guarda-redes |
-| `goleiro_linha_inicio` | `playerId?` (guarda-redes) | Início da janela em que o GR joga como jogador de linha |
-| `goleiro_linha_fim` | — | Fim dessa janela |
-| `fase_jogo` | `fase` | Mudança de fase tática ativa da equipa |
-| `acao_defensiva` | `playerId?`, `subtipo` | Desarme/interceção/bloqueio genérico, atribuição opcional |
+Usa só os tipos existentes em `packages/engine/src/types.ts`: `kickoff`, `pausa`, `fim_pausa`,
+`fim_periodo`, `golo` (com `tipo`, `assistId`, `zona`, `transicaoNumeros`), `golo_sofrido`
+(com `tipo`, `zona`), `cartao_amarelo`, `cartao_vermelho`, `falta`, `falta_sofrida`,
+`lesao_inicio`, `lesao_fim`, `substituicao` (`outId`; `null` = entrada em vaga).
 
-Todos os tipos já existentes (`golo`, `golo_sofrido`, `cartao_amarelo`,
-`cartao_vermelho`, `falta`, `falta_sofrida`, `substituicao`, `pausa`,
-`fim_pausa`, `lesao_inicio`, `lesao_fim`, `kickoff`, `fim_periodo`) ficam
-exatamente como estão — só `falta`/`falta_sofrida` ganham um uso novo
-(opcional) do campo `zona` que já existia na interface mas nunca era
-preenchido por eles.
+## Etapa 2 — novos valores de `EventType`
 
-## `MatchEvent` (packages/engine/src/types.ts) — 5 campos novos
+| Valor | `playerId` | Campos (`payload`) | Origem na UI |
+|---|---|---|---|
+| `remate` | jogador de linha | `desfecho`: `defendido` \| `fora` \| `bloqueado`; `zona?` | linha do jogador (golo continua a ser `golo`) |
+| `remate_adv` | — (null) | `desfecho`: `fora` \| `bloqueado`; `zona?` | linha do GR "Remate deles ▸" |
+| `defesa` | GR em campo | `zona?` | linha do GR "Defendido" (= remate do adversário defendido) |
+| `saida` | GR em campo | `resultado`: `ganha` \| `perdida`; `zona?` | ⋯ do GR |
+| `transicao` | — (nunca) | `dir`: `ofensiva` \| `defensiva`; `resultado`: `ganha` (com finalização) \| `perdida` (sem finalização); `transicaoNumeros` | barra de equipa |
+| `perda` | — (null) | `zona3`: `defesa` \| `meio` \| `ataque` | bloco de perdas |
+| `recuperacao` | — (null) | `zona3`: `defesa` \| `meio` \| `ataque` | bloco de recuperações |
+| `goleiro_linha_inicio` | — | — | barra de equipa |
+| `goleiro_linha_fim` | — | `durSec` | barra de equipa |
+| `anulacao` | — | `alvoId` (= `clientEventId` do evento anulado) | "−" de uma categoria |
 
-| Campo | Tipo | Usado por |
-|---|---|---|
-| `desfecho` | `"defendido" \| "fora" \| "bloqueado" \| null` | `remate` |
-| `direcao` | `"ofensiva" \| "defensiva" \| null` | `transicao` |
-| `resultado` | `"ganha" \| "perdida" \| null` | `transicao`, `saida` (ver research.md Decisão 3 — nunca "ganho"/"perdido") |
-| `subtipo` | `"desarme" \| "intercecao" \| "bloqueio" \| null` | `acao_defensiva` |
-| `fase` | `"organizacao_ofensiva" \| "organizacao_defensiva" \| "transicao_ataque_defesa" \| "transicao_defesa_ataque" \| null` | `fase_jogo` |
+Campos opcionais novos em tipos existentes: `zona?` em `falta`, `falta_sofrida`,
+`cartao_amarelo`, `cartao_vermelho` (campo `zona` já existe em `MatchEvent`).
 
-Campos já existentes, reaproveitados sem mudança de forma (ver research.md
-Decisão 2): `zona` (`remate`, `falta`, `falta_sofrida`, `defesa` — mesma
-escala `ZONAS_GOLO`, 1-12), `tipo` (`remate` — mesma escala do golo:
-org/trs/atr/cnt/lat/lvr/pnt/l10/gll/ppb), `transicaoNumeros` (`transicao`
-— mesmos presets `TRANSICAO_NUMEROS_VANTAGEM`/
-`TRANSICAO_NUMEROS_IGUALDADE_OU_DESVANTAGEM` já em `goalTypes.ts`),
-`playerId` (atribuição automática nos eventos de jogador, opcional e
-nunca presente em `transicao`).
+## Validações
 
-## Novas funções puras (packages/engine)
+- `transicao`: `dir`, `resultado` e `transicaoNumeros` obrigatórios; `playerId` sempre null.
+- `zona`: inteiro 1-12 (grelha de referência — spec, Clarifications); `zona3`: só em `perda`/`recuperacao`.
+- `anulacao.alvoId` tem de referir um evento existente do mesmo jogo, de uma categoria de equipa
+  (`transicao`, `golo_sofrido`, `remate_adv`, `defesa`, `perda`, `recuperacao`), ainda não anulado.
+- Golo sofrido anulado deixa de contar no placar (o placar é sempre derivado dos eventos efetivos).
 
-| Função | Ficheiro | Propósito |
-|---|---|---|
-| `doRemate`, `doPerda`, `doRecuperacao`, `doTransicao`, `doDefesa`, `doSaida`, `doFaseJogo`, `doGoleiroLinhaInicio`, `doGoleiroLinhaFim`, `doAcaoDefensiva` | `liveMatch.ts` | Uma por tipo de evento novo — todas seguem o padrão já existente de `doFoul`/`doFoulSuffered` (acrescentam a `events`, sem efeito sobre `onCourt`/`clockAcc`/`score` — ver research.md Decisão 6) |
-| `inferirTipoOrigem` | `report.ts` (ou ficheiro próprio) | Deriva `tipo` (org/trs/atr) a partir do evento imediatamente anterior + fase ativa — ver research.md Decisão 4 |
-| `transicoesDesperdicadas` | `report.ts` | Filtra `transicao` com `direcao=ofensiva`, `resultado=perdida`, `transicaoNumeros` de vantagem real — ver research.md Decisão 8 |
+## Projeção de eventos efetivos
 
-`describeEvent` (`report.ts`) e `buildTimelineData`/`buildTimelineHtml`
-(`timeline.ts`) ganham um caso novo por tipo de evento, seguindo o padrão
-textual/visual já estabelecido pelos tipos existentes (ex. faixa/marca na
-Timeline, texto no registo cronológico).
+Função pura `eventosEfetivos(events)` (`packages/engine/src/annul.ts`): remove `anulacao` e os
+eventos por elas anulados (uma anulação de uma anulação reativa o original). Usada por
+`recomputeScoreFor`, contadores por parte, Resumo rápido, Resumo do jogo, Timeline e
+`transicoesDesperdicadas`. A lista bruta continua a ser a fonte de verdade sincronizada.
 
-## Relações
+## Categorias de equipa (contadores e "−")
 
-- Nenhuma FK nova — `match_events.type`/`player_id` continuam exatamente
-  como são hoje (sem CHECK, `player_id` uma FK solta e opcional pra
-  `players`).
-- `goleiro_linha_inicio`/`fim` e `pausa`/`fim_pausa` não têm nenhuma
-  relação formal entre si no modelo — um goleiro-linha pode acontecer
-  durante ou fora de uma pausa, sem restrição.
-- "Transição desperdiçada" (US4) não é uma entidade persistida — é um
-  resultado computado sobre `transicao` (ver Decisão 8), sem relação
-  nenhuma no Supabase.
+| Categoria | Eventos efetivos que conta |
+|---|---|
+| Transição a favor / contra | `transicao` com `dir` ofensiva / defensiva |
+| Golo sofrido | `golo_sofrido` |
+| Remates deles: defendido / fora / bloqueado | `defesa` / `remate_adv` com `desfecho` |
+| Perda · {defesa, meio, ataque} | `perda` com `zona3` |
+| Recuperação · {defesa, meio, ataque} | `recuperacao` com `zona3` |
+
+Contagem "parte atual · total" = eventos efetivos com `period` igual à parte atual / todos.
+
+## Estado de UI (não persistido no servidor)
+
+- `fluxo`: `null` \| `{pick-out, inId}` \| `{pick-in, outId}` \| `{vacancy, slot, inId}` (research Decisão 7).
+- `zonaPendente`: `{clientEventId}` do último evento com envio adiado (research Decisão 3).
+- `densidade`: `B` (defeito) \| `A`; `tamanhoBotao`: 48-64 px calculado.

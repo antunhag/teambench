@@ -1,105 +1,57 @@
 # Implementation Plan: Captura detalhada de estatísticas (segunda tela de jogo ao vivo)
 
-> ⚠️ **Desatualizado (2026-10-25).** A `spec.md` foi revista com as decisões do piloto
-> (ver secção *Clarifications* da spec). Este documento ainda reflete a versão anterior
-> (ex.: fase de jogo, perdas/recuperações por jogador, tablet como único alvo, trabalho
-> direto em `main`). Regenerar com `/speckit-plan` e `/speckit-tasks` antes de implementar.
-
-**Branch**: `009-captura-detalhada` | **Date**: 2026-10-17 | **Spec**: [spec.md](./spec.md)
+**Branch**: `claude/fervent-fermi-q3zk57` (trabalho; nunca direto em `main`) | **Date**: 2026-10-25 | **Spec**: [spec.md](./spec.md) (revista em 2026-10-25)
 
 **Input**: Feature specification from `/specs/009-captura-detalhada/spec.md`
 
+**Referência de interação**: `docs/prototipos/consola-prototipo.html` (protótipo com dados fictícios; não é código a reaproveitar tal como está)
+
 ## Summary
 
-Uma segunda tela de jogo ao vivo, autossuficiente, pro diretor dedicado a
-registar estatísticas — mais densa que "Jogo ao vivo" (pensado pro
-treinador, Princípio V), organizada em duas zonas (linhas por jogador +
-painel de equipa). A abordagem técnica: **10 novos `EventType`**, todos
-reaproveitando a MESMA tabela `match_events` sem nenhuma migração (a coluna
-`type` nunca teve CHECK constraint — confirmado em `0001_init.sql`), a
-MESMA fila de sincronização offline-safe, e o MESMO `useLiveMatch`/
-`useMatchLock` que "Jogo ao vivo" já usa. A autossuficiência (apito/
-substituição/pausa/fim de parte) reaproveita por inteiro a lógica já
-existente em `packages/engine/src/liveMatch.ts` — só a UI é nova. O
-relatório de "transições desperdiçadas" (US4) é uma função pura de filtro
-sobre eventos já existentes, consumida pelo Resumo — não um dado guardado
-à parte.
+Uma segunda tela de jogo ao vivo — a **Consola** — em paralelo com o "Jogo ao vivo", para quem regista estatísticas no iPhone ou no tablet: uma linha por jogador com a ação tocada na própria linha (densidade B por defeito), barra de equipa em cima, zona opcional com a grelha de referência do clube, remates do adversário na linha do GR, perdas/recuperações por zona, "−" por categoria, contadores por parte e Resumo rápido.
+
+A abordagem técnica separa a entrega em **duas etapas**:
+
+- **Etapa 1 — Consola com os eventos que já existem** (US1 + parte da US2/US5): golo, golo sofrido, cartões, faltas, atendimento, substituições, entrada em vaga, pausa, fim/início de parte; zona opcional só para o golo (já existe no evento). **Não toca no motor (`packages/engine`), na base de dados nem no "Jogo ao vivo"** — só UI nova em `apps/web`, a reaproveitar `MatchFlow`/`useMatchLock`/`useLiveMatch` tal como existem.
+- **Etapa 2 — Novos tipos de evento** (resto de US2, US3, US4, US5): remate (desfecho), remates do adversário, defesa/saída do GR, transição a favor/contra, perda/recuperação por zona, goleiro-linha, **anulação**; zona opcional em todas as ações; "−" por categoria; contadores e Resumo completos; transições desperdiçadas no Resumo do jogo; exibição dos novos tipos no Resumo, Timeline e editor de registo. **Zero migrações** (ver research.md Decisão 1).
 
 ## Technical Context
 
-**Language/Version**: TypeScript (strict), mesmo monorepo existente
+**Language/Version**: TypeScript (strict), monorepo npm existente
 
-**Primary Dependencies**: Preact 10 + Vite (`apps/web`), zero deps em
-`packages/engine` — nenhuma dependência nova; o seletor de zona reaproveita
-o `.zonegrid`/`.zbtn` já existente (grelha de botões, nunca um desenho
-espacial do campo — essa ideia foi explorada e descartada durante o
-desenho)
+**Primary Dependencies**: Preact 10 + Vite (`apps/web`); `packages/engine` sem dependências. Nenhuma dependência nova.
 
-**Storage**: Supabase Postgres — reaproveita `match_events` por inteiro,
-**zero migrações novas** (ver research.md Decisão 1)
+**Storage**: Supabase Postgres, tabela `match_events` reaproveitada por inteiro (coluna `type` sem CHECK; migrações 0026 e 0027 não restringem tipos) — **nenhuma migração**. Estado local em `localStorage` via `useLiveMatch` + fila `outbox` por proprietário (já existentes).
 
-**Testing**: Vitest (`packages/engine/test/`) para as funções puras novas
-(criação dos 10 eventos, derivação automática de `tipo`, filtro de
-transições desperdiçadas); verificação manual no navegador contra um jogo
-de teste, em viewport tablet/landscape (forma física nova desta tela)
+**Testing**: Vitest em `packages/engine/test/` (funções puras novas da Etapa 2) e em `apps/web/src/**/*.test.ts` (lógica pura de UI extraída, ambiente `node`); `packages/db-tests` não muda (sem SQL novo). Verificação manual no aparelho real feita pelo utilizador (CLAUDE.md; Princípio IV).
 
-**Target Platform**: Web PWA — esta tela especificamente assume ecrã largo
-(tablet, ou telemóvel em landscape), ao contrário do resto da app
-(mobile-portrait-first); confirmado que é tablet de verdade na prática
+**Target Platform**: PWA web — **iPhone 16 (vertical, alvo principal; horizontal, secundário)** e **Samsung Galaxy Tab A11+** (Chrome; 800×1106 vertical, 1280×626 horizontal, CSS px medidos)
 
-**Project Type**: Web application — monorepo existente (`packages/engine` +
-`apps/web`), sem mudança de estrutura
+**Project Type**: Web application (monorepo `packages/engine` + `apps/web`)
 
-**Performance Goals**: Toque único pra marcar o resultado de um remate/
-cartão/falta, sem espera de rede — mesma filosofia de "marcação local
-instantânea, sincronização em segundo plano" já usada em todo o app
+**Performance Goals**: toque único sem espera de rede (registo local imediato, sincronização em segundo plano, como hoje); atualização do relógio sem re-render da lista nem deslocamento
 
-**Constraints**: Autossuficiência total (FR-005 — nunca depender de voltar
-a "Jogo ao vivo" durante o jogo); zero migração de schema; reaproveitar
-`useLiveMatch`/`useMatchLock` tal como existem, nunca duplicar a lógica de
-motor já correta
+**Constraints**: alvos ≥ 48×48 CSS px e o maior possível até 64 px sem esconder jogadores; sem scroll horizontal; sem hover; zoom não desativado; safe areas; offline; append-only (nunca apagar/alterar um evento já enfileirado — invariante do `outbox.ts` e guarda 0026); `data_entry` não pode apagar eventos (0011)
 
-**Scale/Scope**: Um jogo por vez, um diretor por vez (sem escritores
-concorrentes — confirmado na spec). Volume de eventos por jogo sobe de
-umas dezenas (hoje) pra possivelmente centenas (cada remate, perda,
-recuperação, mudança de fase vira um evento) — ainda trivial pro Postgres,
-mas uma mudança real de ordem de grandeza a ter em mente
+**Scale/Scope**: um jogo, um escritor de cada vez (trava `useMatchLock`); volume por jogo passa de dezenas para centenas de eventos na Etapa 2
 
 ## Constitution Check
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-- **Princípio I (correção dos dados de jogo)** — PASS: os 10 eventos novos
-  são só acrescentados a `match_events`, nunca reescrevem nada; a trigger
-  `match_events_update_guard` (migração 0026) já protege qualquer UPDATE
-  futuro sobre eles, sem precisar de nenhum ajuste. Nenhum deles mexe em
-  `onCourt`/`clockAcc`/`score` (são informativos, não alteram o estado do
-  jogo), exceto os que já reaproveitam funções de motor existentes e
-  corretas (substituição, pausa, fim de parte).
-- **Princípio II (revisão de RLS/auth)** — PASS, e sem precisar de revisão
-  do `security-auditor`: zero migração, zero tabela nova, zero policy
-  nova. A nova tela usa a MESMA permissão que "Jogo ao vivo" já tem
-  (`canTrackLive` — `team_admin`/`data_entry`, decisão fechada na
-  clarificação da spec); os 10 tipos de evento novos passam pela MESMA
-  policy de INSERT que `match_events` já tem pra qualquer `type`, sem
-  nenhum CHECK a ajustar.
-- **Princípio III (mono-clube)** — PASS: os eventos novos herdam `team_id`
-  exatamente como qualquer `MatchEvent` já herda hoje. Nada aqui assume
-  uma equipa só.
-- **Princípio IV (testes nunca tocam dados reais)** — PASS: funções puras
-  novas (criação de eventos, derivação de `tipo`, filtro de transições
-  desperdiçadas) ganham testes Vitest sem rede; verificação manual no
-  navegador usa um jogo de teste, nunca um jogo real agendado.
-- **Princípio V (simplicidade pro treinador)** — PASS, e é o motivo de
-  existir esta spec como uma tela SEPARADA: a densidade fica isolada numa
-  tela nova, pro diretor — "Jogo ao vivo" continua exatamente como está
-  hoje, sem nenhum conceito novo exposto ao treinador.
-- **Princípio VI (documentação viva)** — esta mudança altera arquitetura
-  (nova tela, novo bloco de `EventType`, novo padrão de "evento sem efeito
-  no motor, só informativo") — `docs/ARCHITECTURE.md` precisa de
-  atualização antes do push final (tarefa de Polish).
+- **Princípio I (correção dos dados de jogo)** — PASS.
+  - Etapa 1 só usa ações de motor já existentes e testadas.
+  - Etapa 2 é só-acrescenta: o "−" regista um evento `anulacao` (nunca apaga nem altera o original); a zona é juntada **antes** de o evento entrar na fila (research.md Decisão 3), respeitando o invariante "item enfileirado nunca é recalculado" e a guarda 0026.
+  - O fluxo ao vivo continua offline-first.
+- **Princípio II (auth/RLS)** — PASS sem `security-auditor` obrigatório: nenhuma migração, policy ou tabela nova; a Consola usa a mesma permissão `canTrackLive` do "Jogo ao vivo". (Recomendado na mesma o `code-reviewer` na Etapa 2 por mexer na fila de sincronização.)
+- **Princípio III (escopo, mono-clube)** — PASS: nada assume uma só equipa; tudo continua por `team_id`. A grelha de zonas é conceptual, não específica deste clube no código.
+- **Princípio IV (testes sem dados reais)** — PASS: testes Vitest puros, sem rede; verificação em jogo de teste é manual pelo utilizador.
+- **Princípio V (simplicidade)** — PASS: rótulos em português do clube ("Com finalização", "Remate deles", "Mais…"), ações num toque, sem jargão.
+- **Princípio VI (documentação viva)** — PASS condicionado: `docs/ARCHITECTURE.md` atualizado com a Consola (Etapa 1) e os novos tipos/anulação (Etapa 2) antes de cada push para `main`.
+- **Portões de qualidade** — aplicam-se a cada etapa: `npm test`, typecheck (`./node_modules/.bin/tsc -p <pacote> --noEmit` em engine, db-tests e apps/web), `npm run build --workspace apps/web`, verificação no aparelho real pelo utilizador, docs.
+- **Fluxo de trabalho** — branch de trabalho; merge para `main` (produção) só com autorização explícita.
 
-Nenhuma violação — não é necessário preencher Complexity Tracking.
+*Re-check pós-desenho (Phase 1)*: sem violações; a única decisão de risco (zona depois do lance) fica resolvida sem UPDATE (Decisão 3).
 
 ## Project Structure
 
@@ -107,71 +59,63 @@ Nenhuma violação — não é necessário preencher Complexity Tracking.
 
 ```text
 specs/009-captura-detalhada/
-├── plan.md              # Este ficheiro
-├── research.md          # Fase 0 — decisões técnicas
-├── data-model.md        # Fase 1 — EventType/MatchEvent novos, zero tabelas
-├── quickstart.md        # Fase 1 — roteiro de validação manual
-└── tasks.md             # Fase 2 (/speckit-tasks — ainda não gerado)
+├── spec.md              # revista 2026-10-25
+├── plan.md              # este ficheiro
+├── research.md          # decisões técnicas (regenerado)
+├── data-model.md        # eventos/campos (regenerado)
+├── quickstart.md        # validação manual por etapa (regenerado)
+├── contracts/
+│   └── consola-ui.md    # contrato de UI/interação da Consola
+├── checklists/
+└── tasks.md             # /speckit-tasks (a regenerar)
 ```
 
 ### Source Code (repository root)
 
 ```text
-packages/engine/src/
-├── types.ts              # EventType: +10 valores; MatchEvent: +5 campos
-│                          # novos (desfecho, direcao, resultado, subtipo,
-│                          # fase) — zona/tipo/playerId reaproveitados
-├── liveMatch.ts           # +10 funções puras (doRemate, doPerda,
-│                          # doRecuperacao, doTransicao, doDefesa, doSaida,
-│                          # doFaseJogo, doGoleiroLinhaInicio/Fim,
-│                          # doAcaoDefensiva) — maioria só acrescenta a
-│                          # `events`, sem tocar onCourt/clockAcc/score
-├── report.ts              # describeEvent: +10 casos novos (registo
-│                          # cronológico); nova função pura de derivação
-│                          # automática de `tipo` (org/trs/atr a partir do
-│                          # contexto — FR-018); nova função de filtro
-│                          # "transições desperdiçadas" (US4)
-├── timeline.ts             # buildTimelineData/buildTimelineHtml: marcas/
-│                          # faixas pros tipos novos, mesmo padrão de lane
-│                          # já usado por golos/faltas/pausas
-packages/engine/test/
-├── liveMatch.test.ts       # testes das 10 funções novas
-└── report.test.ts          # testes da derivação de tipo + filtro de
-                            # transições desperdiçadas
-
 apps/web/src/match/
-├── MatchHub.tsx             # +1 aba ("Captura detalhada"), gated por
-│                            # canTrackLive — mesmo padrão das 3 já
-│                            # existentes
-├── CapturaDetalhada.tsx (novo) # a tela nova: duas zonas lado a lado
-│                            # (linhas por jogador + painel de equipa),
-│                            # reaproveita useLiveMatch por inteiro
-├── useLiveMatch.ts           # +10 funções expostas (doRemate etc.), MESMA
-│                            # fila de outbox/sincronização
-├── MatchEventEditor.tsx      # Registo: +10 tipos no dropdown "Tipo" +
-│                            # pickers de detalhe (mesmo padrão já usado
-│                            # pra pausa/atendimento)
-├── MatchSummary.tsx          # Resumo: nova secção "Transições
-│                            # desperdiçadas" (US4)
+├── MatchHub.tsx             # Etapa 1: nova aba "Consola" (mesma condição canTrackLive)
+├── MatchFlow.tsx            # Etapa 1: variante que monta Consola em vez de LiveMatch (mesma trava/useLiveMatch)
+├── Consola.tsx              # NOVO (Etapa 1): tela da Consola (cabeçalho, barra de equipa, último evento, linhas, banco, doca)
+├── consola/                 # NOVO
+│   ├── ConsolaRow.tsx       # linha por jogador (densidade B/A; GR com remates deles na Etapa 2)
+│   ├── TeamBar.tsx          # barra de equipa (contadores; "−" na Etapa 2)
+│   ├── ZonePanel.tsx        # Etapa 2: zona rápida não modal (grelha de referência)
+│   ├── SummarySheet.tsx     # Resumo rápido
+│   ├── layout.ts            # lógica pura: modo por viewport, tamanho de botão "o maior que cabe"
+│   ├── layout.test.ts       # testes (ambiente node)
+│   ├── flows.ts             # lógica pura: fluxos de substituição/vaga (cancelar ≠ concluir)
+│   └── flows.test.ts
+├── useLiveMatch.ts          # Etapa 2: enfileiramento adiado do último evento com zona pendente (Decisão 3)
+└── LiveMatch.tsx            # inalterado
+apps/web/src/theme.css       # classes novas da Consola
 
-apps/web/src/theme.css      # classes novas pro layout de duas zonas/linhas
-                            # por jogador; reaproveita .zonegrid/.zbtn tal
-                            # como já existem
-
-supabase/migrations/        # NENHUMA migração nova (ver research.md
-                            # Decisão 1)
-
-docs/
-└── ARCHITECTURE.md          # atualizar: nova tela, novo bloco de
-                            # EventType, padrão de evento informativo
+packages/engine/src/          # só Etapa 2
+├── types.ts                 # novos EventType + campos (data-model.md)
+├── liveMatch.ts             # doRemate, doRemateAdv, doDefesa, doSaida, doTransicao, doPerda, doRecuperacao, doGoleiroLinha*, doAnulacao
+├── annul.ts                 # NOVO: projeção que exclui eventos anulados (usada por placar, relatórios, timeline)
+├── report.ts                # describeEvent dos novos tipos; contadores por parte; transicoesDesperdicadas
+├── timeline.ts              # novos tipos na timeline exportável
+└── goalTypes.ts             # corrigir comentário de ZONAS_GOLO (grelha de referência)
+packages/engine/test/         # testes de cada função nova
+apps/web/src/match/MatchEventEditor.tsx   # Etapa 2: mostrar/corrigir novos tipos e anulações
+docs/ARCHITECTURE.md          # Consola + novos tipos + anulação
 ```
 
-**Structure Decision**: Nenhuma estrutura nova — tudo dentro do monorepo já
-existente (`packages/engine` + `apps/web`), seguindo exatamente a mesma
-separação já estabelecida (motor puro vs. UI/Supabase). A única novidade
-estrutural é um componente de tela novo (`CapturaDetalhada.tsx`), que entra
-no padrão de abas já estabelecido por `MatchHub.tsx`.
+**Structure Decision**: Monorepo existente sem mudança de estrutura. A Consola é um componente irmão de `LiveMatch.tsx`, montado pelo mesmo `MatchFlow` (portanto com a mesma trava `useMatchLock` e o mesmo `useLiveMatch`), escolhido por uma aba nova em `MatchHub`. A lógica de layout e de fluxos fica em módulos puros testáveis, como já é padrão do projeto.
+
+## Etapas e dependências
+
+| Etapa | Entrega | Toca em | Depende de |
+|---|---|---|---|
+| 1 | Consola com eventos existentes (US1; golo com zona; contadores e Resumo dos tipos existentes) | só `apps/web` | — |
+| 2a | Novos tipos no motor + anulação + projeção (sem UI) | `packages/engine` (+testes) | 1 (não bloqueante) |
+| 2b | Zona rápida em todas as ações (enfileiramento adiado) | `useLiveMatch`, Consola | 2a |
+| 2c | Remates deles, transições, perdas/recuperações, GR-linha, "−", contadores/Resumo completos | Consola | 2a |
+| 2d | Exibição: Resumo do jogo, Timeline, editor de registo; transições desperdiçadas | `report.ts`, `timeline.ts`, `MatchEventEditor.tsx`, `MatchSummary.tsx` | 2a |
+
+Cada etapa termina com os portões de qualidade e verificação do utilizador no aparelho; o merge para `main` é decidido pelo utilizador.
 
 ## Complexity Tracking
 
-> Nenhuma violação do Constitution Check — secção não preenchida.
+Sem violações da constituição a justificar.

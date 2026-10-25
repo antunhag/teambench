@@ -1,82 +1,45 @@
-# Quickstart: Captura detalhada de estatísticas
+# Quickstart: validação da Consola (revisto 2026-10-25)
 
-Validação manual, sempre contra um jogo de teste — nunca um jogo real
-agendado (Princípio IV). Esta tela assume um ecrã largo — testar em
-viewport tablet/landscape (ex. `resize_window` do browser de testes), não
-no viewport de telemóvel que o resto da app usa.
+Validação por etapa. Os testes automáticos nunca usam rede nem um Supabase real (Princípio IV).
+A verificação num jogo de teste real é **manual e feita pelo utilizador** (CLAUDE.md), no
+iPhone e no tablet. Detalhes de interação: [contracts/consola-ui.md](./contracts/consola-ui.md);
+tipos e campos: [data-model.md](./data-model.md).
 
-## Pré-requisitos
+## Pré-requisitos (no computador do programador)
 
-- Um jogo de teste, qualquer estado (`scheduled` serve pra testar o apito).
-- `npm test --workspace packages/engine` passando (cobre as 10 funções
-  novas, a derivação de `tipo`, e o filtro de transições desperdiçadas).
+```bash
+npm ci
+npm test                                            # engine + db-tests (+ apps/web quando aplicável)
+./node_modules/.bin/tsc -p packages/engine --noEmit
+./node_modules/.bin/tsc -p packages/db-tests --noEmit
+./node_modules/.bin/tsc -p apps/web --noEmit
+npm run build --workspace apps/web
+```
 
-## Cenário 1 — US1: um jogo inteiro só pela tela nova
+Todos têm de passar antes de pedir a verificação no aparelho. Cada comando só corre com
+autorização (CLAUDE.md — "comando existente ≠ comando aprovado").
 
-1. Abrir um jogo de teste ainda não iniciado; abrir a aba nova ("Captura
-   detalhada" ou nome equivalente).
-2. Escolher titulares, dar o apito — **esperado**: relógio da parte começa,
-   igual ao "Jogo ao vivo".
-3. Fazer uma substituição (tocar no suplente, tocar na linha de quem sai)
-   — **esperado**: minutos do jogador que sai param, os do que entra
-   começam.
-4. Iniciar um pedido de tempo, terminar — **esperado**: minutos
-   descontados de quem estava em quadra. Repetir com "outro motivo" —
-   **esperado**: ninguém perde minutos.
-5. Marcar um golo, um cartão, uma falta — **esperado**: aparecem no
-   registo cronológico exatamente como "Jogo ao vivo" produziria.
-6. Terminar a parte e, depois, o jogo.
-7. Abrir o Resumo — **esperado**: golos, cartões, faltas, substituições e
-   minutos por atleta corretos, sem diferença nenhuma por terem sido
-   registados pela tela nova.
+## Etapa 1 — Consola com eventos existentes
 
-## Cenário 2 — US2: zona opcional em remate/falta/defesa
+Num jogo de teste, com a aba **Consola** (iPhone vertical e tablet nas duas orientações):
 
-1. Marcar um remate (qualquer dos 4 resultados) — **esperado**: aparece a
-   opção de escolher zona (grelha de 12 botões, não um desenho de campo).
-2. Escolher uma zona — **esperado**: fica associada ao remate.
-3. Marcar outro remate e tocar "saltar" na zona — **esperado**: o remate
-   já estava registado antes desse passo; saltar não o desfaz nem atrasa
-   o próximo toque.
-4. Marcar uma falta sofrida com zona — **esperado**: essa zona representa
-   também o livre resultante (não há escolha separada).
-5. Marcar uma defesa do guarda-redes com zona — mesmo comportamento.
+1. Escolher titulares, dar o apito: o relógio corre como no "Jogo ao vivo".
+2. Golo de um jogador com zona (folha do golo, grelha de referência) e golo sofrido pela barra de equipa; placar correto.
+3. Falta feita e recebida (1 toque cada); 5ª falta mostra o aviso habitual.
+4. Cartão amarelo e vermelho pelo ⋯ (densidade B); o vermelho deixa a linha **vaga** na mesma posição; reposição só com escolha + confirmação.
+5. Substituição pelo banco ("SAI" na linha) e pelo ⋯ do jogador; cancelar a meio e tocar no banco → começa fluxo novo, nada é consumido.
+6. Pausa (pedido de tempo e outro motivo), fim de parte (relógio para), início da 2ª parte só com o botão.
+7. Contadores "1ª · total" e Resumo rápido com os tipos existentes.
+8. Abrir o Resumo do jogo e a Timeline: idênticos ao que o "Jogo ao vivo" produziria (SC-002).
+9. Layout: 5 jogadores visíveis sem scroll (densidade B), botões ≥ 48 px, sem scroll horizontal, sem texto cortado (SC-005).
 
-## Cenário 3 — US3: painel de equipa, sem perder velocidade
+## Etapa 2 — Novos tipos de evento
 
-1. Mudar a fase de jogo ativa — **esperado**: fica registada como um
-   acontecimento (não só um estado que se perde ao mudar de novo).
-2. Marcar uma transição — **esperado**: pede direção, resultado, E
-   vantagem numérica antes de confirmar; nenhuma opção de atribuir a um
-   jogador aparece.
-3. Marcar uma recuperação, uma perda, uma bola parada ganha, e uma ação
-   defensiva — **esperado**: cada uma tem a opção (não obrigatória) de
-   atribuir a um jogador.
-4. Marcar o início de goleiro-linha, depois o fim — **esperado**: regista
-   como um período; não muda quem está listado em quadra.
-5. Marcar uma recuperação, e logo a seguir um remate de um jogador —
-   **esperado**: o `tipo` do remate já vem preenchido como "Ataque
-   rápido", visível e corrigível, sem pedir escolha manual. Repetir com
-   uma transição ganha antes de um remate — **esperado**: `tipo` vem como
-   "Transição".
-
-## Cenário 4 — US4: transições desperdiçadas no Resumo
-
-1. Marcar uma transição ofensiva "perdida" com vantagem real (ex. "3x1").
-2. Marcar uma transição ofensiva "perdida" com igualdade numérica (ex.
-   "1x1").
-3. Marcar uma transição ofensiva "ganha" com vantagem real (ex. "2x0").
-4. Abrir o Resumo do jogo — **esperado**: só a transição do passo 1
-   aparece na lista de transições desperdiçadas; as dos passos 2 e 3 não.
-
-## Regressão
-
-- `npm test --workspace packages/engine` — inclui os testes novos e os já
-  existentes (nenhum deve quebrar).
-- `npx tsc --noEmit -p apps/web` limpo.
-- `npm run build --workspace apps/web` sem erro.
-- Um jogo registado inteiramente pela tela ANTIGA ("Jogo ao vivo")
-  continua a abrir e funcionar normalmente no Resumo/Timeline/Registo —
-  os tipos de evento novos não quebram nada pra um jogo que nunca os usou.
-- A tela "Jogo ao vivo" continua a funcionar exatamente como antes —
-  nenhuma mudança visível pro treinador.
+1. Remate do jogador (Remate ▸ → Defendido/Fora/Bloqueado): 2 toques; zona rápida aparece; ignorar e tocar noutra ação regista ambas sem toque extra.
+2. Remates deles na linha do GR: Defendido (atribuído ao GR), Fora, Bloqueado (sem jogador).
+3. Zona em falta e cartão; fechar a app com o painel de zona aberto e reabrir → o evento está lá e sincroniza uma única vez.
+4. Transição a favor 3x1 sem finalização e contra 2x2 com finalização (2 toques cada); aparecem nos contadores, no Resumo e na lista de transições desperdiçadas (só a primeira).
+5. Perdas/recuperações por zona (1 toque); "−" numa categoria anula só o último dessa categoria e mostra o aviso; "Desfazer" repõe.
+6. GR-linha: estado e duração visíveis; terminar regista a duração.
+7. Editor de registo e Timeline mostram os novos tipos e as anulações; placar correto após "−" num golo sofrido.
+8. Offline: registar vários lances sem rede; ao voltar a rede, todos sincronizam (sem itens presos na fila).
