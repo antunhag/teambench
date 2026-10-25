@@ -4,6 +4,7 @@
 // contador guardado à parte: é sempre a contagem de eventos "golo"/
 // "golo_sofrido" na lista. Isto garante que corrigir, apagar ou adicionar um
 // evento esquecido nunca deixa placar e registo cronológico dessincronizados.
+import { eventosEfetivos } from "./annul";
 import type { EventType, MatchEvent, Score } from "./types";
 
 /** Gera um identificador de evento. Não criptográfico — suficiente para uso local; a fila de sincronização usa `clientEventId` separado (crypto.randomUUID) para idempotência com o servidor. */
@@ -36,7 +37,10 @@ export function createEvent(
   };
 }
 
-export function recomputeScoreFor(events: MatchEvent[]): Score {
+// Sempre sobre os eventos efetivos: um golo sofrido anulado pelo "−" da
+// Consola deixa de contar (specs/009-captura-detalhada/data-model.md).
+export function recomputeScoreFor(allEvents: MatchEvent[]): Score {
+  const events = eventosEfetivos(allEvents);
   return {
     nos: events.filter((e) => e.type === "golo").length,
     advers: events.filter((e) => e.type === "golo_sofrido").length,

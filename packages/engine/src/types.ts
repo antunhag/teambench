@@ -35,6 +35,19 @@ export type EventType =
   | "lesao_inicio"
   | "lesao_fim"
   | "substituicao"
+  // Captura detalhada (specs/009-captura-detalhada/data-model.md) — só
+  // acrescentam; nenhum muda o significado dos tipos acima. `match_events.type`
+  // é text sem CHECK, por isso não precisam de migração.
+  | "remate" // remate nosso sem golo (o golo continua a ser "golo")
+  | "remate_adv" // remate do adversário fora ou bloqueado (sem jogador nosso)
+  | "defesa" // remate do adversário defendido — atribuído ao GR em campo
+  | "saida" // saída 1x1 do GR
+  | "transicao" // transição de equipa (nunca de um jogador)
+  | "perda"
+  | "recuperacao"
+  | "goleiro_linha_inicio"
+  | "goleiro_linha_fim"
+  | "anulacao" // "−" de uma categoria de equipa: anula `alvoId` sem apagar nada
   // Seleção de convocados/titulares (specs/007-convocados-sync/) — ao
   // contrário dos demais tipos acima, não representam algo que aconteceu EM
   // QUADRA; são metadados de escalação, nunca aparecem na timeline/relatório
@@ -84,7 +97,20 @@ export interface MatchEvent {
   durSec?: number;
   correcao?: boolean;
   aproximado?: boolean;
+  /** "remate": defendido | fora | bloqueado; "remate_adv": fora | bloqueado. */
+  desfecho?: Desfecho;
+  /** "saida": ganha | perdida; "transicao": ganha = com finalização, perdida = sem finalização. */
+  resultado?: "ganha" | "perdida";
+  /** Só em "transicao". */
+  dir?: "ofensiva" | "defensiva";
+  /** Só em "perda"/"recuperacao": terço do campo. */
+  zona3?: Zona3;
+  /** Só em "anulacao": `clientEventId` (ou `id`) do evento anulado. */
+  alvoId?: string;
 }
+
+export type Desfecho = "defendido" | "fora" | "bloqueado";
+export type Zona3 = "defesa" | "meio" | "ataque";
 
 export interface ClockAccounting {
   /** Segundos acumulados por jogador, somando todas as partes já assentadas. */

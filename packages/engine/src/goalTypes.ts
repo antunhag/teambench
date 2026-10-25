@@ -47,6 +47,10 @@ export const TRANSICAO_NUMEROS_VANTAGEM: string[] = ["2x0", "2x1", "3x0", "3x1",
 // desta lista fica pra corrigir depois em "Corrigir registo".
 export const TRANSICAO_NUMEROS_IGUALDADE_OU_DESVANTAGEM: string[] = ["1x1", "2x2", "3x3"];
 
-// Zona do campo onde o golo aconteceu — grelha 3×4 do banco.html original
-// (1-3 mais perto da baliza, 10-12 mais perto do meio-campo).
+// Zona do campo (golo e, na Consola, qualquer lance) — grelha de referência
+// do clube (specs/009-captura-detalhada/, Clarifications): quadra inteira
+// deitada, a nossa baliza à esquerda; colunas 1-3 | 4-6 ‖ 7-9 | 10-12, cada
+// coluna de cima para baixo; o meio-campo fica entre 4-6 e 7-9. Os valores
+// são os mesmos de sempre; só a descrição antiga ("10-12 mais perto do
+// meio-campo") estava errada.
 export const ZONAS_GOLO: number[] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];

@@ -35,6 +35,11 @@ Campos opcionais novos em tipos existentes: `zona?` em `falta`, `falta_sofrida`,
 - `anulacao.alvoId` tem de referir um evento existente do mesmo jogo, de uma categoria de equipa
   (`transicao`, `golo_sofrido`, `remate_adv`, `defesa`, `perda`, `recuperacao`), ainda não anulado.
 - Golo sofrido anulado deixa de contar no placar (o placar é sempre derivado dos eventos efetivos).
+- Entrada inválida numa ação nova (jogador fora de quadra, desfecho/terço/superioridade fora da
+  lista) devolve o estado sem evento, como `doEnter` — nunca lança a meio do jogo.
+- Goleiro-linha ativo = derivado dos eventos da parte (`goleiroLinhaAtivo`), sem campo novo no
+  estado; `endPeriod` fecha um goleiro-linha aberto (regista `goleiro_linha_fim`) antes do
+  `fim_periodo`, como já faz com uma pausa aberta.
 
 ## Projeção de eventos efetivos
 

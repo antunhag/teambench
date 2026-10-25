@@ -6,9 +6,11 @@
 // tanto localmente offline quanto (no futuro) num worker de sincronização.
 import { createClockAccounting, markOnSince, nowElapsedMs as clockNowElapsedMs, playerSeconds, settleAll, settlePlayer } from "./clock";
 import type { ClockState } from "./clock";
+import { eventosEfetivos, podeAnular } from "./annul";
 import { createEvent, recomputeScoreFor } from "./events";
+import { TRANSICAO_NUMEROS_IGUALDADE_OU_DESVANTAGEM, TRANSICAO_NUMEROS_VANTAGEM } from "./goalTypes";
 import { isLastPeriod } from "./matchFormat";
-import type { ClockAccounting, EventType, MatchEvent, MatchFormat, Score } from "./types";
+import type { ClockAccounting, Desfecho, EventType, MatchEvent, MatchFormat, Score, Zona3 } from "./types";
 
 export interface Treatment {
   playerId: string;
@@ -279,10 +281,10 @@ export function doOppGoal(
 }
 
 /** Cartão vermelho tira o atleta de campo e assenta o tempo dele na hora; amarelo só regista. */
-export function doCard(state: LiveMatchState, playerId: string, kind: "amarelo" | "vermelho", nowMs: number): LiveMatchState {
+export function doCard(state: LiveMatchState, playerId: string, kind: "amarelo" | "vermelho", nowMs: number, zona?: number | null): LiveMatchState {
   const atMs = matchElapsedMs(state, nowMs);
   const type = kind === "amarelo" ? "cartao_amarelo" : "cartao_vermelho";
-  const ev = createEvent(type, playerId, atMs, state.period, nowMs, {});
+  const ev = createEvent(type, playerId, atMs, state.period, nowMs, zonaExtra(zona));
   let onCourt = state.onCourt;
   let clockAcc = state.clockAcc;
   if (kind === "vermelho" && onCourt.includes(playerId)) {
@@ -292,16 +294,16 @@ export function doCard(state: LiveMatchState, playerId: string, kind: "amarelo" 
   return { ...state, events: [...state.events, ev], onCourt, clockAcc };
 }
 
-export function doFoul(state: LiveMatchState, playerId: string, nowMs: number): LiveMatchState {
+export function doFoul(state: LiveMatchState, playerId: string, nowMs: number, zona?: number | null): LiveMatchState {
   const atMs = matchElapsedMs(state, nowMs);
-  const ev = createEvent("falta", playerId, atMs, state.period, nowMs, {});
+  const ev = createEvent("falta", playerId, atMs, state.period, nowMs, zonaExtra(zona));
   return { ...state, events: [...state.events, ev], periodFouls: state.periodFouls + 1 };
 }
 
 /** Falta sofrida por um dos nossos jogadores (cometida pelo adversário) — conta para o total do adversário na parte. */
-export function doFoulSuffered(state: LiveMatchState, playerId: string, nowMs: number): LiveMatchState {
+export function doFoulSuffered(state: LiveMatchState, playerId: string, nowMs: number, zona?: number | null): LiveMatchState {
   const atMs = matchElapsedMs(state, nowMs);
-  const ev = createEvent("falta_sofrida", playerId, atMs, state.period, nowMs, {});
+  const ev = createEvent("falta_sofrida", playerId, atMs, state.period, nowMs, zonaExtra(zona));
   return { ...state, events: [...state.events, ev], periodFoulsAdvers: state.periodFoulsAdvers + 1 };
 }
 
@@ -356,6 +358,8 @@ export function endPeriod(state: LiveMatchState, format: MatchFormat, nowMs: num
   // Fecha uma pausa esquecida em aberto antes de terminar a parte — nunca
   // deixa isso pendurado para a parte seguinte.
   if (state.activePause) state = endPause(state, nowMs);
+  // Idem para um goleiro-linha ainda ativo: a duração é por parte.
+  if (goleiroLinhaAtivo(state.events, state.period)) state = doGoleiroLinhaFim(state, nowMs);
   const atMs = matchElapsedMs(state, nowMs);
   const clockAcc = state.clock.running ? settleAll(state.clockAcc, state.onCourt, atMs) : state.clockAcc;
   const durSec = Math.round(atMs / 1000);
@@ -375,6 +379,120 @@ export function endPeriod(state: LiveMatchState, format: MatchFormat, nowMs: num
     events: [...state.events, ev],
   };
 }
+
+// ---------------------------------------------------------------------------
+// Captura detalhada (specs/009-captura-detalhada/data-model.md). Mesma regra
+// das ações acima: funções puras que só acrescentam um evento. Entrada
+// inválida devolve o estado tal como está (como doEnter), nunca lança — um
+// toque errado a meio do jogo não pode rebentar a tela.
+// ---------------------------------------------------------------------------
+
+/** `zona`: inteiro 1-12 (grelha de referência); qualquer outro valor fica sem zona. */
+function zonaExtra(zona: number | null | undefined): Partial<MatchEvent> {
+  return Number.isInteger(zona) && (zona as number) >= 1 && (zona as number) <= 12 ? { zona } : {};
+}
+
+const ZONAS3: readonly Zona3[] = ["defesa", "meio", "ataque"];
+const DESFECHOS_REMATE: readonly Desfecho[] = ["defendido", "fora", "bloqueado"];
+
+function addEvent(state: LiveMatchState, type: EventType, playerId: string | null, nowMs: number, extra: Partial<MatchEvent>): LiveMatchState {
+  const atMs = matchElapsedMs(state, nowMs);
+  const ev = createEvent(type, playerId, atMs, state.period, nowMs, extra);
+  return { ...state, events: [...state.events, ev] };
+}
+
+/** Remate nosso sem golo (o golo continua a ser `doGoal`). Só de quem está em quadra. */
+export function doRemate(state: LiveMatchState, playerId: string, desfecho: Desfecho, nowMs: number, zona?: number | null): LiveMatchState {
+  if (!state.onCourt.includes(playerId) || !DESFECHOS_REMATE.includes(desfecho)) return state;
+  return addEvent(state, "remate", playerId, nowMs, { desfecho, ...zonaExtra(zona) });
+}
+
+/** Remate do adversário fora ou bloqueado — sem jogador nosso. */
+export function doRemateAdv(state: LiveMatchState, desfecho: "fora" | "bloqueado", nowMs: number, zona?: number | null): LiveMatchState {
+  if (desfecho !== "fora" && desfecho !== "bloqueado") return state;
+  return addEvent(state, "remate_adv", null, nowMs, { desfecho, ...zonaExtra(zona) });
+}
+
+/** Remate do adversário defendido — atribuído ao GR em campo. */
+export function doDefesa(state: LiveMatchState, gkId: string, nowMs: number, zona?: number | null): LiveMatchState {
+  if (!state.onCourt.includes(gkId)) return state;
+  return addEvent(state, "defesa", gkId, nowMs, zonaExtra(zona));
+}
+
+/** Saída 1x1 do GR. */
+export function doSaida(state: LiveMatchState, gkId: string, resultado: "ganha" | "perdida", nowMs: number, zona?: number | null): LiveMatchState {
+  if (!state.onCourt.includes(gkId) || (resultado !== "ganha" && resultado !== "perdida")) return state;
+  return addEvent(state, "saida", gkId, nowMs, { resultado, ...zonaExtra(zona) });
+}
+
+/**
+ * Transição de equipa: `dir`, `resultado` (ganha = com finalização, perdida =
+ * sem finalização) e `transicaoNumeros` obrigatórios; `playerId` sempre null
+ * (FR-015). A superioridade tem de ser um dos presets de goalTypes.ts.
+ */
+export function doTransicao(
+  state: LiveMatchState,
+  dir: "ofensiva" | "defensiva",
+  resultado: "ganha" | "perdida",
+  transicaoNumeros: string,
+  nowMs: number
+): LiveMatchState {
+  const presets = [...TRANSICAO_NUMEROS_VANTAGEM, ...TRANSICAO_NUMEROS_IGUALDADE_OU_DESVANTAGEM];
+  if ((dir !== "ofensiva" && dir !== "defensiva") || (resultado !== "ganha" && resultado !== "perdida") || !presets.includes(transicaoNumeros)) {
+    return state;
+  }
+  return addEvent(state, "transicao", null, nowMs, { dir, resultado, transicaoNumeros });
+}
+
+export function doPerda(state: LiveMatchState, zona3: Zona3, nowMs: number): LiveMatchState {
+  if (!ZONAS3.includes(zona3)) return state;
+  return addEvent(state, "perda", null, nowMs, { zona3 });
+}
+
+export function doRecuperacao(state: LiveMatchState, zona3: Zona3, nowMs: number): LiveMatchState {
+  if (!ZONAS3.includes(zona3)) return state;
+  return addEvent(state, "recuperacao", null, nowMs, { zona3 });
+}
+
+/**
+ * Goleiro-linha ativo nesta parte (início sem fim depois dele), derivado só
+ * dos eventos — como as faltas e os pedidos de tempo — para sobreviver a um
+ * recarregar e ao replay sem campo novo no estado. Devolve o evento de início.
+ */
+export function goleiroLinhaAtivo(events: MatchEvent[], period: number): MatchEvent | null {
+  const efetivos = eventosEfetivos(events);
+  for (let i = efetivos.length - 1; i >= 0; i--) {
+    const e = efetivos[i];
+    if (e.period !== period) continue;
+    if (e.type === "goleiro_linha_fim") return null;
+    if (e.type === "goleiro_linha_inicio") return e;
+  }
+  return null;
+}
+
+export function doGoleiroLinhaInicio(state: LiveMatchState, nowMs: number): LiveMatchState {
+  if (goleiroLinhaAtivo(state.events, state.period)) return state;
+  return addEvent(state, "goleiro_linha_inicio", null, nowMs, {});
+}
+
+export function doGoleiroLinhaFim(state: LiveMatchState, nowMs: number): LiveMatchState {
+  const inicio = goleiroLinhaAtivo(state.events, state.period);
+  if (!inicio) return state;
+  const atMs = matchElapsedMs(state, nowMs);
+  return addEvent(state, "goleiro_linha_fim", null, nowMs, { durSec: Math.max(0, Math.round((atMs - inicio.ms) / 1000)) });
+}
+
+/**
+ * "−" de uma categoria de equipa: regista uma anulação de `alvoId` (ver
+ * annul.ts) — nunca apaga nem altera o evento anulado. Placar recalculado
+ * porque o alvo pode ser um golo sofrido.
+ */
+export function doAnulacao(state: LiveMatchState, alvoId: string, nowMs: number): LiveMatchState {
+  if (!podeAnular(state.events, alvoId)) return state;
+  const next = addEvent(state, "anulacao", null, nowMs, { alvoId });
+  return { ...next, score: recomputeScoreFor(next.events) };
+}
+
 
 export function playerCurrentSeconds(state: LiveMatchState, playerId: string, nowMs: number): number {
   return playerSeconds(state.clockAcc, playerId, matchElapsedMs(state, nowMs));

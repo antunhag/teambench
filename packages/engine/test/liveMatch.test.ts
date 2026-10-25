@@ -4,17 +4,27 @@ import {
   deriveConvocadoIds,
   deriveTitularIds,
   doCard,
+  doDefesa,
   doEnter,
   doFoul,
   doFoulSuffered,
   doGoal,
+  doGoleiroLinhaFim,
+  doGoleiroLinhaInicio,
   doOppGoal,
+  doPerda,
+  doRecuperacao,
+  doRemate,
+  doRemateAdv,
+  doSaida,
   doSub,
+  doTransicao,
   endPause,
   endPeriod,
   endTreatment,
   foulsInPeriod,
   goLive,
+  goleiroLinhaAtivo,
   pause,
   playerCurrentSeconds,
   resumeOrStart,
@@ -445,5 +455,78 @@ describe("liveMatch — fim de parte", () => {
     s = endPeriod(s, COM_PROLONGAMENTO, 3_600_000); // fim do prolongamento 2 — agora sim termina
     expect(s.finished).toBe(true);
     expect(s.period).toBe(4);
+  });
+});
+
+describe("liveMatch — captura detalhada (spec 009)", () => {
+  const F: MatchFormat = { periodCount: 2, periodMinutes: 25, overtimePeriodCount: 0, overtimeMinutes: 0 };
+  function started() {
+    let s = createLiveMatchState([salvador, joao, guarda, "x", "y", suplente]);
+    for (const id of [salvador, joao, guarda, "x", "y"]) s = toggleTitular(s, id, 1);
+    return resumeOrStart(goLive(s), 1000);
+  }
+
+  it("remate: desfecho e zona, só de quem está em quadra", () => {
+    let s = doRemate(started(), joao, "fora", 61000, 7);
+    expect(s.events.at(-1)).toMatchObject({ type: "remate", playerId: joao, desfecho: "fora", zona: 7, min: 1 });
+    const n = s.events.length;
+    expect(doRemate(s, suplente, "fora", 62000).events).toHaveLength(n);
+    expect(doRemate(s, joao, "golo" as never, 62000).events).toHaveLength(n);
+    s = doRemate(s, joao, "bloqueado", 63000, 13);
+    expect(s.events.at(-1)!.zona).toBeUndefined();
+  });
+
+  it("remate do adversário (sem jogador) e defesa do GR", () => {
+    let s = doRemateAdv(started(), "bloqueado", 2000, 3);
+    expect(s.events.at(-1)).toMatchObject({ type: "remate_adv", playerId: null, desfecho: "bloqueado", zona: 3 });
+    expect(doRemateAdv(s, "defendido" as never, 2000).events).toHaveLength(s.events.length);
+    s = doDefesa(s, guarda, 3000);
+    expect(s.events.at(-1)).toMatchObject({ type: "defesa", playerId: guarda });
+    expect(doDefesa(s, suplente, 3000).events).toHaveLength(s.events.length);
+  });
+
+  it("saída 1x1 do GR", () => {
+    const s = doSaida(started(), guarda, "ganha", 2000, 2);
+    expect(s.events.at(-1)).toMatchObject({ type: "saida", playerId: guarda, resultado: "ganha", zona: 2 });
+  });
+
+  it("transição: campos obrigatórios e nunca de um jogador", () => {
+    const s0 = started();
+    const s = doTransicao(s0, "ofensiva", "perdida", "3x1", 2000);
+    expect(s.events.at(-1)).toMatchObject({ type: "transicao", playerId: null, dir: "ofensiva", resultado: "perdida", transicaoNumeros: "3x1" });
+    expect(doTransicao(s0, "ofensiva", "perdida", "", 2000)).toBe(s0);
+    expect(doTransicao(s0, "ofensiva", "perdida", "9x0", 2000)).toBe(s0);
+    expect(doTransicao(s0, "lateral" as never, "ganha", "2x1", 2000)).toBe(s0);
+  });
+
+  it("perda/recuperação por terço, sem jogador", () => {
+    const s0 = started();
+    const s = doRecuperacao(doPerda(s0, "defesa", 2000), "ataque", 3000);
+    expect(s.events.slice(-2).map((e) => [e.type, e.zona3, e.playerId])).toEqual([
+      ["perda", "defesa", null],
+      ["recuperacao", "ataque", null],
+    ]);
+    expect(doPerda(s0, "lateral" as never, 2000)).toBe(s0);
+  });
+
+  it("zona opcional em faltas e cartões", () => {
+    let s = doFoul(started(), joao, 2000, 9);
+    s = doFoulSuffered(s, joao, 3000, 4);
+    s = doCard(s, joao, "amarelo", 4000, 12);
+    expect(s.events.slice(-3).map((e) => e.zona)).toEqual([9, 4, 12]);
+    expect(doFoul(s, joao, 5000).events.at(-1)!.zona).toBeUndefined();
+  });
+
+  it("goleiro-linha: duração; não abre dois; fecha sozinho no fim da parte", () => {
+    let s = doGoleiroLinhaInicio(started(), 11000); // ms 10000
+    expect(goleiroLinhaAtivo(s.events, 1)).not.toBeNull();
+    expect(doGoleiroLinhaInicio(s, 12000)).toBe(s);
+    s = doGoleiroLinhaFim(s, 41000);
+    expect(s.events.at(-1)).toMatchObject({ type: "goleiro_linha_fim", durSec: 30 });
+    expect(goleiroLinhaAtivo(s.events, 1)).toBeNull();
+    s = doGoleiroLinhaInicio(s, 51000);
+    s = endPeriod(s, F, 61000);
+    expect(s.events.slice(-2).map((e) => e.type)).toEqual(["goleiro_linha_fim", "fim_periodo"]);
+    expect(s.events.at(-2)!.durSec).toBe(10);
   });
 });
