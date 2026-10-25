@@ -5,6 +5,11 @@ description: "Task list for Captura detalhada de estatísticas"
 
 # Tasks: Captura detalhada de estatísticas (segunda tela de jogo ao vivo)
 
+> ⚠️ **Desatualizado (2026-10-25).** A `spec.md` foi revista com as decisões do piloto
+> (ver secção *Clarifications* da spec). Estas tarefas ainda refletem a versão anterior
+> (ex.: T001 "trabalho direto em `main`", fase de jogo, perdas/recuperações por jogador).
+> Regenerar com `/speckit-plan` e `/speckit-tasks` antes de implementar.
+
 **Input**: Design documents from `/specs/009-captura-detalhada/`
 
 **Prerequisites**: [plan.md](plan.md), [spec.md](spec.md), [research.md](research.md), [data-model.md](data-model.md), [quickstart.md](quickstart.md)

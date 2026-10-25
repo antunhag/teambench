@@ -1,5 +1,10 @@
 # Implementation Plan: Captura detalhada de estatísticas (segunda tela de jogo ao vivo)
 
+> ⚠️ **Desatualizado (2026-10-25).** A `spec.md` foi revista com as decisões do piloto
+> (ver secção *Clarifications* da spec). Este documento ainda reflete a versão anterior
+> (ex.: fase de jogo, perdas/recuperações por jogador, tablet como único alvo, trabalho
+> direto em `main`). Regenerar com `/speckit-plan` e `/speckit-tasks` antes de implementar.
+
 **Branch**: `009-captura-detalhada` | **Date**: 2026-10-17 | **Spec**: [spec.md](./spec.md)
 
 **Input**: Feature specification from `/specs/009-captura-detalhada/spec.md`
