@@ -1,0 +1,974 @@
+<!doctype html>
+<html lang="pt">
+<head>
+<meta charset="utf-8">
+<!-- Zoom do utilizador NÃO é desativado (sem maximum-scale / user-scalable=no). -->
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Consola de registo — protótipo</title>
+<style>
+:root {
+  --bg: #f3f5f2; --surface: #ffffff; --ink: #18221c; --muted: #5b675f; --line: #d5dbd6;
+  --accent: #1f7a4d; --accent-ink: #ffffff;
+  --remate: #eef1ec; --falta: #e9eef7; --yellow: #f7d54a; --red: #d9473f; --gr: #e7f0fb;
+  --warn: #b25b00; --ok: #1f7a4d; --lock: #fff4d6;
+  --btn: 48px;               /* objetivo mínimo de alvo de toque (CSS px) */
+  --gap: 6px;
+  --sat: env(safe-area-inset-top, 0px); --sar: env(safe-area-inset-right, 0px);
+  --sab: env(safe-area-inset-bottom, 0px); --sal: env(safe-area-inset-left, 0px);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111613; --surface: #1b221e; --ink: #e8eee9; --muted: #a3b0a7; --line: #334039;
+    --remate: #26302a; --falta: #232b38; --gr: #1f2a36; --lock: #3a3320;
+  }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink);
+  font: 15px/1.25 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; -webkit-text-size-adjust: 100%; }
+button { font: inherit; color: inherit; cursor: pointer; touch-action: manipulation; }
+button:disabled { cursor: default; opacity: .45; }
+.app { height: 100dvh; display: grid; grid-template-rows: auto auto auto 1fr auto;
+  padding: var(--sat) var(--sar) 0 var(--sal); }
+
+/* ---------- Cabeçalho ---------- */
+.hdr { display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: var(--surface);
+  border-bottom: 1px solid var(--line); min-height: 52px; }
+.score { font-weight: 700; font-size: 18px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.score small { font-weight: 500; color: var(--muted); font-size: 12px; }
+.clock { font-variant-numeric: tabular-nums; font-weight: 700; font-size: 18px; min-width: 4.2ch; text-align: right; }
+.period { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.fouls { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.sync { font-size: 12px; white-space: nowrap; padding: 3px 7px; border-radius: 999px; border: 1px solid var(--line); }
+.sync.ok { color: var(--ok); } .sync.pend { color: var(--warn); } .sync.off { color: var(--red); font-weight: 600; }
+.spacer { flex: 1; }
+.ibtn { min-width: var(--btn); min-height: var(--btn); border-radius: 10px; border: 1px solid var(--line);
+  background: var(--surface); padding: 0 8px; font-size: 13px; font-weight: 600; }
+.ibtn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+
+/* ---------- Faixa do último evento (altura fixa: nunca desloca a lista) ---------- */
+.last { display: flex; align-items: center; gap: 8px; padding: 4px 10px; min-height: 56px; height: 56px;
+  background: var(--surface); border-bottom: 1px solid var(--line); }
+.last .txt { flex: 1; min-width: 0; font-size: 13px; overflow-wrap: anywhere;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.last .txt b { font-weight: 700; }
+.last.mode { background: var(--lock); }
+
+/* ---------- Corpo ---------- */
+.body { min-height: 0; display: grid; }
+.court, .side { min-height: 0; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain;
+  overflow-anchor: none; padding: 8px 10px; }
+.side { border-left: 1px solid var(--line); background: var(--surface); }
+.mode-tab-l .body, .mode-phone-l .body.with-side { grid-template-columns: 1fr var(--side-w, 300px); }
+.mode-tab-p .body { grid-template-rows: auto auto; overflow-y: auto; }
+.mode-tab-p .court, .mode-tab-p .side { overflow: visible; }
+.mode-tab-p .side { border-left: 0; border-top: 1px solid var(--line); }
+.mode-phone-p .side, .mode-phone-l .side { display: none; }
+
+/* ---------- Linha / cartão de jogador ---------- */
+.row { display: grid; grid-template-columns: var(--id-w, 96px) 1fr; gap: var(--gap); align-items: stretch;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 6px; margin-bottom: 6px;
+  position: relative; }
+.row.gk { background: var(--gr); }
+.row.vacant { grid-template-columns: 1fr; }
+.idb { text-align: left; border: 0; background: transparent; padding: 2px 4px; border-radius: 8px;
+  display: flex; flex-direction: column; justify-content: center; min-height: var(--btn); min-width: 0; }
+.idb .l1 { display: flex; align-items: baseline; gap: 6px; }
+.idb .num { font-weight: 800; font-size: 17px; }
+.idb .more { margin-left: auto; color: var(--muted); font-weight: 700; }
+.idb .nm { font-weight: 600; font-size: 13px; overflow-wrap: anywhere; }
+.idb .meta { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.acts { display: grid; gap: 4px; min-width: 0; }
+.acts.two { grid-template-columns: repeat(4, minmax(var(--btn), 1fr)); grid-auto-rows: minmax(var(--btn), auto); }
+.acts.one { display: flex; align-items: stretch; gap: 4px; }
+.acts.one .grp { display: flex; gap: 4px; flex: var(--grow, 1) 1 0; min-width: 0; }
+.acts.one .grp + .grp { margin-left: 8px; }
+.glbl { display: none; }
+.labels .acts.one .grp { flex-direction: column; gap: 2px; }
+.labels .acts.one .grp .glbl { display: block; font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.labels .acts.one .grp .gbtns { display: flex; gap: 4px; flex: 1; }
+.gbtns { display: contents; }
+.labels .gbtns { display: flex; }
+.acts.two .grp, .acts.two .gbtns { display: contents; }
+.acts.two .glbl { display: none; }
+.a { min-height: var(--btn); min-width: var(--btn); flex: 1 1 0; border-radius: 10px; border: 1px solid var(--line);
+  background: var(--remate); font-size: 12px; font-weight: 600; padding: 2px; line-height: 1.1; overflow-wrap: normal; word-break: keep-all; hyphens: manual; -webkit-hyphens: manual; }
+.mode-phone-p .a, .mode-phone-l .a { font-size: 11px; letter-spacing: -.01em; }
+.a.y { background: var(--yellow); color: #3a2c00; border-color: #c9a92a; }
+.a.r { background: var(--red); color: #fff; border-color: #a8322c; }
+.a.f { background: var(--falta); }
+.a.g { background: var(--accent); color: #fff; border-color: var(--accent); }
+.a.ph { visibility: hidden; }
+.a:active { filter: brightness(.9); }
+.flash { animation: flash .5s ease-out; }
+@keyframes flash { from { box-shadow: 0 0 0 3px var(--accent); } to { box-shadow: 0 0 0 0 transparent; } }
+
+/* bloqueio curto após substituição */
+.outbtn { min-height: var(--btn); border-radius: 10px; border: 2px dashed var(--red); background: var(--surface);
+  font-weight: 700; color: var(--red); width: 100%; }
+.vacbtn { min-height: var(--btn); border-radius: 10px; border: 2px dashed var(--line); background: transparent; width: 100%;
+  color: var(--muted); font-weight: 600; }
+
+/* ---------- Doca (telemóvel vertical) ---------- */
+.dock { display: none; gap: 6px; padding: 6px 10px calc(6px + var(--sab)); background: var(--surface); border-top: 1px solid var(--line); }
+.dock .ibtn { flex: 1; }
+.mode-phone-p .dock { display: flex; }
+.app.mode-phone-l { grid-template-columns: auto minmax(0, 1fr) 72px; grid-template-rows: 56px minmax(0, 1fr);
+  grid-template-areas: "hdr last dock" "body body dock"; padding-bottom: var(--sab); }
+.mode-phone-l .hdr { grid-area: hdr; border-right: 1px solid var(--line); }
+.mode-phone-l .last { grid-area: last; }
+.mode-phone-l .body { grid-area: body; }
+.mode-phone-l .dock { grid-area: dock; display: flex; flex-direction: column; padding: 6px; border-top: 0; border-left: 1px solid var(--line); }
+.mode-phone-l .dock .ibtn { flex: 0 0 auto; padding: 0 2px; font-size: 12px; }
+.mode-phone-l .app-pad-b { display: none; }
+.mode-phone-l .hdr .cfgbtn { display: none; }
+.dock .cfgbtn { display: none; } .mode-phone-l .dock .cfgbtn, .mode-phone-p .dock .cfgbtn { display: block; }
+.mode-phone-p .hdr .cfgbtn { display: none; }   /* iPhone vertical: ⚙ passa para a doca, para o cronómetro maior caber */
+.mode-phone-p .dock .cfgbtn { flex: 0 0 var(--btn); }
+/* Tablet horizontal: cabeçalho e último evento na mesma faixa, para as 5 linhas caberem com a barra de equipa */
+.app.mode-tab-l { grid-template-columns: auto minmax(0, 1fr); grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-areas: "hdr last" "team team" "body body"; padding-bottom: var(--sab); }
+.mode-tab-l .hdr { grid-area: hdr; border-right: 1px solid var(--line); }
+.mode-tab-l .hdr .spacer { flex: 0 0 12px; }
+.mode-tab-l .last { grid-area: last; height: auto; }
+.mode-tab-l .teambar { grid-area: team; }
+.mode-tab-l .body { grid-area: body; }
+.mode-tab-l .app-pad-b { display: none; }
+.mode-phone-l .court { padding: 4px 8px; }
+.mode-phone-l .row { padding: 3px; margin-bottom: 4px; }
+.mode-phone-l .idb { padding: 0 4px; }
+.meta-inline { display: none; font-size: 11px; color: var(--muted); font-weight: 500; }
+.mode-phone-l .meta-inline { display: inline; }
+.mode-phone-l .meta-block { display: none; }
+.mode-phone-l .app-pad-b, .mode-tab-l .app-pad-b, .mode-tab-p .app-pad-b { height: var(--sab); }
+
+/* ---------- Painel de equipa ---------- */
+.side h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 10px 0 6px; }
+.tgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 6px; }
+.tgrid .ibtn { width: 100%; }
+.tag009 { font-size: 10px; color: var(--muted); font-weight: 500; }
+.bench { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 6px; }
+.bchip { min-height: var(--btn); border-radius: 10px; border: 1px solid var(--line); background: var(--bg); text-align: left; padding: 4px 8px; }
+.bchip b { font-weight: 800; } .bchip.sel { outline: 3px solid var(--accent); }
+.seg { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.seg .ibtn.on { background: var(--accent); color: #fff; }
+
+/* ---------- Folha (sheet) ---------- */
+.sheetwrap { position: fixed; inset: 0; background: rgba(0,0,0,.35); display: none; align-items: flex-end; justify-content: center; z-index: 50; }
+.sheetwrap.open { display: flex; }
+.sheet { background: var(--surface); width: min(640px, 100%); max-height: 88dvh; overflow-y: auto; border-radius: 16px 16px 0 0;
+  padding: 12px 12px calc(12px + var(--sab)); padding-left: max(12px, var(--sal)); padding-right: max(12px, var(--sar)); }
+.sheet h2 { font-size: 16px; margin: 4px 0 8px; }
+.sheet h4 { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin: 12px 0 6px; }
+.chips { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 6px; }
+.chips .ibtn.on, .zgrid .ibtn.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+.zgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.sheet .actionsrow { display: flex; gap: 8px; margin-top: 12px; position: sticky; bottom: 0; background: var(--surface); padding-top: 8px; }
+.sheet .actionsrow .ibtn { flex: 1; }
+.note { font-size: 12px; color: var(--muted); }
+.cfg label { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: var(--btn); }
+.cfg select { min-height: 40px; font: inherit; }
+.clock.stopped { color: var(--warn); }
+/* Contadores por categoria de equipa */
+.cnt { display: block; font-size: 11px; font-weight: 500; color: var(--muted); font-variant-numeric: tabular-nums; margin-top: 2px; }
+.ibtn.gkon .cnt, .ibtn.primary .cnt { color: inherit; }
+.tgrp { display: grid; grid-template-columns: minmax(0, 1fr) var(--btn); gap: 4px; min-width: 0; }
+.ibtn.minus { font-size: 22px; font-weight: 700; padding: 0; min-width: var(--btn); }
+.pr { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.pr h4 { margin: 0 0 2px; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+.pr .col { display: grid; gap: 6px; align-content: start; }
+.ibtn.perda { border-color: #c4524b; } .ibtn.recup { border-color: var(--accent); }
+/* Barra de equipa no topo */
+.teambar { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 6px; padding: 6px 10px;
+  background: var(--surface); border-bottom: 1px solid var(--line); }
+.teambar .ibtn { width: 100%; padding: 0 4px; line-height: 1.1; }
+.mode-phone-l .teambar { display: none; }
+.mode-tab-p .teambar { grid-auto-flow: row; grid-template-columns: repeat(3, minmax(0, 1fr)); }   /* tablet vertical: 2 filas de 3, sem cortar texto */
+.mode-phone-p #dock [data-act="open-team"] { display: none; }   /* no iPhone vertical, "Mais…" na barra de equipa substitui "Equipa" */
+.mode-phone-p.gk-on #dock [data-act="open-team"] { display: block; }   /* GR-linha ativo ocupa o lugar de "Mais…": passa para a doca */
+.ibtn.gkon { background: var(--warn); color: #fff; border-color: var(--warn); }
+.gkchip { font-size: 12px; font-weight: 700; color: #fff; background: var(--warn); border-radius: 999px; padding: 3px 8px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+/* Cronómetro maior */
+.clock { font-size: 24px; }
+.labels .clock { font-size: 34px; }
+.mode-phone-l .clock { font-size: 24px; }
+/* Zona rápida: painel NÃO modal (sem fundo escurecido), fixo, não desloca a lista */
+.zq { position: fixed; z-index: 40; right: max(8px, var(--sar)); bottom: calc(8px + var(--sab)); width: min(420px, calc(100vw - 16px));
+  background: var(--surface); border: 2px solid var(--accent); border-radius: 14px; padding: 6px; box-shadow: 0 6px 24px rgba(0,0,0,.25); }
+.mode-phone-p .zq { bottom: var(--sab); left: max(6px, var(--sal)); right: max(6px, var(--sar)); width: auto; }
+.quadra { display: flex; align-items: stretch; gap: 4px; margin-top: 4px; }
+.quadra .gside { writing-mode: vertical-rl; transform: rotate(180deg); font-size: 11px; color: var(--muted); text-align: center;
+  border-right: 3px solid var(--muted); padding-right: 2px; }
+.quadra .gside:last-child { transform: none; border-right: 0; border-left: 3px solid var(--muted); padding: 0 0 0 2px; }
+.quadra .q4 { flex: 1; display: grid; grid-template-columns: 1fr 1fr 2px 1fr 1fr; gap: 4px; }
+.quadra .q4 .ibtn { min-height: var(--btn); min-width: 0; }
+.quadra .mid { border-left: 2px dashed var(--muted); }
+.ataque { text-align: center; font-size: 11px; color: var(--muted); margin-top: 2px; }
+.sheet .goal { text-align: center; font-size: 11px; color: var(--muted); margin: 2px 0; }
+.zq .goalside { display: flex; align-items: stretch; gap: 4px; }
+.zq .goalside .zgrid { flex: 1; }
+.zq .goalbar { writing-mode: vertical-rl; font-size: 11px; color: var(--muted); text-align: center; border-left: 3px solid var(--muted); padding-left: 2px; }
+.mode-phone-l .zq { right: calc(80px + var(--sar)); }
+.zq .zqh { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; }
+.zq .zqh span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.zq .goal { text-align: center; font-size: 11px; color: var(--muted); margin: 2px 0; }
+.zq .zgrid .ibtn { min-height: 44px; }
+.mode-phone-p .zq .zgrid .ibtn, .labels .zq .zgrid .ibtn { min-height: var(--btn); }
+.mode-phone-l .zq { width: 340px; bottom: calc(4px + var(--sab)); padding: 4px; }
+.mode-phone-l .zq .zgrid { gap: 4px; }
+.mode-phone-l .zq .zgrid .ibtn { min-height: 48px; }
+/* Resumo rápido */
+.stats { width: 100%; border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums; }
+.stats th, .stats td { padding: 6px 4px; border-bottom: 1px solid var(--line); text-align: right; }
+.stats th:first-child, .stats td:first-child { text-align: left; }
+.stats td:last-child { width: calc(var(--btn) + 8px); padding: 2px 0 2px 8px; }
+.stats tr.sub td:first-child { padding-left: 16px; color: var(--muted); }
+.qstats { font-size: 13px; background: var(--bg); border-radius: 10px; padding: 8px; margin-top: 4px; }
+.qstats b { font-variant-numeric: tabular-nums; }
+/* iPhone vertical: o cabeçalho tem de caber em ~390 px — espaços menores e o estado de sincronização pode partir em 2 linhas */
+.mode-phone-p .hdr { gap: 5px; padding: 4px 8px; }
+.mode-phone-p .sync { white-space: normal; text-align: center; line-height: 1.1; min-width: 0; flex: 0 1 auto; padding: 3px 6px; }
+.mode-phone-p .score { font-size: 17px; }
+/* Reforço visual (opção do protótipo, só no tablet): 1 = texto maior + negrito; 2 = idem + alvos de 64 px */
+.app.rf.labels .a { font-weight: 800; font-size: 16px; }
+.app.rf.labels .idb .num { font-size: 21px; }
+.app.rf.labels .idb .nm { font-size: 15px; }
+.app.rf.labels .glbl { font-size: 11px; font-weight: 700; }
+.cfg details { border-top: 1px solid var(--line); margin-top: 8px; }
+.cfg summary { min-height: var(--btn); display: flex; align-items: center; font-weight: 700; cursor: pointer; }
+.hist, .tasks { margin: 4px 0 8px; padding-left: 22px; font-size: 13px; }
+.hist { max-height: 40dvh; overflow-y: auto; }
+.hist li, .tasks li { margin: 2px 0; }
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <header class="hdr" id="hdr"></header>
+  <div class="teambar" id="teambar"></div>
+  <div class="last" id="last"></div>
+  <main class="body" id="body">
+    <section class="court" id="court" aria-label="Jogadores em quadra"></section>
+    <aside class="side" id="side" aria-label="Equipa e banco"></aside>
+  </main>
+  <nav class="dock" id="dock" aria-label="Ações gerais">
+    <button class="ibtn" data-act="open-team">Equipa</button>
+    <button class="ibtn" data-act="open-bench">Substituir</button>
+    <button class="ibtn" data-act="summary">Resumo</button>
+    <button class="ibtn" data-act="pause" id="dockPause">Pausa</button>
+    <button class="ibtn cfgbtn" data-act="cfg" aria-label="Definições do protótipo">⚙</button>
+  </nav>
+  <div class="app-pad-b"></div>
+  <div class="zq" id="zq" hidden></div>
+</div>
+<div class="sheetwrap" id="sheetwrap"><div class="sheet" id="sheet" role="dialog" aria-modal="true"></div></div>
+
+<script>
+"use strict";
+/* Protótipo de interação — dados FICTÍCIOS, estado só em memória, sem rede, sem Supabase.
+   Taxonomia: eventos existentes + tipos propostos na spec 009 (não implementados na app). */
+
+// ---------- Simulação de safe areas (só para medição): ?safe=top,right,bottom,left ----------
+(function () {
+  const q = new URLSearchParams(location.search);
+  const s = q.get("safe");
+  if (s) {
+    const [t, r, b, l] = s.split(",").map((x) => (parseFloat(x) || 0) + "px");
+    const st = document.documentElement.style;
+    st.setProperty("--sat", t); st.setProperty("--sar", r); st.setProperty("--sab", b); st.setProperty("--sal", l);
+  }
+  if (q.get("density")) window.__density = q.get("density");
+  if (q.get("rf") != null) window.__rf = +q.get("rf");
+})();
+
+const ROSTER = [
+  { id: "p1", num: "1", name: "Tiago Ramos", pos: "GR", gk: true },
+  { id: "p10", num: "10", name: "Martim S.", pos: "AE" },
+  { id: "p7", num: "7", name: "Francisco Albuquerque", pos: "AD" },
+  { id: "p4", num: "4", name: "Rui Lopes", pos: "FX" },
+  { id: "p9", num: "9", name: "Duarte Mendes", pos: "PV" },
+  { id: "p12", num: "12", name: "Gonçalo Pires", pos: "GR", gk: true },
+  { id: "p5", num: "5", name: "João Costa", pos: "FX" },
+  { id: "p8", num: "8", name: "Lourenço Faria", pos: "AE" },
+  { id: "p11", num: "11", name: "Henrique Sá", pos: "AD" },
+  { id: "p14", num: "14", name: "Vasco Teixeira", pos: "PV" },
+];
+const byId = Object.fromEntries(ROSTER.map((p) => [p.id, p]));
+const TIPOS = [["org","ORG Organização"],["trs","TRS Transição"],["atr","ATR Ataque rápido"],["cnt","CNT Canto"],["lat","LAT Lateral"],
+  ["lvr","LVR Livre"],["pnt","PNT Penálti"],["l10","L10 Livre 10 m"],["gll","GLL Goleiro-linha"],["ppb","PPB Própria baliza"]];
+const LABEL = {
+  golo: "Golo", remate_defendido: "Remate defendido", remate_fora: "Remate fora", remate_bloqueado: "Remate bloqueado",
+  cartao_amarelo: "Cartão amarelo", cartao_vermelho: "Cartão vermelho", falta: "Falta feita", falta_sofrida: "Falta recebida",
+  defesa: "Remate deles defendido (GR)", saida_ganha: "Saída 1x1 ganha", saida_perdida: "Saída 1x1 perdida", golo_sofrido: "Golo sofrido",
+  substituicao: "Substituição", entrada: "Entrada (vaga)", pausa: "Pausa", fim_pausa: "Fim de pausa", lesao_inicio: "Atendimento iniciado",
+  lesao_fim: "Atendimento terminado", fim_periodo: "Fim de parte", perda: "Perda de bola", recuperacao: "Recuperação de bola",
+  remate_adv_fora: "Remate deles fora", remate_adv_bloqueado: "Remate deles bloqueado",
+  transicao: "Transição", fase_jogo: "Fase de jogo", goleiro_linha_inicio: "Goleiro-linha início", goleiro_linha_fim: "Goleiro-linha fim",
+};
+// Categorias de equipa com contador e "−" (anula o último evento dessa categoria)
+const ZONAS3 = [["defesa", "Defesa"], ["meio", "Meio-campo"], ["ataque", "Ataque"]];
+const TEAM_CATS = {
+  trF: { label: "Transição a favor", match: (e) => e.type === "transicao" && e.dir === "ofensiva" },
+  trA: { label: "Transição contra", match: (e) => e.type === "transicao" && e.dir === "defensiva" },
+  gs: { label: "Golo sofrido", match: (e) => e.type === "golo_sofrido" },
+  ra_def: { label: "Remate deles defendido", match: (e) => e.type === "defesa" },
+  ra_fora: { label: "Remate deles fora", match: (e) => e.type === "remate_adv_fora" },
+  ra_bloq: { label: "Remate deles bloqueado", match: (e) => e.type === "remate_adv_bloqueado" },
+};
+ZONAS3.forEach(([z, l]) => {
+  TEAM_CATS["p_" + z] = { label: "Perda · " + l, match: (e) => e.type === "perda" && e.z3 === z };
+  TEAM_CATS["r_" + z] = { label: "Recuperação · " + l, match: (e) => e.type === "recuperacao" && e.z3 === z };
+});
+// Zona opcional — grelha de referência do clube (quadra inteira, deitada, igual nas duas partes):
+// a NOSSA baliza à esquerda e a do ADVERSÁRIO à direita (ataque →). Colunas da nossa baliza para a deles:
+// 1-3 | 4-6 ‖ 7-9 | 10-12, cada coluna de cima para baixo; meio-campo entre 4-6 e 7-9.
+const ZONA_OK = new Set(["remate_defendido","remate_fora","remate_bloqueado","defesa","remate_adv_fora","remate_adv_bloqueado",
+  "saida_ganha","saida_perdida","falta","falta_sofrida","cartao_amarelo","cartao_vermelho"]);
+function courtGridHTML(act, selected) {
+  const btn = (z) => `<button class="ibtn${selected === z ? " on" : ""}" data-act="${act}" data-v="${z}">${z}</button>`;
+  const rows = [1, 2, 3].map((r) => btn(r) + btn(r + 3) + `<span class="mid" aria-hidden="true"></span>` + btn(r + 6) + btn(r + 9)).join("");
+  return `<div class="quadra"><div class="gside">nossa baliza</div><div class="q4">${rows}</div><div class="gside">baliza adversária</div></div>
+    <div class="ataque">ataque →</div>`;
+}
+const ADV_SHOTS = new Set(["remate_adv_fora","remate_adv_bloqueado"]);   // remates deles sem jogador nosso
+
+// ---------- Estado ----------
+// O relógio vive FORA do estado de jogo: desfazer um evento nunca faz recuar o tempo decorrido.
+const CLOCK = { ms: 0, running: true, lastTick: Date.now() };
+function initialState() {
+  return {
+    slots: ["p1", "p10", "p7", "p4", "p9"],      // posição FIXA das linhas; quem entra herda a linha de quem sai
+    bench: ["p12", "p5", "p8", "p11", "p14"],
+    events: [], score: { nos: 0, adv: 0 }, period: 1,
+    minutes: { p1: 14, p10: 12, p7: 9, p4: 14, p9: 6, p12: 0, p5: 5, p8: 3, p11: 0, p14: 2 },
+    cards: {}, pause: null, treatment: null, gkLine: false, gkLineStart: 0, foulsNos: 3, foulsAdv: 2,
+  };
+}
+function resetClock() { CLOCK.ms = 14 * 60000 + 32000; CLOCK.running = true; CLOCK.lastTick = Date.now(); }
+let S = initialState();
+resetClock();
+const UI = {
+  density: window.__density || "B",
+  reinforce: window.__rf != null ? window.__rf : 2,   // 2 = automático: o maior botão que ainda deixa as 5 linhas visíveis (≥ 48); 0 = normal
+  offline: false, pending: 0, syncing: false, expanded: null, taps: 0,
+  // Fluxo transitório ÚNICO (substituição / vaga). null = nenhum. Nunca sobrevive a um cancelamento.
+  //   { kind: "pick-out", inId }      — escolhido quem entra; falta tocar SAI numa linha
+  //   { kind: "pick-in", outId }      — escolhido quem sai (a partir da linha); falta escolher quem entra
+  //   { kind: "vacancy", slot, inId } — vaga por vermelho; escolher e CONFIRMAR quem entra
+  flow: null,
+  notice: null,              // aviso na faixa do último evento (ex.: "Anulada: …")
+  zq: null,                  // zona rápida aberta: { evId } — painel não modal depois de remate/falta/defesa
+  sheetKind: null,           // tipo da folha aberta; "flow" = pertence ao fluxo em curso
+  confirmReset: false,
+};
+let epoch = 0;               // muda em cada reinício: callbacks de temporizadores antigos ficam sem efeito
+const BOUNDARY = new Set(["fim_periodo", "kickoff"]);   // limites de parte: não se desfazem neste protótipo
+let undoStack = [];
+const snap = () => JSON.parse(JSON.stringify(S));
+
+function addEvent(type, pid, extra) {
+  if (BOUNDARY.has(type)) undoStack = [];       // o desfazer não atravessa um limite de parte
+  else { undoStack.push(snap()); if (undoStack.length > 50) undoStack.shift(); }
+  const ev = { id: Math.random().toString(36).slice(2), type, pid: pid || null, t: CLOCK.ms, period: S.period, ...(extra || {}) };
+  S.events.push(ev);
+  UI.pending++; scheduleSync();
+  return ev;
+}
+function canUndo() { return undoStack.length > 0 && !UI.flow; }
+function undo() {
+  if (!canUndo()) return;
+  S = undoStack.pop();                           // o relógio (CLOCK) não é restaurado: o tempo decorrido mantém-se
+  UI.pending = Math.max(0, UI.pending - 1);
+  UI.expanded = null; UI.zq = null; UI.notice = null;
+  renderAll();
+}
+let syncTimer = null;
+function scheduleSync() {
+  if (UI.offline || syncTimer) return renderHeader();
+  UI.syncing = true; renderHeader();
+  const myEpoch = epoch;
+  syncTimer = setTimeout(() => {
+    syncTimer = null;
+    if (myEpoch !== epoch) return;
+    UI.syncing = false; if (!UI.offline) UI.pending = 0; renderHeader();
+  }, 2500);
+}
+
+// ---------- Layout por viewport efetivo ----------
+let MODE = "";
+function computeMode() {
+  const w = innerWidth, h = innerHeight;
+  let mode;
+  if (w < 600) mode = "phone-p";
+  else if (h < 500) mode = "phone-l";
+  else if (w >= h) mode = "tab-l";
+  else mode = "tab-p";
+  const app = document.getElementById("app");
+  app.className = "app mode-" + mode + (mode === "tab-l" || mode === "tab-p" ? " labels" : "") + (UI.reinforce ? " rf" : "") + (S.gkLine ? " gk-on" : "");
+  const r = document.documentElement.style;
+  // tamanhos de alvo: nunca abaixo de 48; maiores no tablet
+  const auto = UI.reinforce === 2;
+  const btn = mode.startsWith("tab") ? (auto ? 64 : 56) : (auto && mode === "phone-p" && UI.density === "B" ? 64 : 48);
+  r.setProperty("--btn", btn + "px");
+  r.setProperty("--id-w", mode === "phone-p" ? "96px" : mode === "phone-l" ? "164px" : "168px");
+  r.setProperty("--side-w", w >= 1100 ? "320px" : "264px");
+  MODE = mode;
+}
+function actsLayout() {
+  // Uma linha só se couberem 8 alvos de --btn mais identificação; senão, duas filas de 4 (sem encolher alvos).
+  if (MODE === "phone-p") return "two";
+  const btn = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--btn"));
+  const court = document.getElementById("court");
+  const idw = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--id-w"));
+  const n = UI.density === "A" ? 8 : 5;
+  const need = idw + 6 + n * btn + (n - 1) * 4 + 3 * 8 + 12 + 20;
+  if (court.clientWidth >= need) return "one";
+  if (MODE.startsWith("tab") && btn > 48) {   // reduz por degraus (…→56→48, nunca abaixo de 48) antes de partir em duas filas
+    for (const b of [56, 48].filter((x) => x < btn)) {
+      const needB = idw + 6 + n * b + (n - 1) * 4 + 3 * 8 + 12 + 20;
+      if (court.clientWidth >= needB) { document.documentElement.style.setProperty("--btn", b + "px"); return "one"; }
+    }
+  }
+  return "two";
+}
+
+// ---------- Render ----------
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const fmt = (ms) => { const s = Math.floor(ms / 1000); return String(Math.floor(s / 60)).padStart(2, "0") + ":" + String(s % 60).padStart(2, "0"); };
+const pname = (id) => `#${byId[id].num} ${esc(byId[id].name)}`;
+
+function renderHeader() {
+  const syncCls = UI.offline ? "off" : UI.pending ? "pend" : "ok";
+  const short = MODE === "phone-l";
+  const syncTxt = short ? (UI.offline ? `Sem rede · ${UI.pending}` : UI.pending ? `${UI.pending} por enviar` : "Sincron.") : UI.offline ? `Sem rede · ${UI.pending} por enviar` : UI.pending ? (UI.syncing ? `A enviar ${UI.pending}…` : `${UI.pending} por enviar`) : "Sincronizado";
+  $("hdr").innerHTML = `
+    <span class="score" aria-label="Resultado">Nós ${S.score.nos}–${S.score.adv} <small>Adv</small></span>
+    <span class="period">${S.period}ª P</span>
+    <span class="clock${CLOCK.running ? "" : " stopped"}" id="clock" aria-live="off">${fmt(CLOCK.ms)}</span>
+    <span class="fouls" title="Faltas acumuladas na parte">F ${S.foulsNos}·${S.foulsAdv}</span>
+    ${MODE === "phone-l" && S.gkLine ? `<span class="gkchip">GR-linha <span data-gkl>${fmt(CLOCK.ms - S.gkLineStart)}</span></span>` : ""}
+    ${MODE === "phone-l" ? "" : '<span class="spacer"></span>'}
+    <span class="sync ${syncCls}" role="status">${syncTxt}</span>
+    <button class="ibtn cfgbtn" data-act="cfg" aria-label="Protótipo: definições e avaliação">⚙</button>`;
+  const dp = $("dockPause");
+  if (!CLOCK.running) { dp.textContent = `▶ Iniciar ${S.period}ª`; dp.dataset.act = "kickoff"; dp.classList.add("primary"); }
+  else { dp.textContent = S.pause ? "Retomar" : "Pausa"; dp.dataset.act = "pause"; dp.classList.remove("primary"); }
+  document.querySelector('#dock [data-act="open-bench"]').textContent = MODE === "phone-l" ? "Subst." : "Substituir";
+  document.querySelector('#dock [data-act="open-team"]').textContent = MODE === "phone-p" ? "Mais…" : "Equipa";
+}
+
+function summaryBtn() { return MODE.startsWith("tab") ? `<button class="ibtn" data-act="summary">Resumo</button>` : ""; }
+function renderLast() {
+  const el = $("last");
+  const f = UI.flow;
+  if (f && f.kind === "pick-out") {
+    el.className = "last mode";
+    el.innerHTML = `<span class="txt">Entra <b>${pname(f.inId)}</b> — toca em <b>SAI</b> na linha de quem sai</span>
+      <button class="ibtn" data-act="cancel-flow">Cancelar</button>`;
+    return;
+  }
+  el.className = "last";
+  if (UI.notice) {
+    el.innerHTML = `<span class="txt">${UI.notice}</span><button class="ibtn" data-act="undo" aria-label="Desfazer a anulação"${canUndo() ? "" : " disabled"}>↩ Desfazer</button>${summaryBtn()}`;
+    return;
+  }
+  const ev = S.events[S.events.length - 1];
+  if (!ev) { el.innerHTML = `<span class="txt note">Ainda sem eventos.</span><button class="ibtn" disabled>↩ Desfazer</button>${summaryBtn()}`; return; }
+  const who = ev.pid ? ` · ${pname(ev.pid)}` : "";
+  let extra = "";
+  if (ev.type === "substituicao") extra = ` · sai #${byId[ev.out].num}`;
+  if (ev.zona) extra += ` · zona ${ev.zona}`;
+  if (ev.tipo) extra += ` · ${ev.tipo.toUpperCase()}`;
+  if (ev.type === "fim_periodo") extra += " · relógio parado";
+  if (ev.z3) extra += ` · ${ZONAS3.find(([z]) => z === ev.z3)[1].toLowerCase()}`;
+  if (ev.type === "goleiro_linha_fim" && ev.durSec != null) extra += ` · durou ${fmt(ev.durSec * 1000)}`;
+  if (ev.type === "transicao") extra += ` · ${ev.dir === "ofensiva" ? "a favor" : "contra"} · ${ev.num} · ${ev.res === "ganha" ? "com finalização" : "sem finalização"}`;
+  const boundaryNote = BOUNDARY.has(ev.type) ? ` <span class="note">(não se desfaz aqui)</span>` : "";
+  const zonaBtn = ZONA_OK.has(ev.type) && !ev.zona && !ev.z3 && !UI.zq ? `<button class="ibtn" data-act="zona-last">+ Zona</button>` : "";
+  el.innerHTML = `<span class="txt"><b>${fmt(ev.t)}</b> · ${LABEL[ev.type] || ev.type}${who}${extra}${boundaryNote}</span>${zonaBtn}
+    <button class="ibtn" data-act="undo" aria-label="Desfazer o último evento"${canUndo() ? "" : " disabled"}>↩ Desfazer</button>${summaryBtn()}`;
+}
+
+function actBtn(act, label, cls, pid, extraLabel) {
+  const p = byId[pid];
+  return `<button class="a ${cls || ""}" data-act="${act}" data-pid="${pid}" aria-label="${esc(extraLabel || label)} — #${p.num} ${esc(p.name)}">${label}</button>`;
+}
+function rowActions(pid, layout) {
+  const p = byId[pid];
+  const g = (name, inner, grow) => `<div class="grp" style="--grow:${grow}"><span class="glbl">${name}</span><div class="gbtns">${inner}</div></div>`;
+  if (UI.density === "B") {
+    if (UI.expanded === pid) {
+      return p.gk
+        ? g("Remates deles", actBtn("defesa", "Defen&shy;dido", "", pid, "Remate deles defendido") + actBtn("remate_adv_fora", "Fora", "", pid, "Remate deles fora") +
+          actBtn("remate_adv_bloqueado", "Blo&shy;queado", "", pid, "Remate deles bloqueado") + `<button class="a" data-act="collapse" aria-label="Fechar">✕</button>`, 4)
+        : g("Remate", actBtn("remate_defendido", "Defen&shy;dido", "", pid, "Remate defendido") + actBtn("remate_fora", "Fora", "", pid) +
+          actBtn("remate_bloqueado", "Blo&shy;queado", "", pid, "Remate bloqueado") + `<button class="a" data-act="collapse" aria-label="Fechar remate">✕</button>`, 4);
+    }
+    const first = p.gk ? actBtn("golo_sofrido", "Golo sofrido", "r", pid, "Golo sofrido") + actBtn("expand", "Remate deles ▸", "", pid, "Remate deles sem golo")
+                       : actBtn("golo", "Golo", "g", pid) + actBtn("expand", "Remate ▸", "", pid, "Remate sem golo");
+    return g(p.gk ? "Remates deles" : "Remate", first, 2) + g("Falta", actBtn("falta", "Feita", "f", pid, "Falta feita") + actBtn("falta_sofrida", "Rece&shy;bida", "f", pid, "Falta recebida"), 2);
+  }
+  const first = p.gk
+    ? actBtn("golo_sofrido", "Golo sofrido", "r", pid, "Golo sofrido") + actBtn("defesa", "Defen&shy;dido", "", pid, "Remate deles defendido") +
+      actBtn("remate_adv_fora", "Fora", "", pid, "Remate deles fora") + actBtn("remate_adv_bloqueado", "Blo&shy;queado", "", pid, "Remate deles bloqueado")
+    : actBtn("golo", "Golo", "g", pid) + actBtn("remate_defendido", "Defen&shy;dido", "", pid, "Remate defendido") +
+      actBtn("remate_fora", "Fora", "", pid, "Remate fora") + actBtn("remate_bloqueado", "Blo&shy;queado", "", pid, "Remate bloqueado");
+  return g(p.gk ? "Remates deles" : "Remate", first, 4) +
+    g("Cartões", actBtn("cartao_amarelo", "Ama&shy;relo", "y", pid, "Cartão amarelo") + actBtn("cartao_vermelho", "Ver&shy;melho", "r", pid, "Cartão vermelho"), 2) +
+    g("Falta", actBtn("falta", "Feita", "f", pid, "Falta feita") + actBtn("falta_sofrida", "Rece&shy;bida", "f", pid, "Falta recebida"), 2);
+}
+function renderCourt() {
+  const court = $("court");
+  const layout = actsLayout();
+  const pickingOut = UI.flow && UI.flow.kind === "pick-out";
+  const html = S.slots.map((pid, i) => {
+    if (!pid) {
+      return `<div class="row vacant" data-slot="${i}"><button class="vacbtn" data-act="vacancy" data-slot="${i}">Vaga (vermelho) — reposição…</button></div>`;
+    }
+    const p = byId[pid];
+    const cards = S.cards[pid] || {};
+    const cardTxt = (cards.y ? " · 🟨" : "") + (cards.r ? " · 🟥" : "");
+    const treat = S.treatment === pid ? " · atendimento" : "";
+    const body = pickingOut
+      ? `<button class="outbtn" data-act="sub-out" data-slot="${i}">SAI #${p.num}</button>`
+      : `<div class="acts ${layout}">${rowActions(pid, layout)}</div>`;
+    return `<div class="row${p.gk ? " gk" : ""}" data-slot="${i}" data-pid="${pid}">
+      <button class="idb" data-act="open-player" data-pid="${pid}" aria-label="Mais ações para #${p.num} ${esc(p.name)}">
+        <span class="l1"><span class="num">#${p.num}</span><span class="meta-inline">${p.pos} · ${S.minutes[pid] || 0}'${cardTxt}${treat}</span><span class="more" aria-hidden="true">⋯</span></span>
+        <span class="nm">${esc(p.name)}</span>
+        <span class="meta meta-block">${p.pos} · <span data-min="${pid}">${S.minutes[pid] || 0}'</span>${cardTxt}${treat}</span>
+      </button>
+      ${body}
+    </div>`;
+  }).join("");
+  court.innerHTML = html;
+}
+function catCount(key) {
+  const m = TEAM_CATS[key].match;
+  return { p: S.events.filter((e) => e.period === S.period && m(e)).length, j: S.events.filter(m).length };
+}
+function cntHTML(key) { const c = catCount(key); return `<span class="cnt">${S.period}ª ${c.p} · total ${c.j}</span>`; }
+function minusBtn(key) {
+  const none = catCount(key).j === 0;
+  return `<button class="ibtn minus" data-act="minus" data-cat="${key}" aria-label="Anular último: ${TEAM_CATS[key].label}"${none ? " disabled" : ""}>−</button>`;
+}
+function teamBtn(key, act, attrs, label) {
+  return `<div class="tgrp"><button class="ibtn" data-act="${act}" ${attrs}>${label}${cntHTML(key)}</button>${minusBtn(key)}</div>`;
+}
+function prHTML() {
+  const cell = (kind, z, l) => `<div class="tgrp"><button class="ibtn ${kind === "p" ? "perda" : "recup"}" data-act="pr" data-kind="${kind}" data-z="${z}">${l}${cntHTML(kind + "_" + z)}</button>${minusBtn(kind + "_" + z)}</div>`;
+  return `<div class="pr"><div class="col"><h4>Perdas de bola</h4>${ZONAS3.map(([z, l]) => cell("p", z, l)).join("")}</div>
+    <div class="col"><h4>Recuperações</h4>${ZONAS3.map(([z, l]) => cell("r", z, l)).join("")}</div></div>`;
+}
+function gkBtn() {
+  return S.gkLine
+    ? `<button class="ibtn gkon" data-act="gkline" aria-label="Terminar GR-linha">GR-linha <span data-gkl>${fmt(CLOCK.ms - S.gkLineStart)}</span> · terminar</button>`
+    : `<button class="ibtn" data-act="gkline">GR-linha</button>`;
+}
+function periodBtns() {
+  return CLOCK.running
+    ? `<button class="ibtn" data-act="pause">${S.pause ? "Retomar" : "Pausa / tempo"}</button><button class="ibtn" data-act="end-period">Fim da parte</button>`
+    : `<button class="ibtn primary" data-act="kickoff">▶ Iniciar ${S.period}ª parte</button>`;
+}
+function teamPanelHTML() {
+  return `
+    <h3>Equipa</h3>
+    <div class="tgrid">
+      ${teamBtn("trF", "transicao", 'data-dir="ofensiva"', "Transição a favor")}
+      ${teamBtn("trA", "transicao", 'data-dir="defensiva"', "Transição contra")}
+      ${teamBtn("gs", "golo_sofrido", "", "Golo sofrido")}
+      ${gkBtn()}
+      ${periodBtns()}
+    </div>
+    <h3>Perdas e recuperações</h3>${prHTML()}`;
+}
+function renderTeamBar() {
+  const el = $("teambar");
+  if (MODE === "phone-l") { el.innerHTML = ""; return; }
+  if (MODE === "phone-p") {
+    // 3 ações mais usadas + "Mais…" (ou GR-linha ativo, para estar sempre visível)
+    el.innerHTML = `
+      <button class="ibtn" data-act="transicao" data-dir="ofensiva">Trans. a favor${cntHTML("trF")}</button>
+      <button class="ibtn" data-act="transicao" data-dir="defensiva">Trans. contra${cntHTML("trA")}</button>
+      <button class="ibtn" data-act="golo_sofrido">Golo sofrido${cntHTML("gs")}</button>
+      ${S.gkLine
+        ? `<button class="ibtn gkon" data-act="gkline" aria-label="Terminar GR-linha">GR-linha <span data-gkl>${fmt(CLOCK.ms - S.gkLineStart)}</span></button>`
+        : `<button class="ibtn" data-act="open-team">Mais…</button>`}`;
+    return;
+  }
+  el.innerHTML = `
+    ${teamBtn("trF", "transicao", 'data-dir="ofensiva"', "Transição a favor")}
+    ${teamBtn("trA", "transicao", 'data-dir="defensiva"', "Transição contra")}
+    ${teamBtn("gs", "golo_sofrido", "", "Golo sofrido")}
+    ${gkBtn()}
+    ${periodBtns()}`;
+}
+function benchHTML(title, selectedId) {
+  return `<h3>${title}</h3>
+    <div class="bench">${S.bench.map((id) => {
+      const p = byId[id];
+      const sel = selectedId === id || (UI.flow && UI.flow.kind === "pick-out" && UI.flow.inId === id);
+      return `<button class="bchip${sel ? " sel" : ""}" data-act="bench" data-pid="${id}"><b>#${p.num}</b> ${esc(p.name)} <span class="note">${p.pos} · ${S.minutes[id] || 0}'</span></button>`;
+    }).join("")}</div>`;
+}
+const VANTAGEM = ["2x0","2x1","3x0","3x1","3x2","4x1","4x2"];
+const IGUAL_DESV = ["1x1","2x2","3x3"];
+function countStats(evs) {
+  const c = (f) => evs.filter(f).length;
+  const tr = (dir) => evs.filter((e) => e.type === "transicao" && e.dir === dir);
+  const f = tr("ofensiva"), a = tr("defensiva");
+  return {
+    trF: f.length, trFr: f.filter((e) => e.res === "ganha").length, trFn: f.filter((e) => e.res === "perdida").length,
+    trFsup: f.filter((e) => e.res === "perdida" && VANTAGEM.includes(e.num)).length,
+    trA: a.length, trAr: a.filter((e) => e.res === "ganha").length, trAn: a.filter((e) => e.res === "perdida").length,
+    golos: c((e) => e.type === "golo"), def: c((e) => e.type === "remate_defendido"), fora: c((e) => e.type === "remate_fora"), bloq: c((e) => e.type === "remate_bloqueado"),
+    aDef: c((e) => e.type === "defesa"), aFora: c((e) => e.type === "remate_adv_fora"), aBloq: c((e) => e.type === "remate_adv_bloqueado"),
+    gs: c((e) => e.type === "golo_sofrido"), fF: c((e) => e.type === "falta"), fR: c((e) => e.type === "falta_sofrida"),
+    ca: c((e) => e.type === "cartao_amarelo"), cv: c((e) => e.type === "cartao_vermelho"),
+    pT: c((e) => e.type === "perda"), rT: c((e) => e.type === "recuperacao"),
+    ...Object.fromEntries(ZONAS3.flatMap(([z]) => [["p_" + z, c((e) => e.type === "perda" && e.z3 === z)], ["r_" + z, c((e) => e.type === "recuperacao" && e.z3 === z)]])),
+  };
+}
+function summaryHTML() {
+  const P = countStats(S.events.filter((e) => e.period === S.period)), J = countStats(S.events);
+  const row = (l, k, sub, cat) => `<tr${sub ? ' class="sub"' : ""}><td>${l}</td><td>${P[k]}</td><td>${J[k]}</td><td>${cat ? minusBtn(cat) : ""}</td></tr>`;
+  const rem = (X) => X.golos + X.def + X.fora + X.bloq;
+  const remA = (X) => X.gs + X.aDef + X.aFora + X.aBloq;
+  return `<h2>Resumo rápido</h2>
+    <table class="stats"><thead><tr><th></th><th>${S.period}ª parte</th><th>Jogo</th><th></th></tr></thead><tbody>
+      ${row("Transições a favor", "trF", 0, "trF")}${row("com finalização", "trFr", 1)}${row("sem finalização", "trFn", 1)}${row("sem finalização, em superioridade", "trFsup", 1)}
+      ${row("Transições contra", "trA", 0, "trA")}${row("com finalização", "trAr", 1)}${row("sem finalização", "trAn", 1)}
+      <tr><td>Remates nossos</td><td>${rem(P)}</td><td>${rem(J)}</td><td></td></tr>
+      ${row("golo", "golos", 1)}${row("defendido", "def", 1)}${row("fora", "fora", 1)}${row("bloqueado", "bloq", 1)}
+      <tr><td>Remates deles</td><td>${remA(P)}</td><td>${remA(J)}</td><td></td></tr>
+      ${row("golo", "gs", 1, "gs")}${row("defendido (GR)", "aDef", 1, "ra_def")}${row("fora", "aFora", 1, "ra_fora")}${row("bloqueado", "aBloq", 1, "ra_bloq")}
+      ${row("Faltas feitas", "fF")}${row("Faltas recebidas", "fR")}
+      ${row("Perdas de bola", "pT")}${ZONAS3.map(([z, l]) => row(l.toLowerCase(), "p_" + z, 1, "p_" + z)).join("")}
+      ${row("Recuperações", "rT")}${ZONAS3.map(([z, l]) => row(l.toLowerCase(), "r_" + z, 1, "r_" + z)).join("")}
+${row("Amarelos", "ca")}${row("Vermelhos", "cv")}
+    </tbody></table>
+    <div class="actionsrow"><button class="ibtn" data-act="close">Fechar</button></div>`;
+}
+function quickStatsHTML() { return ""; }   // no tablet, "Resumo" está na faixa de cima (ao lado de Desfazer)
+function renderSide() {
+  if (MODE === "phone-p" || MODE === "phone-l") { $("side").innerHTML = ""; return; }
+  $("side").innerHTML = quickStatsHTML() + `<h3>Perdas e recuperações</h3>` + prHTML() + benchHTML("Banco — toca em quem entra");
+}
+function renderZq() {
+  const el = $("zq");
+  const ev = UI.zq && S.events.find((e) => e.id === UI.zq.evId);
+  if (!ev) { UI.zq = null; el.hidden = true; el.innerHTML = ""; return; }
+  const who = ev.pid ? ` · #${byId[ev.pid].num}` : "";
+  el.hidden = false;
+  el.innerHTML = `<div class="zqh"><span>Zona · ${LABEL[ev.type]}${who} <span class="note">(opcional)</span></span>
+      <button class="ibtn" data-act="zq-close" aria-label="Sem zona">✕</button></div>
+    ${courtGridHTML("zq-set", null)}`;
+}
+/** Botões "o maior possível": desce em degraus de 8 px (nunca abaixo de 48) até as 5 linhas caberem sem scroll e nada exceder a largura. */
+function fitButtons() {
+  if (UI.reinforce !== 2 || MODE === "phone-l" || (MODE === "phone-p" && UI.density === "A")) return;
+  const root = document.documentElement.style;
+  const sc = MODE === "tab-p" ? $("body") : $("court");
+  let btn = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--btn"));
+  const court = $("court");
+  const over = () => sc.scrollHeight > sc.clientHeight + 1 || court.scrollWidth > court.clientWidth + 1 || document.documentElement.scrollWidth > document.documentElement.clientWidth + 1;
+  for (let i = 0; i < 3 && btn > 48 && over(); i++) {
+    btn = Math.max(48, btn - 8); root.setProperty("--btn", btn + "px"); renderCourt();
+  }
+}
+function renderAll() { computeMode(); renderHeader(); renderTeamBar(); renderLast(); renderCourt(); renderSide(); fitButtons(); renderZq(); }
+
+// ---------- Folhas ----------
+// kind: "flow" quando a folha faz parte do fluxo em curso (fechar = cancelar o fluxo); outro valor = folha independente.
+function openSheet(html, kind) { UI.sheetKind = kind || "plain"; $("sheet").innerHTML = html; $("sheetwrap").classList.add("open"); }
+function closeSheet() { UI.sheetKind = null; $("sheetwrap").classList.remove("open"); $("sheet").innerHTML = ""; }
+/** Fecho pelo utilizador (Cancelar/Fechar/fundo): se a folha pertence ao fluxo, isto É um cancelamento. */
+function dismissSheet() { if (UI.sheetKind === "flow") return cancelFlow(); closeSheet(); }
+function cancelFlow() { UI.flow = null; closeSheet(); renderAll(); }
+
+let goalDraft = null;
+function goalSheet() {
+  const d = goalDraft;
+  const scorer = d.side === "nos" ? pname(d.pid) : "Adversário";
+  const mates = S.slots.filter((x) => x && x !== d.pid);
+  openSheet(`
+    <h2>${d.side === "nos" ? "Golo — " + scorer : "Golo sofrido"}</h2>
+    <p class="note">Detalhes opcionais.</p>
+    <h4>Tipo</h4><div class="chips">${TIPOS.map(([id, l]) => `<button class="ibtn${d.tipo === id ? " on" : ""}" data-act="g-tipo" data-v="${id}">${l}</button>`).join("")}</div>
+    ${d.side === "nos" ? `<h4>Assistência</h4><div class="chips">${mates.map((id) => `<button class="ibtn${d.assist === id ? " on" : ""}" data-act="g-assist" data-v="${id}">${pname(id)}</button>`).join("")}
+      <button class="ibtn${d.assist === null ? " on" : ""}" data-act="g-assist" data-v="">Sem assistência</button></div>` : ""}
+    <h4>Zona</h4>${courtGridHTML("g-zona", d.zona)}
+    <div class="actionsrow"><button class="ibtn" data-act="close">Cancelar</button><button class="ibtn primary" data-act="g-confirm">Confirmar golo</button></div>`, "goal");
+}
+function playerSheet(pid) {
+  const p = byId[pid];
+  const inT = S.treatment === pid;
+  const extraB = (p.gk ? `<button class="ibtn" data-act="saida_ganha" data-pid="${pid}">Saída 1x1 ganha</button><button class="ibtn" data-act="saida_perdida" data-pid="${pid}">Saída 1x1 perdida</button>` : "") +
+    (UI.density === "B"
+      ? `<button class="ibtn" style="background:var(--yellow)" data-act="cartao_amarelo" data-pid="${pid}">Amarelo</button><button class="ibtn" style="background:var(--red);color:#fff" data-act="cartao_vermelho" data-pid="${pid}">Vermelho</button>`
+      : "");
+  openSheet(`<h2>${pname(pid)} <span class="note">${p.pos} · ${S.minutes[pid] || 0}'</span></h2>
+    <div class="tgrid">${extraB}
+      <button class="ibtn" data-act="${inT ? "treat-end" : "treat-start"}" data-pid="${pid}">${inT ? "Terminar atendimento" : "Iniciar atendimento"}</button>
+      <button class="ibtn" data-act="sub-from-row" data-pid="${pid}">Substituir (sai)</button>
+    </div>
+    <div class="actionsrow"><button class="ibtn" data-act="close">Fechar</button></div>`, "player");
+}
+function pickInSheet() {
+  const f = UI.flow;
+  openSheet(`<h2>Sai ${pname(f.outId)} — quem entra?</h2>${benchHTML("Banco")}
+    <div class="actionsrow"><button class="ibtn" data-act="close">Cancelar substituição</button></div>`, "flow");
+}
+function vacancySheet() {
+  const f = UI.flow;
+  openSheet(`<h2>Reposição da vaga</h2>
+    <p class="note">Neste protótipo a elegibilidade da reposição <b>não é simulada</b>. Confirma só quando a reposição for permitida no jogo real.</p>
+    ${benchHTML("Quem entra?", f.inId)}
+    <div class="actionsrow"><button class="ibtn" data-act="close">Cancelar</button>
+      <button class="ibtn primary" data-act="vacancy-confirm"${f.inId ? "" : " disabled"}>${f.inId ? "Confirmar entrada de " + pname(f.inId) : "Escolhe quem entra"}</button></div>`, "flow");
+}
+let transDraft = null;
+function transSheet() {
+  const dir = transDraft.dir;
+  const chips = (res) => [...VANTAGEM, ...IGUAL_DESV].map((n) => `<button class="ibtn" data-act="t-quick" data-res="${res}" data-num="${n}">${n}</button>`).join("");
+  const [lblR, lblN] = ["Com finalização", "Sem finalização"];
+  openSheet(`<h2>Transição ${dir === "ofensiva" ? "a favor" : "contra"}</h2>
+    <p class="note">Um toque na superioridade numérica regista.</p>
+    <h4>${lblR}</h4><div class="chips">${chips("ganha")}</div>
+    <h4>${lblN}</h4><div class="chips">${chips("perdida")}</div>
+    <div class="actionsrow"><button class="ibtn" data-act="close">Cancelar</button></div>`, "trans");
+}
+const TAREFAS = [
+  "Regista: #10 remate fora na zona 5 → #7 falta feita → #10 remate defendido na zona 2.",
+  "Substitui #9 por #14 e regista um remate bloqueado de #14.",
+  "Regista um golo de #4 com assistência de #10, tipo ORG, zona 7.",
+  "Toca de propósito numa linha errada e corrige com Desfazer.",
+  "Cartão vermelho a #7 e ocupa a vaga (confirmando a reposição).",
+  "Regista 2 transições a favor (3x1 sem finalização, 2x1 com finalização) e 1 contra; consulta o Resumo.",
+  "Regista um remate deles defendido pelo GR na zona 2 e uma falta feita na zona 8.",
+];
+function historyHTML() {
+  if (!S.events.length) return `<p class="note">Sem eventos.</p>`;
+  return `<ol class="hist">${S.events.slice().reverse().map((ev) => {
+    const who = ev.pid ? ` · ${pname(ev.pid)}` : "";
+    const out = ev.type === "substituicao" ? ` (sai #${byId[ev.out].num})` : "";
+    return `<li><b>${ev.period}ª ${fmt(ev.t)}</b> · ${LABEL[ev.type] || ev.type}${who}${out}${ev.zona ? " · zona " + ev.zona : ""}</li>`;
+  }).join("")}</ol>`;
+}
+function cfgSheet(openSection) {
+  const vv = window.visualViewport;
+  const op = (s) => (openSection === s ? " open" : "");
+  openSheet(`<h2>Protótipo — definições e avaliação</h2><div class="cfg">
+    <label>Densidade das linhas <select data-cfg="density"><option value="B"${UI.density === "B" ? " selected" : ""}>B — compacta + expansão</option><option value="A"${UI.density === "A" ? " selected" : ""}>A — todas visíveis</option></select></label>
+    <label>Tamanho dos botões <select data-cfg="rf">${[[2, "Automático — o maior que cabe"], [1, "Normal + negrito (tablet)"], [0, "Normal"]].map(([v, l]) => `<option value="${v}"${UI.reinforce === v ? " selected" : ""}>${l}</option>`).join("")}</select></label>
+    <label>Simular sem rede <input type="checkbox" data-cfg="offline"${UI.offline ? " checked" : ""} style="width:28px;height:28px"></label>
+    <details${op("eval")}><summary>Avaliação do piloto</summary>
+      <label>Contador de ativações (botões da consola; exclui este painel): <b id="tapcount">${UI.taps}</b> <button class="ibtn" data-act="tap-reset">Repor contador</button></label>
+      <h4>Tarefas para comparar A e B</h4>
+      <p class="note">Para cada tarefa: repor contador → fazer a tarefa → anotar ativações → repetir na outra densidade.</p>
+      <ol class="tasks">${TAREFAS.map((t) => `<li>${t}</li>`).join("")}</ol>
+      <h4>Histórico de eventos simulados (${S.events.length})</h4>${historyHTML()}
+      <h4>Reiniciar cenário</h4>
+      ${UI.confirmReset
+        ? `<p class="note">Apaga todos os eventos simulados e volta ao início. O contador de ativações não é reposto.</p>
+           <div class="seg"><button class="ibtn" data-act="reset-cancel">Cancelar</button><button class="ibtn primary" data-act="reset-go">Confirmar reinício</button></div>`
+        : `<button class="ibtn" data-act="reset-ask">Reiniciar cenário…</button>`}
+    </details>
+    <details${op("about")}><summary>Sobre este protótipo</summary>
+      <ul class="note">
+        <li>Dados fictícios, estado só em memória. Nada é enviado para lado nenhum; a sincronização é simulada.</li>
+        <li>Transições, GR-linha, remates e ações do guarda-redes são propostas da spec 009, ainda não implementadas na app. Perda, recuperação e fase de jogo foram retiradas da consola por decisão do piloto.</li>
+        <li>Zonas: grelha de referência do clube, de quadra inteira e deitada, igual nas duas partes: nossa baliza à esquerda, a do adversário à direita (ataque →); colunas 1-3, 4-6 (nossa metade) e 7-9, 10-12 (metade do adversário), cada coluna de cima para baixo. Serve para remates (nossos e deles), defesas, saídas, faltas e cartões. Perdas e recuperações usam 3 zonas (defesa, meio-campo, ataque). Atenção: o comentário atual do motor da app (goalTypes.ts) descreve a grelha como meio-campo — a confirmar na spec.</li>
+        <li>Remates deles: golo (= golo sofrido), defendido (atribuído ao GR em campo), fora e bloqueado (sem jogador nosso).</li>
+        <li>Zona rápida: depois de cada ação de jogador ou remate deles abre um painel opcional; qualquer outra ação fecha-o sem custo. Na app real, acrescentar a zona a um evento já enviado colide com a proteção da migração 0026; hipótese de implementação: manter o evento só local até a zona ser escolhida ou o painel fechar, e só então enviá-lo. O golo recolhe os detalhes antes de confirmar.</li>
+        <li>"−" por categoria: anula o último evento dessa categoria, mesmo que não seja o último do jogo. Na app real seria um evento de anulação/correção (nunca apagar um evento já enviado — Princípio I e migração 0026).</li>
+        <li>Perdas e recuperações: só por zona (defesa, meio-campo, ataque), sem jogador.</li>
+        <li>Transição: "com finalização" é guardado como resultado "ganha" e "sem finalização" como "perdida", do ponto de vista de quem ataca (também nas transições contra).</li>
+        <li>Desfazer: anula só o último evento e não faz recuar o relógio. Os limites de parte (fim de parte, início de parte) não se desfazem aqui. Na app real, um evento já sincronizado não é removido do servidor pelo desfazer.</li>
+        <li>Pausa: tal como na app, não para o relógio da parte. Fim de parte: para o relógio; a parte seguinte só começa com "Iniciar parte".</li>
+        <li>Reposição após vermelho: a elegibilidade não é simulada.</li>
+        <li>Minutos por jogador são fictícios e não avançam.</li>
+      </ul>
+      <p class="note">Viewport medido neste aparelho: <b>${innerWidth}×${innerHeight}</b> CSS px${vv ? ` (visual ${Math.round(vv.width)}×${Math.round(vv.height)})` : ""} · modo <b>${MODE}</b> · DPR ${devicePixelRatio}</p>
+    </details></div>
+    <div class="actionsrow"><button class="ibtn" data-act="close">Fechar</button></div>`, "cfg");
+}
+
+// ---------- Ações ----------
+const PLAYER_EVENTS = new Set(["remate_defendido","remate_fora","remate_bloqueado","falta","falta_sofrida","defesa","saida_ganha","saida_perdida","cartao_amarelo","cartao_vermelho"]);
+function flashRow(pid) {
+  const r = document.querySelector(`.row[data-pid="${pid}"]`);
+  if (r) { r.classList.remove("flash"); void r.offsetWidth; r.classList.add("flash"); }
+}
+function doPlayerEvent(type, pid) {
+  if (!S.slots.includes(pid)) return;            // ação de uma folha antiga para alguém que já não está em quadra
+  addEvent(type, pid);
+  if (type === "falta") S.foulsNos++;
+  if (type === "cartao_amarelo") (S.cards[pid] = S.cards[pid] || {}).y = true;
+  if (type === "cartao_vermelho") { (S.cards[pid] = S.cards[pid] || {}).r = true; S.slots = S.slots.map((x) => (x === pid ? null : x)); }
+  UI.expanded = null;
+  const ev = S.events[S.events.length - 1];
+  UI.zq = ZONA_OK.has(type) ? { evId: ev.id } : null;
+  closeSheet(); renderAll(); flashRow(pid);
+}
+/** Conclusão legítima de uma substituição: valida, regista, limpa o fluxo e só depois fecha a folha. */
+function completeSub(outId, inId) {
+  const slot = S.slots.indexOf(outId);
+  UI.flow = null;
+  if (slot < 0 || !S.bench.includes(inId)) { closeSheet(); return renderAll(); }   // estado mudou entretanto: não consome nada
+  addEvent("substituicao", inId, { out: outId });
+  S.slots[slot] = inId;
+  S.bench = S.bench.filter((x) => x !== inId).concat(outId);
+  closeSheet(); renderAll();
+}
+function resetScenario() {
+  epoch++;                                        // invalida o temporizador de sincronização pendente
+  clearTimeout(syncTimer); syncTimer = null;
+  S = initialState(); resetClock(); undoStack = [];
+  Object.assign(UI, { pending: 0, syncing: false, expanded: null, flow: null, zq: null, notice: null, confirmReset: false });
+  goalDraft = null; transDraft = null;
+  closeSheet(); renderAll();
+}
+
+document.addEventListener("click", (e) => {
+  const b = e.target.closest("[data-act]");
+  if (!b || b.disabled) return;
+  const act = b.dataset.act, pid = b.dataset.pid;
+  if (UI.zq && !act.startsWith("zq-") && act !== "cfg") { UI.zq = null; renderZq(); }
+  if (UI.notice && act !== "cfg") { UI.notice = null; if (act !== "undo" && act !== "minus") renderLast(); }
+  if (ADV_SHOTS.has(act)) {
+    const ev = addEvent(act, null); UI.expanded = null; UI.zq = { evId: ev.id }; closeSheet(); return renderAll();
+  }
+  if (PLAYER_EVENTS.has(act)) return doPlayerEvent(act, pid);
+  switch (act) {
+    case "golo": if (!S.slots.includes(pid)) return; goalDraft = { side: "nos", pid, tipo: null, assist: undefined, zona: null }; return goalSheet();
+    case "golo_sofrido": UI.expanded = null; goalDraft = { side: "adv", tipo: null, zona: null }; return goalSheet();
+    case "g-tipo": goalDraft.tipo = goalDraft.tipo === b.dataset.v ? null : b.dataset.v; return goalSheet();
+    case "g-assist": goalDraft.assist = b.dataset.v || null; return goalSheet();
+    case "g-zona": goalDraft.zona = +b.dataset.v === goalDraft.zona ? null : +b.dataset.v; return goalSheet();
+    case "g-confirm": {
+      const d = goalDraft; goalDraft = null;
+      if (!d) return closeSheet();
+      if (d.side === "nos") { addEvent("golo", d.pid, { tipo: d.tipo, assist: d.assist || null, zona: d.zona }); S.score.nos++; }
+      else { addEvent("golo_sofrido", null, { tipo: d.tipo, zona: d.zona }); S.score.adv++; }
+      closeSheet(); renderAll(); if (d.pid) flashRow(d.pid); return;
+    }
+    case "expand": UI.expanded = pid; return renderCourt();
+    case "collapse": UI.expanded = null; return renderCourt();
+    case "open-player": return playerSheet(pid);
+    case "treat-start": addEvent("lesao_inicio", pid); S.treatment = pid; closeSheet(); return renderAll();
+    case "treat-end": addEvent("lesao_fim", pid); S.treatment = null; closeSheet(); return renderAll();
+    // ----- Substituições: um fluxo de cada vez; qualquer fluxo novo substitui explicitamente o anterior -----
+    case "sub-from-row": UI.flow = { kind: "pick-in", outId: pid }; renderAll(); return pickInSheet();
+    case "open-bench":
+      UI.flow = null; renderAll();
+      return openSheet(benchHTML("Quem entra?") + `<p class="note">Depois toca em SAI na linha de quem sai.</p><div class="actionsrow"><button class="ibtn" data-act="close">Fechar</button></div>`, "bench");
+    case "bench": {
+      const f = UI.flow;
+      if (f && f.kind === "pick-in") return completeSub(f.outId, pid);
+      if (f && f.kind === "vacancy") { f.inId = pid; return vacancySheet(); }   // escolher não é confirmar
+      UI.flow = { kind: "pick-out", inId: pid }; closeSheet(); return renderAll();
+    }
+    case "sub-out": {
+      const f = UI.flow;
+      if (!f || f.kind !== "pick-out") return;
+      return completeSub(S.slots[+b.dataset.slot], f.inId);
+    }
+    case "vacancy": UI.flow = { kind: "vacancy", slot: +b.dataset.slot, inId: null }; renderAll(); return vacancySheet();
+    case "vacancy-confirm": {
+      const f = UI.flow;
+      if (!f || f.kind !== "vacancy" || !f.inId) return;
+      UI.flow = null;
+      if (S.slots[f.slot] !== null || !S.bench.includes(f.inId)) { closeSheet(); return renderAll(); }
+      addEvent("entrada", f.inId); S.slots[f.slot] = f.inId; S.bench = S.bench.filter((x) => x !== f.inId);
+      closeSheet(); return renderAll();
+    }
+    case "cancel-flow": return cancelFlow();
+    case "open-team": return openSheet(teamPanelHTML() + `<div class="actionsrow"><button class="ibtn" data-act="close">Fechar</button></div>`, "team");
+    case "pause":
+      if (!CLOCK.running) return;
+      if (S.pause) { addEvent("fim_pausa", null); S.pause = null; closeSheet(); return renderAll(); }
+      return openSheet(`<h2>Pausa — motivo</h2><div class="tgrid">
+        <button class="ibtn" data-act="pause-go" data-v="tempo_nos">Pedido de tempo (nós)</button>
+        <button class="ibtn" data-act="pause-go" data-v="tempo_advers">Pedido de tempo (adv.)</button>
+        <button class="ibtn" data-act="pause-go" data-v="outro">Outro motivo</button></div>
+        <div class="actionsrow"><button class="ibtn" data-act="close">Cancelar</button></div>`, "pause");
+    case "pause-go": addEvent("pausa", null, { reason: b.dataset.v }); S.pause = b.dataset.v; closeSheet(); return renderAll();
+    case "end-period":
+      return openSheet(`<h2>Terminar a ${S.period}ª parte?</h2><p class="note">O relógio para. A parte seguinte só começa quando tocares em "Iniciar parte".</p>
+        <div class="actionsrow"><button class="ibtn" data-act="close">Cancelar</button><button class="ibtn primary" data-act="end-period-go">Terminar parte</button></div>`, "end");
+    case "end-period-go":
+      if (!CLOCK.running) return closeSheet();
+      if (S.pause) { addEvent("fim_pausa", null); S.pause = null; }   // pausa em curso fecha-se ao terminar a parte
+      addEvent("fim_periodo", null);
+      CLOCK.running = false;
+      S.period++; S.foulsNos = 0; S.foulsAdv = 0;
+      closeSheet(); return renderAll();
+    case "kickoff":
+      if (CLOCK.running) return;
+      CLOCK.ms = 0; CLOCK.running = true; CLOCK.lastTick = Date.now();
+      addEvent("kickoff", null); closeSheet(); return renderAll();
+    case "gkline":
+      addEvent(S.gkLine ? "goleiro_linha_fim" : "goleiro_linha_inicio", null, S.gkLine ? { durSec: Math.round((CLOCK.ms - S.gkLineStart) / 1000) } : {});
+      S.gkLine = !S.gkLine; if (S.gkLine) S.gkLineStart = CLOCK.ms;
+      closeSheet(); return renderAll();
+    case "transicao": transDraft = { dir: b.dataset.dir }; return transSheet();
+    case "t-quick": if (!transDraft) return closeSheet(); addEvent("transicao", null, { dir: transDraft.dir, res: b.dataset.res, num: b.dataset.num }); transDraft = null; closeSheet(); return renderAll();
+    case "summary": return openSheet(summaryHTML(), "summary");
+    case "pr": addEvent(b.dataset.kind === "p" ? "perda" : "recuperacao", null, { z3: b.dataset.z }); renderAll(); if (UI.sheetKind === "team") openSheet(teamPanelHTML() + `<div class="actionsrow"><button class="ibtn" data-act="close">Fechar</button></div>`, "team"); return;
+    case "minus": {
+      // Anula o último evento DESTA categoria (pode não ser o último do jogo). Desfazível com "Desfazer".
+      const cat = TEAM_CATS[b.dataset.cat]; if (!cat) return;
+      let idx = -1; for (let k = S.events.length - 1; k >= 0; k--) if (cat.match(S.events[k])) { idx = k; break; }
+      if (idx < 0) return;
+      undoStack.push(snap());
+      const [ev] = S.events.splice(idx, 1);
+      if (ev.type === "golo_sofrido") S.score.adv = Math.max(0, S.score.adv - 1);
+      UI.pending++; scheduleSync();
+      const det = ev.type === "transicao" ? ` ${ev.num}` : "";
+      UI.notice = `Anulado: <b>${cat.label}${det}</b> (${ev.period}ª ${fmt(ev.t)})`;
+      renderAll();
+      if (UI.sheetKind === "team") openSheet(teamPanelHTML() + `<div class="actionsrow"><button class="ibtn" data-act="close">Fechar</button></div>`, "team");
+      if (UI.sheetKind === "summary") openSheet(summaryHTML(), "summary");
+      return;
+    }
+    case "zq-set": { const ev = UI.zq && S.events.find((x) => x.id === UI.zq.evId); if (ev) ev.zona = +b.dataset.v; UI.zq = null; renderZq(); return renderLast(); }
+    case "zq-close": UI.zq = null; return renderZq();
+    case "zona-last": { const ev = S.events[S.events.length - 1]; if (ev && ZONA_OK.has(ev.type)) { UI.zq = { evId: ev.id }; renderZq(); renderLast(); } return; }
+    case "undo": return undo();
+    case "cfg": UI.confirmReset = false; return cfgSheet();
+    case "tap-reset": UI.taps = 0; return cfgSheet("eval");
+    case "reset-ask": UI.confirmReset = true; return cfgSheet("eval");
+    case "reset-cancel": UI.confirmReset = false; return cfgSheet("eval");
+    case "reset-go": return resetScenario();
+    case "close": return dismissSheet();
+  }
+});
+$("sheetwrap").addEventListener("click", (e) => { if (e.target === $("sheetwrap")) dismissSheet(); });
+document.addEventListener("change", (e) => {
+  const c = e.target.dataset.cfg;
+  if (c === "density") { UI.density = e.target.value; UI.expanded = null; renderAll(); }
+  if (c === "rf") { UI.reinforce = +e.target.value; renderAll(); }
+  if (c === "offline") { UI.offline = e.target.checked; if (!UI.offline) scheduleSync(); else renderHeader(); }
+});
+// Contador de ativações: cada ativação (toque, clique ou teclado) de um botão da consola; exclui o painel do protótipo.
+document.addEventListener("click", (e) => {
+  const b = e.target.closest("button");
+  if (!b || b.disabled) return;
+  if (b.dataset.act === "cfg" || b.closest(".cfg") || (UI.sheetKind === "cfg" && b.closest("#sheet"))) return;
+  UI.taps++;
+}, true);
+
+// ---------- Relógio: só altera texto de largura fixa; nunca re-renderiza a lista ----------
+setInterval(() => {
+  const now = Date.now();
+  if (CLOCK.running) CLOCK.ms += now - CLOCK.lastTick;   // a pausa não para o relógio (como na app); o fim de parte para
+  CLOCK.lastTick = now;
+  const c = $("clock"); if (c) c.textContent = fmt(CLOCK.ms);
+  if (S.gkLine) document.querySelectorAll("[data-gkl]").forEach((x) => (x.textContent = fmt(Math.max(0, CLOCK.ms - S.gkLineStart))));
+}, 250);
+let rT = null;
+addEventListener("resize", () => { clearTimeout(rT); rT = setTimeout(renderAll, 80); });
+renderAll();
+</script>
+</body>
+</html>
