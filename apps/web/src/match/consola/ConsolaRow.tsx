@@ -11,8 +11,8 @@ export interface ConsolaRowProps {
   minutes: number;
   goals: number;
   density: Density;
-  /** "events": ações normais; "pick-out": só "SAI"; "prekickoff": só "Tirar do cinco"; "off": tudo desativado (intervalo/fim). */
-  mode: "events" | "pick-out" | "prekickoff" | "off";
+  /** "events": ações normais; "pick-out": só "SAI"; "prekickoff": só "Tirar do cinco"; "off": intervalo (só o ⋯, para substituir); "done": jogo terminado, nada regista. */
+  mode: "events" | "pick-out" | "prekickoff" | "off" | "done";
   inTreatment: boolean;
   /** Estável entre renders (ver Consola) — é o que deixa `memo` saltar a linha a cada segundo do relógio. */
   onAction: (playerId: string, action: RowAction) => void;
@@ -39,7 +39,7 @@ function ConsolaRowImpl({ slot, player, minutes, goals, density, mode, inTreatme
   }
   const gk = isGoalkeeper(player.position);
   const act = (a: RowAction) => () => onAction(player.id, a);
-  const disabled = mode === "off";
+  const disabled = mode === "off" || mode === "done";
 
   let actions;
   if (mode === "pick-out") {
@@ -82,7 +82,7 @@ function ConsolaRowImpl({ slot, player, minutes, goals, density, mode, inTreatme
         <button type="button" className="cbtn" disabled={disabled} onClick={act("falta_sofrida")}>
           Falta rece&shy;bida
         </button>
-        <button type="button" className="cbtn more" onClick={act("mais")} aria-label="Mais ações">
+        <button type="button" className="cbtn more" disabled={mode === "done"} onClick={act("mais")} aria-label="Mais ações">
           ⋯
         </button>
       </>

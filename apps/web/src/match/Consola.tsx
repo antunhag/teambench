@@ -231,8 +231,8 @@ export function Consola({ live, roster, opponent, onViewSummary, ourLabel, sync,
   const lastIsBoundary = last?.type === "kickoff" || last?.type === "fim_periodo";
   const canUndo = live.canUndo && !lastIsBoundary && flow === null && !state.finished;
 
-  const rowMode = (): "events" | "pick-out" | "prekickoff" | "off" => {
-    if (state.finished) return "off";
+  const rowMode = (): "events" | "pick-out" | "prekickoff" | "off" | "done" => {
+    if (state.finished) return "done";
     if (preKickoff) return "prekickoff";
     if (flow?.kind === "pick-out") return "pick-out";
     if (awaitingKickoff) return "off";
@@ -493,9 +493,11 @@ export function Consola({ live, roster, opponent, onViewSummary, ourLabel, sync,
           }}
         >
           {benchList}
-          <button type="button" className="btn ghost block" style={{ marginTop: 10 }} onClick={() => setSheet({ kind: "add-convocado" })}>
-            + Chamar atleta ao banco
-          </button>
+          {!state.finished && (
+            <button type="button" className="btn ghost block" style={{ marginTop: 10 }} onClick={() => setSheet({ kind: "add-convocado" })}>
+              + Chamar atleta ao banco
+            </button>
+          )}
         </Sheet>
       )}
 
@@ -564,9 +566,11 @@ export function Consola({ live, roster, opponent, onViewSummary, ourLabel, sync,
                 {state.activePause ? "▶ Retomar" : "⏸ Pausa"}
               </button>
             )}
-            <button type="button" className="abtn" onClick={() => setSheet({ kind: "add-convocado" })}>
-              Chamar atleta ao banco
-            </button>
+            {!state.finished && (
+              <button type="button" className="abtn" onClick={() => setSheet({ kind: "add-convocado" })}>
+                Chamar atleta ao banco
+              </button>
+            )}
             <button type="button" className="abtn" onClick={onViewSummary}>
               📋 Resumo do jogo
             </button>
@@ -598,7 +602,7 @@ export function Consola({ live, roster, opponent, onViewSummary, ourLabel, sync,
         <SummarySheet events={state.events} period={state.period} onOpenFullSummary={onViewSummary} onClose={() => setSheet(null)} />
       )}
 
-      {sheet?.kind === "add-convocado" && (
+      {sheet?.kind === "add-convocado" && !state.finished && (
         <Sheet title="Chamar atleta ao banco" sub="Quem não estava nos convocados — passa a poder entrar a partir de agora" onClose={() => setSheet(null)}>
           <div className="pgrid">
             {roster
