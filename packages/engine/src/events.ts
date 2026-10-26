@@ -5,7 +5,7 @@
 // "golo_sofrido" na lista. Isto garante que corrigir, apagar ou adicionar um
 // evento esquecido nunca deixa placar e registo cronológico dessincronizados.
 import { eventosEfetivos } from "./annul";
-import type { EventType, MatchEvent, Score } from "./types";
+import { SQUAD_EVENT_TYPES, type EventType, type MatchEvent, type Score } from "./types";
 
 /** Gera um identificador de evento. Não criptográfico — suficiente para uso local; a fila de sincronização usa `clientEventId` separado (crypto.randomUUID) para idempotência com o servidor. */
 export function uid(): string {
@@ -45,4 +45,13 @@ export function recomputeScoreFor(allEvents: MatchEvent[]): Score {
     nos: events.filter((e) => e.type === "golo").length,
     advers: events.filter((e) => e.type === "golo_sofrido").length,
   };
+}
+
+/**
+ * Só os eventos de jogo — sem convocatória/titulares (`SQUAD_EVENT_TYPES`),
+ * que vivem na mesma tabela mas nunca são registo do jogo. Para quem lê
+ * `match_events` do Supabase e mostra registo/minutos/timeline.
+ */
+export function semEventosDeEscalacao(events: MatchEvent[]): MatchEvent[] {
+  return events.filter((e) => !SQUAD_EVENT_TYPES.includes(e.type));
 }

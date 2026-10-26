@@ -159,6 +159,10 @@ export function RotationPlanner({ teamId, matchId, opponent, formatId, status, o
   // confirmação "toca 2x" já usado no MatchEventEditor, nunca window.confirm() (falha silenciosa em PWA).
   const [confirmingGenerate, setConfirmingGenerate] = useState(false);
   const [generateError, setGenerateError] = useState("");
+  // Importar plano a partir de texto (ex.: copiado da folha do clube) — só grava depois de pré-visualizar sem erros e confirmar.
+  const [importText, setImportText] = useState("");
+  const [importAllPeriods, setImportAllPeriods] = useState(true);
+  const [importResult, setImportResult] = useState<engine.RotationImportResult | null>(null);
   // Confiança: guarda sozinha ao trocar o <select>, mas o onChange original não aguardava a escrita
   // nem tratava falha — uma rejeição silenciosa (rede instável, sessão expirada) deixava o valor
   // mostrado reverter no próximo render, sem nenhum aviso, e qualquer geração seguinte usava o peso
@@ -364,6 +368,26 @@ export function RotationPlanner({ teamId, matchId, opponent, formatId, status, o
     );
   }
 
+  function previewImport() {
+    setImportResult(
+      engine.parseRotationText(importText, activeRoster, {
+        periodSec: durSec,
+        periodCount: format.periodCount,
+        applyToAllPeriods: importAllPeriods,
+      })
+    );
+  }
+
+  /** Substitui o plano inteiro pelo importado — mesmo caminho de gravação de qualquer outra edição. */
+  async function confirmImport() {
+    if (!importResult || importResult.errors.length) return;
+    const next = importResult.stints;
+    setImportResult(null);
+    setImportText("");
+    setIncluded(new Set(next.map((st) => st.playerId)));
+    await persistStints(next);
+  }
+
   async function chooseOption(option: engine.RotationPlanOption) {
     setRotationOptions(null);
     // Ao vivo: preserva os turnos já jogados do plano atual, recortando o turno em andamento (se houver) em
@@ -407,6 +431,80 @@ export function RotationPlanner({ teamId, matchId, opponent, formatId, status, o
           </ul>
         </p>
       )}
+
+      <details className="card" style={{ marginTop: 12, padding: 10 }}>
+        <summary style={{ cursor: "pointer", fontWeight: 600 }}>Importar plano de texto</summary>
+        <p className="hint">
+          Uma vaga por linha, com os turnos em minutos. Ex.: <code>Fixo: Dinis 0-6, Felipe 6-11</code>. Vagas: Fixo, Ala
+          esquerda, Ala direita, Pivô. Para partes diferentes, escreva uma linha <code>Parte 2</code> antes das linhas dessa
+          parte. Substitui o plano atual.
+        </p>
+        <textarea
+          value={importText}
+          onInput={(e) => {
+            setImportText((e.target as HTMLTextAreaElement).value);
+            setImportResult(null);
+          }}
+          rows={6}
+          style={{ width: "100%", boxSizing: "border-box", font: "inherit", fontSize: 13 }}
+          placeholder={"Fixo: Dinis 0-6, Felipe 6-11\nPivô: Cartucho 0-3, Rogão 3-6\nAla esquerda: …\nAla direita: …"}
+        />
+        <label className="hint" style={{ display: "flex", gap: 6, alignItems: "center", margin: "6px 0" }}>
+          <input
+            type="checkbox"
+            checked={importAllPeriods}
+            onChange={(e) => {
+              setImportAllPeriods((e.target as HTMLInputElement).checked);
+              setImportResult(null);
+            }}
+          />
+          Aplicar a todas as partes (se o texto não tiver linhas "Parte N")
+        </label>
+        <button type="button" className="btn sm" disabled={!importText.trim()} onClick={previewImport}>
+          Pré-visualizar
+        </button>
+        {importResult && importResult.errors.length > 0 && (
+          <div className="banner error" style={{ marginTop: 8 }}>
+            Corrija antes de importar:
+            <ul style={{ margin: "4px 0 0", paddingLeft: 18 }}>
+              {importResult.errors.map((e) => (
+                <li key={e}>{e}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {importResult && importResult.errors.length === 0 && (
+          <div style={{ marginTop: 8 }}>
+            {importResult.warnings.length > 0 && (
+              <div className="banner warn">
+                Atenção:
+                <ul style={{ margin: "4px 0 0", paddingLeft: 18 }}>
+                  {importResult.warnings.map((w) => (
+                    <li key={w}>{w}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            <p className="hint">
+              {importResult.stints.length} turnos em{" "}
+              {Array.from(new Set(importResult.stints.map((st) => st.period)))
+                .sort()
+                .map((pp) => engine.periodLabel(pp, format))
+                .join(" e ")}
+              . Minutos previstos:{" "}
+              {Object.entries(engine.plannedSecondsByPlayer(importResult.stints))
+                .map(([id, sec]) => `${byId(id)?.name ?? id} ${engine.fmtMinSec(sec * 1000)}`)
+                .join(" · ")}
+            </p>
+            <button type="button" className="btn sm danger" onClick={confirmImport}>
+              Confirmar — substitui o plano atual
+            </button>{" "}
+            <button type="button" className="btn sm ghost" onClick={() => setImportResult(null)}>
+              Cancelar
+            </button>
+          </div>
+        )}
+      </details>
 
       <h3 className="section-title" style={{ marginTop: 16 }}>Incluídos no plano</h3>
       <div className="pgrid">

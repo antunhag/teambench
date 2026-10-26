@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createEvent, recomputeScoreFor } from "../src/events";
+import { createEvent, recomputeScoreFor, semEventosDeEscalacao } from "../src/events";
 import type { MatchEvent } from "../src/types";
 
 describe("events", () => {
@@ -29,5 +29,14 @@ describe("events", () => {
 
     events = events.filter((e) => e.id !== golo.id); // simula "desfazer" o golo
     expect(recomputeScoreFor(events)).toEqual({ nos: 0, advers: 1 });
+  });
+});
+
+describe("semEventosDeEscalacao", () => {
+  it("tira convocatória/titulares e mantém os eventos de jogo", () => {
+    const evs = ["convocado_add", "titular_add", "kickoff", "golo", "convocado_remove", "titular_remove", "fim_periodo"].map(
+      (type, i) => ({ id: String(i), type, playerId: null, ms: 0, min: 0, sec: 0, period: 1, ts: i }) as MatchEvent
+    );
+    expect(semEventosDeEscalacao(evs).map((e) => e.type)).toEqual(["kickoff", "golo", "fim_periodo"]);
   });
 });

@@ -11,6 +11,7 @@ export * from "./time";
 export * from "./report";
 export * from "./timeline";
 export * from "./rotationPlan";
+export * from "./rotationImport";
 export * from "./resourceLock";
 export * from "./navigation";
 export * from "./recentMinutes";

@@ -56,7 +56,9 @@ export function MatchSummary({ live, roster, opponent, matchId, teamId, onClose,
       .order("ms", { ascending: true })
       .then(({ data, error }) => {
         if (cancelled || error || !data) return;
-        setRemoteEvents(data.map((row) => row.payload as engine.MatchEvent));
+        // Sem convocatória/titulares: vivem na mesma tabela, mas não são
+        // registo do jogo (apareciam como "convocado_add" no registo cronológico).
+        setRemoteEvents(engine.semEventosDeEscalacao(data.map((row) => row.payload as engine.MatchEvent)));
       });
     return () => {
       cancelled = true;
