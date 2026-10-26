@@ -2,6 +2,7 @@ import * as engine from "@teambench/engine";
 import { useEffect, useRef, useState } from "preact/hooks";
 import { enqueue, removeByClientEventIds } from "../sync/outbox";
 import { supabase } from "../supabaseClient";
+import { PRAZO_ZONA_MS, resolvePending, startPending, type Pending, type Trigger } from "./consola/deferredEnqueue";
 import { useRotationPlan } from "./useRotationPlan";
 
 const SUB_ALERT_LEAD_SEC = 60;
@@ -13,6 +14,10 @@ export interface UpcomingSubAlert {
 }
 
 const STORAGE_PREFIX = "teambench.liveMatch.";
+// clientEventId do lance da Consola à espera de zona (ver deferredEnqueue.ts)
+// — guardado à parte para, se a app fechar com o painel aberto, o lance ser
+// enfileirado no próximo arranque em vez de ficar só no estado local.
+const PENDING_PREFIX = "teambench.liveMatch.pending.";
 
 // O relógio de jogo é sempre a fonte de verdade — este estado local é o que
 // vale durante o jogo. Cada evento novo entra também na fila de
@@ -204,6 +209,88 @@ export function useLiveMatch(matchId: string, teamId: string, ownerId: string, f
     }
   }
 
+  // ---- Envio adiado do lance à espera de zona (só a Consola usa) ----
+  // O "Jogo ao vivo" nunca chama `applyDeferred`, por isso para ele nada muda:
+  // `pendingRef` fica sempre null e cada evento entra na fila na hora.
+  const pendingRef = useRef<Pending | null>(null);
+  const [pendingZonaKey, setPendingZonaKey] = useState<string | null>(null);
+  const pendingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const keyOf = (e: engine.MatchEvent) => e.clientEventId ?? e.id;
+
+  function enqueueByKey(events: engine.MatchEvent[], key: string) {
+    const ev = events.find((e) => keyOf(e) === key);
+    if (ev) enqueueNewEvents([ev]);
+  }
+
+  function setPending(next: Pending | null) {
+    pendingRef.current = next;
+    setPendingZonaKey(next ? next.key : null);
+    try {
+      if (next) localStorage.setItem(PENDING_PREFIX + matchId, next.key);
+      else localStorage.removeItem(PENDING_PREFIX + matchId);
+    } catch {
+      // sem armazenamento: perde-se só a recuperação no arranque; sair da tela continua a enfileirar
+    }
+    if (pendingTimerRef.current) clearTimeout(pendingTimerRef.current);
+    pendingTimerRef.current = next
+      ? // O temporizador pertence sempre ao pendente atual (cada setPending
+        // cancela o anterior), por isso ao disparar expira-o sempre — sem
+        // comparar com Date.now(), que pode recuar (acerto de relógio) e
+        // deixar o lance preso sem novo temporizador.
+        setTimeout(() => setState((s) => (runTrigger(s, { type: "prazo", now: Number.POSITIVE_INFINITY }), s)), PRAZO_ZONA_MS)
+      : null;
+  }
+
+  /** Aplica um gatilho ao lance pendente; enfileira-o a partir de `s` (o estado mais recente) quando for a hora. */
+  function runTrigger(s: engine.LiveMatchState, t: Trigger) {
+    if (!pendingRef.current) return;
+    const r = resolvePending(pendingRef.current, t);
+    if (r.enqueueKey) enqueueByKey(s.events, r.enqueueKey);
+    if (r.next !== pendingRef.current) setPending(r.next);
+  }
+
+  // Arranque: um lance que ficou pendente quando a app fechou entra agora na
+  // fila, tal como ficou (com ou sem zona). Reenfileirar é idempotente por
+  // client_event_id (outbox.ts), por isso não há duplicado se já lá estava.
+  useEffect(() => {
+    try {
+      const key = localStorage.getItem(PENDING_PREFIX + matchId);
+      if (key) {
+        enqueueByKey(stateRef.current.events, key);
+        localStorage.removeItem(PENDING_PREFIX + matchId);
+      }
+    } catch {
+      // sem armazenamento: nada a recuperar
+    }
+    // App em segundo plano ou a fechar (chamada, ecrã bloqueado, o iOS a
+    // matar a PWA): enfileira já o pendente, sem zona. A limpeza do efeito
+    // não corre num fecho de página, e a recuperação no arranque só acontece
+    // quando este jogo voltar a ser aberto neste aparelho.
+    const flushOnHide = () => {
+      if (document.visibilityState === "hidden") setState((s) => (runTrigger(s, { type: "desmontar" }), s));
+    };
+    const flushNow = () => setState((s) => (runTrigger(s, { type: "desmontar" }), s));
+    document.addEventListener("visibilitychange", flushOnHide);
+    window.addEventListener("pagehide", flushNow);
+    // Sair da tela (trocar de aba, fechar o jogo) enfileira o pendente.
+    return () => {
+      document.removeEventListener("visibilitychange", flushOnHide);
+      window.removeEventListener("pagehide", flushNow);
+      const p = pendingRef.current;
+      if (!p) return;
+      enqueueByKey(stateRef.current.events, p.key);
+      pendingRef.current = null;
+      if (pendingTimerRef.current) clearTimeout(pendingTimerRef.current);
+      try {
+        localStorage.removeItem(PENDING_PREFIX + matchId);
+      } catch {
+        // idem
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [matchId]);
+
   // Cada ação empilha o estado ANTERIOR antes de aplicar a mudança — desfazer
   // é simplesmente voltar ao topo da pilha. Suficiente para correções em
   // campo; não sobrevive a um recarregar de página (aceitável: undo é para
@@ -214,6 +301,8 @@ export function useLiveMatch(matchId: string, teamId: string, ownerId: string, f
   // quando/se consegue enviar.
   function apply(next: (s: engine.LiveMatchState) => engine.LiveMatchState) {
     setState((s) => {
+      // Outra ação: o lance à espera de zona entra primeiro na fila (ordem preservada).
+      runTrigger(s, { type: "outra-acao" });
       historyRef.current.push(s);
       if (historyRef.current.length > UNDO_LIMIT) historyRef.current.shift();
       setCanUndo(true);
@@ -232,12 +321,61 @@ export function useLiveMatch(matchId: string, teamId: string, ownerId: string, f
   // `events` (ver LiveMatchState.squadEvents).
   function applySquad(next: (s: engine.LiveMatchState) => engine.LiveMatchState) {
     setState((s) => {
+      runTrigger(s, { type: "outra-acao" });
       const result = next(s);
       if (result.squadEvents.length > s.squadEvents.length) {
         enqueueNewEvents(result.squadEvents.slice(s.squadEvents.length));
       }
       return result;
     });
+  }
+
+  /**
+   * Como `apply`, mas o (último) evento novo fica à espera de zona em vez de
+   * entrar logo na fila (research.md Decisão 3). Um pendente anterior é
+   * enfileirado primeiro. Se a ação não criou evento (entrada inválida),
+   * nada fica pendente.
+   */
+  function applyDeferred(next: (s: engine.LiveMatchState) => engine.LiveMatchState) {
+    setState((s) => {
+      const result = next(s);
+      if (result.events.length <= s.events.length) return s;
+      historyRef.current.push(s);
+      if (historyRef.current.length > UNDO_LIMIT) historyRef.current.shift();
+      setCanUndo(true);
+      const fresh = result.events.slice(s.events.length);
+      const last = fresh[fresh.length - 1];
+      const r = startPending(pendingRef.current, keyOf(last), Date.now());
+      if (r.enqueueKey) enqueueByKey(s.events, r.enqueueKey);
+      if (fresh.length > 1) enqueueNewEvents(fresh.slice(0, -1));
+      setPending(r.next);
+      return result;
+    });
+  }
+
+  /** Zona escolhida no painel: entra no evento pendente (ainda não enfileirado) e só então ele vai para a fila. */
+  function setPendingZona(zona: number) {
+    if (!Number.isInteger(zona) || zona < 1 || zona > 12) return;
+    // `p` capturado fora do updater: se o updater correr mais de uma vez, a
+    // zona entra sempre no estado e o enqueue (idempotente) só acontece na 1ª.
+    const p = pendingRef.current;
+    if (!p) return;
+    setState((s) => {
+      const idx = s.events.findIndex((e) => keyOf(e) === p.key);
+      if (idx < 0) {
+        if (pendingRef.current === p) setPending(null);
+        return s;
+      }
+      const events = s.events.slice();
+      events[idx] = { ...events[idx], zona };
+      if (pendingRef.current === p) runTrigger({ ...s, events }, { type: "zona" });
+      return { ...s, events };
+    });
+  }
+
+  /** Painel fechado sem zona (✕): o lance vai para a fila tal como está. */
+  function closePendingZona() {
+    setState((s) => (runTrigger(s, { type: "fechar" }), s));
   }
 
   function undo() {
@@ -252,6 +390,11 @@ export function useLiveMatch(matchId: string, teamId: string, ownerId: string, f
       .filter((e) => !prev.events.some((pe) => pe.id === e.id))
       .map((e) => e.clientEventId ?? e.id);
     removeByClientEventIds(ownerId, removedIds);
+    // O lance desfeito pode ser o que esperava zona: nunca chegou à fila, descarta-se.
+    if (pendingRef.current) {
+      const r = resolvePending(pendingRef.current, { type: "desfazer", removedKeys: removedIds });
+      if (r.next !== pendingRef.current) setPending(r.next);
+    }
     setCanUndo(historyRef.current.length > 0);
     setState(prev);
   }
@@ -406,5 +549,18 @@ export function useLiveMatch(matchId: string, teamId: string, ownerId: string, f
     endTreatment: () => apply((s) => engine.endTreatment(s, now())),
     endPeriod: () => apply((s) => engine.endPeriod(s, format, now())),
     playerSeconds: (playerId: string) => engine.playerCurrentSeconds(state, playerId, now()),
+    // ---- Consola (specs/009): lances com zona opcional e envio adiado ----
+    pendingZonaKey,
+    setPendingZona,
+    closePendingZona,
+    deferred: {
+      doFoul: (playerId: string) => applyDeferred((s) => engine.doFoul(s, playerId, now())),
+      doFoulSuffered: (playerId: string) => applyDeferred((s) => engine.doFoulSuffered(s, playerId, now())),
+      doCard: (playerId: string, kind: "amarelo" | "vermelho") => applyDeferred((s) => engine.doCard(s, playerId, kind, now())),
+      doRemate: (playerId: string, desfecho: engine.Desfecho) => applyDeferred((s) => engine.doRemate(s, playerId, desfecho, now())),
+      doRemateAdv: (desfecho: "fora" | "bloqueado") => applyDeferred((s) => engine.doRemateAdv(s, desfecho, now())),
+      doDefesa: (gkId: string) => applyDeferred((s) => engine.doDefesa(s, gkId, now())),
+      doSaida: (gkId: string, resultado: "ganha" | "perdida") => applyDeferred((s) => engine.doSaida(s, gkId, resultado, now())),
+    },
   };
 }

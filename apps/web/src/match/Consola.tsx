@@ -21,6 +21,7 @@ import { GoalSheet, type GoalDraft } from "./consola/GoalSheet";
 import { consolaMode, pickButtonSize, rowsFit, type ConsolaMode } from "./consola/layout";
 import { SummarySheet } from "./consola/SummarySheet";
 import { TeamBar } from "./consola/TeamBar";
+import { ZonePanel } from "./consola/ZonePanel";
 import { PlayerChip, Sheet } from "./PickerUI";
 import type { useLiveMatch } from "./useLiveMatch";
 
@@ -187,17 +188,19 @@ export function Consola({ live, roster, opponent, onViewSummary, ourLabel, sync,
       case "golo_sofrido":
         setSheet({ kind: "goal", draft: { side: "adv", scorerId: null, openedAtMs: nowMsForEvent() } });
         break;
+      // Lances com zona opcional: ficam à espera da zona (painel) antes de
+      // irem para a fila — ver deferredEnqueue.ts.
       case "falta":
-        live.doFoul(id);
+        live.deferred.doFoul(id);
         break;
       case "falta_sofrida":
-        live.doFoulSuffered(id);
+        live.deferred.doFoulSuffered(id);
         break;
       case "amarelo":
-        live.doCard(id, "amarelo");
+        live.deferred.doCard(id, "amarelo");
         break;
       case "vermelho":
-        live.doCard(id, "vermelho");
+        live.deferred.doCard(id, "vermelho");
         break;
       case "mais":
         setSheet({ kind: "player", playerId: id });
@@ -428,6 +431,19 @@ export function Consola({ live, roster, opponent, onViewSummary, ourLabel, sync,
         </nav>
       )}
 
+      {(() => {
+        const ev = live.pendingZonaKey ? state.events.find((e) => (e.clientEventId ?? e.id) === live.pendingZonaKey) : undefined;
+        if (!ev || sheet || flow) return null;
+        return (
+          <ZonePanel
+            event={ev}
+            player={ev.playerId ? byId.get(ev.playerId) : undefined}
+            onPick={(z) => live.setPendingZona(z)}
+            onClose={() => live.closePendingZona()}
+          />
+        );
+      })()}
+
       {/* ---- folhas ---- */}
 
       {sheet?.kind === "goal" && (
@@ -460,10 +476,10 @@ export function Consola({ live, roster, opponent, onViewSummary, ourLabel, sync,
           return (
             <Sheet title={`#${p.num} ${p.name}`} onClose={() => setSheet(null)}>
               <div className="actiongrid">
-                <button type="button" className="abtn yellow" disabled={preKickoff} onClick={close(() => live.doCard(p.id, "amarelo"))}>
+                <button type="button" className="abtn yellow" disabled={preKickoff} onClick={close(() => live.deferred.doCard(p.id, "amarelo"))}>
                   <span className="ic">🟨</span>Amarelo
                 </button>
-                <button type="button" className="abtn red" disabled={preKickoff} onClick={close(() => live.doCard(p.id, "vermelho"))}>
+                <button type="button" className="abtn red" disabled={preKickoff} onClick={close(() => live.deferred.doCard(p.id, "vermelho"))}>
                   <span className="ic">🟥</span>Vermelho
                 </button>
                 <button

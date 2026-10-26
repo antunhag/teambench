@@ -1341,3 +1341,47 @@ textarea.exportbox {
 .consola-summary td:first-child {
   text-align: left;
 }
+
+/* Zona rápida da Consola: não modal, por cima da parte de baixo, sem fundo. */
+.consola-zq {
+  position: fixed;
+  z-index: 45;
+  right: calc(8px + env(safe-area-inset-right, 0px));
+  bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+  width: min(440px, calc(100vw - 16px));
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+  padding: 8px;
+}
+.consola--iphone-v .consola-zq {
+  left: calc(6px + env(safe-area-inset-left, 0px));
+  right: calc(6px + env(safe-area-inset-right, 0px));
+  bottom: env(safe-area-inset-bottom, 0px);
+  width: auto;
+}
+.consola--iphone-h .consola-zq {
+  right: calc(166px + env(safe-area-inset-right, 0px));
+  width: min(400px, calc(100vw - 190px));
+}
+.consola--iphone-h .consola-zq .consola-zones-col .zbtn {
+  min-height: 48px;
+}
+.consola-zq-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+.consola-zq-head > span {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.consola-zq-head .opt {
+  font-weight: 400;
+  color: var(--ink-dim);
+}

@@ -112,12 +112,12 @@ description: "Task list for Captura detalhada de estatísticas (Consola)"
 
 **Independent Test**: quickstart.md "Etapa 2" passos 1 e 3 (ignorar o painel e tocar noutra ação regista ambas; fechar a app com o painel aberto e reabrir → evento sincroniza uma única vez).
 
-- [ ] T036 [P] [US2] Criar `apps/web/src/match/consola/deferredEnqueue.ts`: função pura "enfileirar agora?" dado `{zonaPendente, evento}` e o gatilho (`zona-escolhida` | `painel-fechado` | `outra-acao` | `prazo` (~10 s) | `desmontar` | `arranque`) (research Decisão 3)
-- [ ] T037 [P] [US2] Criar `apps/web/src/match/consola/deferredEnqueue.test.ts` cobrindo todos os gatilhos e que um evento nunca é enfileirado duas vezes
-- [ ] T038 [US2] Em `apps/web/src/match/useLiveMatch.ts`, implementar o envio adiado do último evento com zona pendente: entra logo no estado local (`localStorage`), só vai para o `outbox` (com a zona) no primeiro gatilho; no arranque/desmontar enfileira eventos locais ainda não enfileirados; o caminho do "Jogo ao vivo" mantém envio imediato (FR-028, FR-029)
-- [ ] T039 [P] [US2] Criar `apps/web/src/match/consola/ZonePanel.tsx`: painel não modal (sem fundo escurecido, não desloca a lista) com a grelha de referência; um toque grava a zona; ✕ ou outra ação fecha sem custo (FR-010, FR-011)
-- [ ] T040 [US2] Ligar `ZonePanel` em `apps/web/src/match/Consola.tsx` e "+ Zona" na faixa do último evento, para remate, remate deles, defesa, saída, faltas e cartões
-- [ ] T041 [US2] Pedir ao `code-reviewer` (só leitura; a sessão fornece o diff) revisão de `useLiveMatch.ts` + `deferredEnqueue.ts` por mexer na fila de sincronização (plan, Princípio II nota)
+- [x] T036 [P] [US2] Criar `apps/web/src/match/consola/deferredEnqueue.ts`: função pura "enfileirar agora?" dado `{zonaPendente, evento}` e o gatilho (`zona-escolhida` | `painel-fechado` | `outra-acao` | `prazo` (~10 s) | `desmontar` | `arranque`) (research Decisão 3)
+- [x] T037 [P] [US2] Criar `apps/web/src/match/consola/deferredEnqueue.test.ts` cobrindo todos os gatilhos e que um evento nunca é enfileirado duas vezes
+- [x] T038 [US2] Em `apps/web/src/match/useLiveMatch.ts`, implementar o envio adiado do último evento com zona pendente: entra logo no estado local (`localStorage`), só vai para o `outbox` (com a zona) no primeiro gatilho; no arranque/desmontar enfileira eventos locais ainda não enfileirados; o caminho do "Jogo ao vivo" mantém envio imediato (FR-028, FR-029)
+- [x] T039 [P] [US2] Criar `apps/web/src/match/consola/ZonePanel.tsx`: painel não modal (sem fundo escurecido, não desloca a lista) com a grelha de referência; um toque grava a zona; ✕ ou outra ação fecha sem custo (FR-010, FR-011)
+- [x] T040 [US2] Ligar `ZonePanel` em `apps/web/src/match/Consola.tsx` e "+ Zona" na faixa do último evento, para remate, remate deles, defesa, saída, faltas e cartões
+- [x] T041 [US2] Pedir ao `code-reviewer` (só leitura; a sessão fornece o diff) revisão de `useLiveMatch.ts` + `deferredEnqueue.ts` por mexer na fila de sincronização (plan, Princípio II nota)
 
 **Checkpoint**: zona opcional em todas as ações, sem itens presos nem duplicados na fila.
 
