@@ -55,3 +55,17 @@ export function recomputeScoreFor(allEvents: MatchEvent[]): Score {
 export function semEventosDeEscalacao(events: MatchEvent[]): MatchEvent[] {
   return events.filter((e) => !SQUAD_EVENT_TYPES.includes(e.type));
 }
+
+/**
+ * Junta a versão do servidor com os lances deste aparelho que ainda lá não
+ * estão (por clientEventId). Só ficam os locais ainda por sincronizar
+ * (`pendentes`): um evento que já sincronizou e depois foi apagado no
+ * servidor (ex.: na Registo) não volta a aparecer. `pendentes` null = não se
+ * sabe (fila ilegível ou com quarentena) — mantém todos os locais, nunca
+ * arrisca esconder um lance que ainda não chegou ao servidor.
+ */
+export function juntarComServidor(servidor: MatchEvent[], local: MatchEvent[], pendentes: ReadonlySet<string> | null): MatchEvent[] {
+  const key = (e: MatchEvent) => e.clientEventId ?? e.id;
+  const noServidor = new Set(servidor.map(key));
+  return [...servidor, ...local.filter((e) => !noServidor.has(key(e)) && (pendentes === null || pendentes.has(key(e))))];
+}

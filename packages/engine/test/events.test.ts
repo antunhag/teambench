@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createEvent, recomputeScoreFor, semEventosDeEscalacao } from "../src/events";
+import { createEvent, juntarComServidor, recomputeScoreFor, semEventosDeEscalacao } from "../src/events";
 import type { MatchEvent } from "../src/types";
 
 describe("events", () => {
@@ -38,5 +38,24 @@ describe("semEventosDeEscalacao", () => {
       (type, i) => ({ id: String(i), type, playerId: null, ms: 0, min: 0, sec: 0, period: 1, ts: i }) as MatchEvent
     );
     expect(semEventosDeEscalacao(evs).map((e) => e.type)).toEqual(["kickoff", "golo", "fim_periodo"]);
+  });
+});
+
+describe("juntarComServidor", () => {
+  const ev = (id: string, type: MatchEvent["type"] = "falta") => ({ id, clientEventId: id, type, playerId: null, ms: 0, min: 0, sec: 0, period: 1, ts: 0 }) as MatchEvent;
+  const corrigido = { ...ev("a"), ms: 5000, correcao: true };
+
+  it("a versão do servidor ganha; locais por sincronizar ficam", () => {
+    const r = juntarComServidor([corrigido, ev("b")], [ev("a"), ev("b"), ev("c")], new Set(["c"]));
+    expect(r.map((e) => e.id)).toEqual(["a", "b", "c"]);
+    expect(r[0].ms).toBe(5000);
+  });
+
+  it("local já sincronizado e apagado no servidor não volta", () => {
+    expect(juntarComServidor([ev("b")], [ev("a"), ev("b")], new Set()).map((e) => e.id)).toEqual(["b"]);
+  });
+
+  it("sem saber o que está por sincronizar, mantém todos os locais", () => {
+    expect(juntarComServidor([ev("b")], [ev("a"), ev("b")], null).map((e) => e.id)).toEqual(["b", "a"]);
   });
 });

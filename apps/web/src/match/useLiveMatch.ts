@@ -1,6 +1,6 @@
 import * as engine from "@teambench/engine";
 import { useEffect, useRef, useState } from "preact/hooks";
-import { enqueue, removeByClientEventIds } from "../sync/outbox";
+import { enqueue, peekAll, peekQuarantine, removeByClientEventIds } from "../sync/outbox";
 import { supabase } from "../supabaseClient";
 import { PRAZO_ZONA_MS, resolvePending, startPending, type Pending, type Trigger } from "./consola/deferredEnqueue";
 import { useRotationPlan } from "./useRotationPlan";
@@ -34,6 +34,7 @@ function loadState(matchId: string): engine.LiveMatchState {
 }
 
 const UNDO_LIMIT = 25;
+const REMOTE_CHECK_TIMEOUT_MS = 8000;
 
 export function useLiveMatch(matchId: string, teamId: string, ownerId: string, format: engine.MatchFormat, dbStatus?: string) {
   const [state, setState] = useState<engine.LiveMatchState>(() => loadState(matchId));
@@ -108,31 +109,83 @@ export function useLiveMatch(matchId: string, teamId: string, ownerId: string, f
   // MESMO aparelho continuava a mostrar a versão antiga, poluída, até
   // limpar o cache à mão. Um jogo `finished` nunca mais recebe uma ação
   // local legítima por este caminho (só a Registo mexe nele a partir
-  // daí) — por isso, pra esse caso, SEMPRE confia no Supabase por cima do
-  // que estiver em cache, nunca o contrário.
+  // daí) — por isso, pra esse caso, a versão do Supabase passa por cima do
+  // que estiver em cache, juntando só os lances deste aparelho que ainda
+  // estão na fila por sincronizar (`juntarComServidor`).
   const [checkingRemote, setCheckingRemote] = useState(true);
+  // O formato pode chegar depois do 1º render (useMatchFormats) — o replay
+  // abaixo usa sempre o mais recente, nunca o capturado no arranque.
+  const formatRef = useRef(format);
+  formatRef.current = format;
   useEffect(() => {
     let cancelled = false;
     async function checkRemote() {
-      if (state.events.length > 0 && dbStatus !== "finished") {
+      // Jogo terminado — segundo a base de dados OU segundo este próprio
+      // aparelho — também vai buscar a versão do servidor: depois do fim, as
+      // correções feitas na Registo (ou noutro aparelho) têm de aparecer aqui.
+      // Achado real (jogo do Póvoa): `finish_live_match` só passa de 'live'
+      // para 'finished'; um jogo que nunca chegou a 'live' ficava com a cópia
+      // local de antes das correções para sempre. Jogo a decorrer: a cópia
+      // local continua a mandar (quem tem a trava é quem escreve).
+      if (state.events.length > 0 && dbStatus !== "finished" && !state.finished) {
         setCheckingRemote(false);
         return;
       }
-      const { data, error } = await supabase
+      // Retrato da fila ANTES da leitura: um lance que sincronize (e saia da
+      // fila) enquanto a leitura decorre pode não vir na resposta — sem este
+      // retrato desapareceria do estado local (achado de revisão: o fim de
+      // jogo a sumir "reabria" o jogo neste aparelho).
+      const filaAntes = peekAll(ownerId);
+      const query = supabase
         .from("match_events")
         .select("payload")
         .eq("match_id", matchId)
         .order("period", { ascending: true })
         .order("ms", { ascending: true });
+      // Com o jogo já guardado neste aparelho, não fica preso em "A carregar"
+      // se a rede do pavilhão ligar mas não responder: ao fim do prazo segue
+      // com a cópia local (as correções aparecem na próxima abertura).
+      const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), REMOTE_CHECK_TIMEOUT_MS));
+      const res = state.events.length > 0 ? await Promise.race([Promise.resolve(query), timeout]) : await query;
       if (cancelled) return;
+      if (!res) {
+        setCheckingRemote(false);
+        return;
+      }
+      const { data, error } = res;
       if (!error && data && data.length > 0) {
         const all = data.map((row) => row.payload as engine.MatchEvent);
         const squadEvents = all.filter((e) => (engine.SQUAD_EVENT_TYPES as string[]).includes(e.type));
         const gameEvents = all.filter((e) => !(engine.SQUAD_EVENT_TYPES as string[]).includes(e.type));
         if (gameEvents.length > 0) {
-          const heuristicIds = gameEvents.flatMap((e) => [e.playerId, e.outId, ...(e.lineup ?? [])].filter((x): x is string => !!x));
-          const convocadoIds = Array.from(new Set([...heuristicIds, ...engine.deriveConvocadoIds(squadEvents)]));
-          setState({ ...engine.replayEvents(convocadoIds, gameEvents, format), squadEvents });
+          // Lances deste aparelho ainda por sincronizar entram por cima da
+          // versão do servidor — nunca se perdem ao trocar o estado local.
+          // Pendentes = fila antes E depois da leitura + o lance à espera de
+          // zona (ver deferredEnqueue.ts). Fila ou quarentena ilegível, ou
+          // quarentena com itens: não se sabe o que falta, mantém todos.
+          const filaDepois = peekAll(ownerId);
+          const quarentena = peekQuarantine(ownerId);
+          let pendentes: Set<string> | null = null;
+          if (filaAntes.status === "ok" && filaDepois.status === "ok" && quarentena.status === "ok" && quarentena.items.length === 0) {
+            pendentes = new Set([...filaAntes.items, ...filaDepois.items].map((i) => i.client_event_id));
+            try {
+              const aEsperaDeZona = localStorage.getItem(PENDING_PREFIX + matchId);
+              if (aEsperaDeZona) pendentes.add(aEsperaDeZona);
+            } catch {
+              pendentes = null;
+            }
+            if (pendingRef.current) pendentes?.add(pendingRef.current.key);
+          }
+          setState((s) => {
+            const events = engine.juntarComServidor(gameEvents, s.events, pendentes);
+            const squad = engine.juntarComServidor(squadEvents, s.squadEvents, pendentes);
+            const heuristicIds = events.flatMap((e) => [e.playerId, e.outId, ...(e.lineup ?? [])].filter((x): x is string => !!x));
+            const convocadoIds = Array.from(new Set([...heuristicIds, ...engine.deriveConvocadoIds(squad), ...s.convocadoIds]));
+            return { ...engine.replayEvents(convocadoIds, events, formatRef.current), squadEvents: squad };
+          });
+          // O "Desfazer" voltaria a um estado de antes desta troca — esvazia-se.
+          historyRef.current = [];
+          setCanUndo(false);
         }
         // Sem nenhum evento de jogo ainda (gameEvents vazio): o jogo não
         // começou neste aparelho — fica por conta do efeito de merge ativo

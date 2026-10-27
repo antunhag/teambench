@@ -139,6 +139,11 @@ export function pendingCount(ownerId: string): number {
   return state.status === "ok" ? state.items.length : 0;
 }
 
+/** Estado da quarentena tal como está — ilegível é "corrupted", nunca "vazia" (ao contrário de quarantineCount). */
+export function peekQuarantine(ownerId: string): OutboxState {
+  return readKey(quarantineKey(ownerId));
+}
+
 export function quarantineCount(ownerId: string): number {
   const state = readKey(quarantineKey(ownerId));
   return state.status === "ok" ? state.items.length : 0;
