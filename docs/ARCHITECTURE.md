@@ -235,7 +235,17 @@ tipo de evento novo, nenhuma alteração no motor nem na base de dados.
 - "Desfazer" usa o `undo()` de sempre; desativado a meio de um fluxo e quando o
   último evento é um limite de parte (o relógio nunca recua).
 
-Etapa 2 (em curso) — **novos tipos de evento, sem migração** (`match_events.type`
+Etapa 2c — **na Consola**: "Remate ▸" (nosso) e "Remate deles ▸" (linha do
+GR: defendido = `defesa` do GR em campo; fora/bloqueado = `remate_adv` sem
+jogador) abrem o desfecho na própria linha; saída 1x1 no ⋯ do GR; transições
+a favor/contra em 2 toques (com/sem finalização + superioridade); perdas e
+recuperações por terço (coluna lateral no tablet, "Mais…" no iPhone); GR-linha
+com duração visível; contadores "parte · total" e Resumo rápido sobre
+`eventosEfetivos`; "−" na barra (tablet) e no Resumo rápido (todas as
+categorias de equipa). `describeEvent` descreve os tipos novos e a anulação
+("Anulado: …").
+
+Etapa 2 — **novos tipos de evento, sem migração** (`match_events.type`
 é text sem CHECK): `remate`, `remate_adv`, `defesa`, `saida`, `transicao`,
 `perda`, `recuperacao`, `goleiro_linha_inicio/fim`, `anulacao`; zona opcional
 (1-12) também em faltas e cartões. Ações puras em `liveMatch.ts`; entrada

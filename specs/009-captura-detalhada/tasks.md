@@ -129,11 +129,11 @@ description: "Task list for Captura detalhada de estatísticas (Consola)"
 
 **Independent Test**: quickstart.md "Etapa 2" passos 1, 2, 4, 5 (sem "−"), 6; contagem de toques conforme SC-003.
 
-- [ ] T042 [P] [US3] Em `apps/web/src/match/consola/ConsolaRow.tsx`, ativar "Remate ▸" → Defendido · Fora · Bloqueado · ✕ na própria linha (mesma altura), chamando `doRemate`; golo continua a ser `golo` (FR-008; densidade A com 8 ações)
-- [ ] T043 [US3] Na linha do GR em `apps/web/src/match/consola/ConsolaRow.tsx`, "Remate deles ▸" → Defendido (`defesa`, GR em campo) · Fora · Bloqueado (`remate_adv`, sem jogador) · ✕; ⋯ do GR com Saída 1x1 ganha/perdida (`saida`) (FR-009, FR-024)
-- [ ] T044 [US3] Em `apps/web/src/match/consola/TeamBar.tsx`, Transição a favor/contra → folha "Com finalização" / "Sem finalização", cada uma com os presets de `TRANSICAO_NUMEROS_VANTAGEM` e `TRANSICAO_NUMEROS_IGUALDADE_OU_DESVANTAGEM` (`goalTypes.ts`); um toque num preset regista `transicao` (`dir`, `resultado`, `transicaoNumeros`; nunca jogador) e fecha (FR-014, FR-015)
-- [ ] T045 [US3] Perdas/recuperações por zona (defesa, meio, ataque; sem jogador): coluna lateral no tablet (1 toque) e "Mais…" no iPhone (2 toques), em `apps/web/src/match/Consola.tsx` e `apps/web/src/match/consola/TeamBar.tsx` (FR-016)
-- [ ] T046 [US3] GR-linha em `apps/web/src/match/consola/TeamBar.tsx`: início/fim com duração sempre visível enquanto ativo; no iPhone ocupa o lugar de "Mais…", que passa para a doca; o fim regista `goleiro_linha_fim` com `durSec` (FR-017)
+- [x] T042 [P] [US3] Em `apps/web/src/match/consola/ConsolaRow.tsx`, ativar "Remate ▸" → Defendido · Fora · Bloqueado · ✕ na própria linha (mesma altura), chamando `doRemate`; golo continua a ser `golo` (FR-008; densidade A com 8 ações)
+- [x] T043 [US3] Na linha do GR em `apps/web/src/match/consola/ConsolaRow.tsx`, "Remate deles ▸" → Defendido (`defesa`, GR em campo) · Fora · Bloqueado (`remate_adv`, sem jogador) · ✕; ⋯ do GR com Saída 1x1 ganha/perdida (`saida`) (FR-009, FR-024)
+- [x] T044 [US3] Em `apps/web/src/match/consola/TeamBar.tsx`, Transição a favor/contra → folha "Com finalização" / "Sem finalização", cada uma com os presets de `TRANSICAO_NUMEROS_VANTAGEM` e `TRANSICAO_NUMEROS_IGUALDADE_OU_DESVANTAGEM` (`goalTypes.ts`); um toque num preset regista `transicao` (`dir`, `resultado`, `transicaoNumeros`; nunca jogador) e fecha (FR-014, FR-015)
+- [x] T045 [US3] Perdas/recuperações por zona (defesa, meio, ataque; sem jogador): coluna lateral no tablet (1 toque) e "Mais…" no iPhone (2 toques), em `apps/web/src/match/Consola.tsx` e `apps/web/src/match/consola/TeamBar.tsx` (FR-016)
+- [x] T046 [US3] GR-linha em `apps/web/src/match/consola/TeamBar.tsx`: início/fim com duração sempre visível enquanto ativo; no iPhone ocupa o lugar de "Mais…", que passa para a doca; o fim regista `goleiro_linha_fim` com `durSec` (FR-017)
 
 **Checkpoint**: todas as ações novas registáveis; contadores ainda sem "−".
 
@@ -145,10 +145,10 @@ description: "Task list for Captura detalhada de estatísticas (Consola)"
 
 **Independent Test**: quickstart.md "Etapa 2" passo 5 ("−" anula só o último da categoria, mostra o aviso; "Desfazer" repõe) e passo 7 (placar correto após "−" num golo sofrido).
 
-- [ ] T047 [US5] Em `apps/web/src/match/consola/TeamBar.tsx`, "−" ao lado de cada categoria de equipa (tablet: 1 toque; iPhone: via "Mais…" ou Resumo) chamando `doAnulacao` com o `alvoId` de `ultimoDaCategoria`; desativado quando não há nada a anular (FR-025)
-- [ ] T048 [US5] Faixa do último evento em `apps/web/src/match/Consola.tsx` mostra "Anulado: …" após um "−"; "Desfazer" de uma anulação usa o `undo()` local se ainda não foi enviada, senão anula a anulação
-- [ ] T049 [US5] Contadores "1ª n · total m" de todas as categorias a partir de `contarCategoria` (eventos efetivos) em `apps/web/src/match/consola/TeamBar.tsx` (FR-026)
-- [ ] T050 [US5] Completar `apps/web/src/match/consola/SummarySheet.tsx` com todas as categorias novas (remates por desfecho, remates deles, transições, perdas/recuperações por zona, GR-linha), sempre a partir de `eventosEfetivos` (FR-027)
+- [x] T047 [US5] Em `apps/web/src/match/consola/TeamBar.tsx`, "−" ao lado de cada categoria de equipa (tablet: 1 toque; iPhone: via "Mais…" ou Resumo) chamando `doAnulacao` com o `alvoId` de `ultimoDaCategoria`; desativado quando não há nada a anular (FR-025)
+- [x] T048 [US5] Faixa do último evento em `apps/web/src/match/Consola.tsx` mostra "Anulado: …" após um "−"; "Desfazer" de uma anulação usa o `undo()` local se ainda não foi enviada, senão anula a anulação
+- [x] T049 [US5] Contadores "1ª n · total m" de todas as categorias a partir de `contarCategoria` (eventos efetivos) em `apps/web/src/match/consola/TeamBar.tsx` (FR-026)
+- [x] T050 [US5] Completar `apps/web/src/match/consola/SummarySheet.tsx` com todas as categorias novas (remates por desfecho, remates deles, transições, perdas/recuperações por zona, GR-linha), sempre a partir de `eventosEfetivos` (FR-027)
 
 **Checkpoint**: contagens corrigíveis em jogo sem apagar nada.
 
@@ -162,7 +162,7 @@ description: "Task list for Captura detalhada de estatísticas (Consola)"
 
 - [ ] T051 [P] [US4] Em `packages/engine/src/report.ts`, `transicoesDesperdicadas(events)`: `dir=ofensiva`, `resultado=perdida`, `transicaoNumeros` em `TRANSICAO_NUMEROS_VANTAGEM`, sobre `eventosEfetivos` (FR-019, FR-020; research Decisão 8)
 - [ ] T052 [P] [US4] Testes em `packages/engine/test/report.test.ts`: exclui com finalização, igualdade/desvantagem, transições contra e anuladas
-- [ ] T053 [P] [US3] Em `packages/engine/src/report.ts`, `describeEvent` e agregados para os novos tipos e `anulacao`, a partir de `eventosEfetivos` (FR-021); testes em `packages/engine/test/report.test.ts`
+- [ ] T053 [P] [US3] (describeEvent dos tipos novos e da anulação já feito na 2c; falta: agregados) Em `packages/engine/src/report.ts`, `describeEvent` e agregados para os novos tipos e `anulacao`, a partir de `eventosEfetivos` (FR-021); testes em `packages/engine/test/report.test.ts`
 - [ ] T054 [P] [US3] Em `packages/engine/src/timeline.ts`, novos tipos na timeline exportável e anulados marcados/excluídos; testes em `packages/engine/test/timeline.test.ts` (FR-021)
 - [ ] T055 [US4] Em `apps/web/src/match/MatchSummary.tsx`, secção "Transições desperdiçadas com vantagem" e os novos agregados
 - [ ] T056 [US3] Em `apps/web/src/match/MatchEventEditor.tsx`, mostrar e permitir corrigir os novos tipos e as anulações, sem apagar eventos já enviados (correções com `correcao: true`, como hoje)

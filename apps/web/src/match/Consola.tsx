@@ -1,16 +1,26 @@
 /**
  * Consola — segunda tela de registo ao vivo (specs/009-captura-detalhada/).
- * Etapa 1: só usa ações que o "Jogo ao vivo" já usa, através do mesmo
- * useLiveMatch montado pelo mesmo MatchFlow (mesma trava, mesma fila):
- * resumeOrStart, pause/endPause, endPeriod, doGoal, doOppGoal, doCard,
- * doFoul, doFoulSuffered, startTreatment/endTreatment, doSub, doEnter,
- * toggleTitular, toggleConvocado, undo. Nada de novo no motor nem na BD.
+ * Usa o mesmo useLiveMatch montado pelo mesmo MatchFlow do "Jogo ao vivo"
+ * (mesma trava, mesma fila). Etapa 1: as ações de sempre (apito, golos,
+ * cartões, faltas, atendimento, substituições, pausas, partes). Etapa 2: os
+ * tipos novos da captura detalhada (remates, remates deles, defesa, saída,
+ * transições, perdas/recuperações, GR-linha, "−" = anulação), com zona
+ * opcional e envio adiado para a fila (ver consola/deferredEnqueue.ts).
  *
  * Ocupa o ecrã inteiro (camada fixa abaixo das folhas `.overlay`) porque a
  * `.page` normal tem no máximo 760 px e leva topo/abas por cima — no iPhone
  * a altura útil e no tablet deitado a largura não chegavam.
  */
-import { describeEvents, isLastPeriod, timeoutUsedInPeriod } from "@teambench/engine";
+import {
+  contarCategoria,
+  describeEvents,
+  goleiroLinhaAtivo,
+  isLastPeriod,
+  timeoutUsedInPeriod,
+  ultimoDaCategoria,
+  type CategoriaEquipa,
+  type Zona3,
+} from "@teambench/engine";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import type { useOutboxSync } from "../sync/useOutboxSync";
 import { isGoalkeeper } from "../team/positions";
@@ -19,8 +29,10 @@ import { ConsolaRow, type Density, type RowAction } from "./consola/ConsolaRow";
 import { reconcileSlots, stepFlow, type Flow, type FlowEvent } from "./consola/flows";
 import { GoalSheet, type GoalDraft } from "./consola/GoalSheet";
 import { consolaMode, pickButtonSize, rowsFit, type ConsolaMode } from "./consola/layout";
+import { PerdasBlock } from "./consola/PerdasBlock";
 import { SummarySheet } from "./consola/SummarySheet";
 import { TeamBar } from "./consola/TeamBar";
+import { TransicaoSheet } from "./consola/TransicaoSheet";
 import { ZonePanel } from "./consola/ZonePanel";
 import { PlayerChip, Sheet } from "./PickerUI";
 import type { useLiveMatch } from "./useLiveMatch";
@@ -45,6 +57,7 @@ type Sheetkind =
   | { kind: "summary" }
   | { kind: "add-convocado" }
   | { kind: "settings" }
+  | { kind: "transicao"; dir: "ofensiva" | "defensiva" }
   | null;
 
 function fmtMinSec(ms: number): string {
@@ -129,11 +142,36 @@ export function Consola({ live, roster, opponent, onViewSummary, ourLabel, sync,
     setOverflow(!rowsFit(h, mode, size));
   });
 
-  // ---- contagens ----
-  const oppGoals = {
-    period: state.events.filter((e) => e.type === "golo_sofrido" && e.period === state.period).length,
-    total: state.events.filter((e) => e.type === "golo_sofrido").length,
+  // ---- contagens (sempre sobre os eventos efetivos: sem anulados) ----
+  const conta = (cat: CategoriaEquipa) => contarCategoria(state.events, cat, state.period);
+  const podeAnular = (cat: CategoriaEquipa) => !state.finished && ultimoDaCategoria(state.events, cat) !== null;
+  const oppGoals = conta("golo_sofrido");
+  const zonas3: Zona3[] = ["defesa", "meio", "ataque"];
+  const perdasContagens = {
+    perda: Object.fromEntries(zonas3.map((z) => [z, conta(`perda_${z}`)])) as Record<Zona3, { period: number; total: number }>,
+    recuperacao: Object.fromEntries(zonas3.map((z) => [z, conta(`recuperacao_${z}`)])) as Record<Zona3, { period: number; total: number }>,
   };
+  const glInicio = goleiroLinhaAtivo(state.events, state.period);
+  const goleiroLinhaMs = glInicio ? elapsedMs - glInicio.ms : null;
+  /** "−": anula o último lance efetivo da categoria (evento novo; nunca apaga). */
+  function anular(cat: CategoriaEquipa) {
+    const alvo = ultimoDaCategoria(state.events, cat);
+    if (alvo) live.doAnulacao(alvo.clientEventId ?? alvo.id);
+  }
+  const perdasBlock = (
+    <PerdasBlock
+      contagens={perdasContagens}
+      disabled={state.finished || awaitingKickoff}
+      onPerda={(z) => {
+        live.doPerda(z);
+        if (!benchVisible) setSheet(null);
+      }}
+      onRecuperacao={(z) => {
+        live.doRecuperacao(z);
+        if (!benchVisible) setSheet(null);
+      }}
+    />
+  );
   const goalsFor = (id: string) => state.events.filter((e) => e.type === "golo" && e.playerId === id).length;
   const timeoutNosUsed = timeoutUsedInPeriod(state.events, state.period, "tempo_nos");
   const timeoutAdversUsed = timeoutUsedInPeriod(state.events, state.period, "tempo_advers");
@@ -211,6 +249,26 @@ export function Consola({ live, roster, opponent, onViewSummary, ourLabel, sync,
       case "tirar":
         runFlow({ type: "out", outId: id, nowMs: nowMsForEvent() });
         break;
+      case "remate_defendido":
+        live.deferred.doRemate(id, "defendido");
+        break;
+      case "remate_fora":
+        live.deferred.doRemate(id, "fora");
+        break;
+      case "remate_bloqueado":
+        live.deferred.doRemate(id, "bloqueado");
+        break;
+      // Remates do adversário (linha do GR): defendido conta para o GR em
+      // campo; fora/bloqueado não têm jogador nosso (FR-024).
+      case "defesa":
+        live.deferred.doDefesa(id);
+        break;
+      case "remate_adv_fora":
+        live.deferred.doRemateAdv("fora");
+        break;
+      case "remate_adv_bloqueado":
+        live.deferred.doRemateAdv("bloqueado");
+        break;
     }
   };
   const onAction = useCallback((id: string, a: RowAction) => handlerRef.current(id, a), []);
@@ -228,6 +286,7 @@ export function Consola({ live, roster, opponent, onViewSummary, ourLabel, sync,
     ? describeEvents(state.events, lookup, live.format)
         .get(last.id)
         ?.replace(/^\[[^\]]*\]\s*/, "")
+        .replace(/^Anulado: \[[^\]]*\]\s*/, "Anulado: ")
         .replace(/\s*\|\s*em quadra:.*$/, "")
     : undefined;
   // Limites de parte não se desfazem aqui (research Decisão 9): o relógio nunca recua.
@@ -336,12 +395,19 @@ export function Consola({ live, roster, opponent, onViewSummary, ourLabel, sync,
           <TeamBar
             mode={mode}
             period={state.period}
-            oppGoals={oppGoals}
+            favor={conta("transicao_favor")}
+            contra={conta("transicao_contra")}
+            golosSofridos={oppGoals}
+            podeAnular={{ favor: podeAnular("transicao_favor"), contra: podeAnular("transicao_contra"), golosSofridos: podeAnular("golo_sofrido") }}
+            goleiroLinhaMs={goleiroLinhaMs}
             awaitingKickoff={awaitingKickoff}
             finished={state.finished}
             paused={!!state.activePause}
             isFinalPeriod={isFinalPeriod}
+            onTransicao={(dir) => setSheet({ kind: "transicao", dir })}
             onOppGoal={() => handlerRef.current("", "golo_sofrido")}
+            onAnular={anular}
+            onGoleiroLinha={() => (goleiroLinhaMs !== null ? live.doGoleiroLinhaFim() : live.doGoleiroLinhaInicio())}
             onKickoff={() => live.resumeOrStart()}
             onPause={() => setSheet({ kind: "pause" })}
             onResume={() => live.endPause()}
@@ -392,6 +458,7 @@ export function Consola({ live, roster, opponent, onViewSummary, ourLabel, sync,
 
         {benchVisible && (
           <aside className="consola-bench">
+            {perdasBlock}
             <div className="consola-bench-title">Banco ({bench.length})</div>
             {benchList}
           </aside>
@@ -404,7 +471,7 @@ export function Consola({ live, roster, opponent, onViewSummary, ourLabel, sync,
             ) : (
               !state.finished && (
                 <button type="button" className="cbtn opp" onClick={() => handlerRef.current("", "golo_sofrido")}>
-                  Golo sofrido <span className="cnt">{oppGoals.period}·{oppGoals.total}</span>
+                  Golo sofrido <span className="cnt">{state.period}ª {oppGoals.period} · {oppGoals.total}</span>
                 </button>
               )
             )}
@@ -427,7 +494,12 @@ export function Consola({ live, roster, opponent, onViewSummary, ourLabel, sync,
           >
             {state.activePause ? "▶ Retomar" : "⏸ Pausa"}
           </button>
-          <button type="button" className="cbtn" aria-label="Definições" onClick={() => setSheet({ kind: "settings" })}>⚙</button>
+          {/* Com GR-linha ativo, o lugar de "Mais…" na barra mostra o GR-linha e "Mais…" vem para aqui. */}
+          {goleiroLinhaMs !== null ? (
+            <button type="button" className="cbtn" onClick={() => setSheet({ kind: "more" })}>Mais…</button>
+          ) : (
+            <button type="button" className="cbtn" aria-label="Definições" onClick={() => setSheet({ kind: "settings" })}>⚙</button>
+          )}
         </nav>
       )}
 
@@ -494,6 +566,16 @@ export function Consola({ live, roster, opponent, onViewSummary, ourLabel, sync,
                 <button type="button" className="abtn" disabled={preKickoff || bench.length === 0} onClick={() => startSubFromPlayer(p.id)}>
                   <span className="ic">🔁</span>Substituir (sai)
                 </button>
+                {isGoalkeeper(p.position) && (
+                  <>
+                    <button type="button" className="abtn" disabled={preKickoff || awaitingKickoff} onClick={close(() => live.deferred.doSaida(p.id, "ganha"))}>
+                      <span className="ic">✅</span>Saída 1x1 ganha
+                    </button>
+                    <button type="button" className="abtn" disabled={preKickoff || awaitingKickoff} onClick={close(() => live.deferred.doSaida(p.id, "perdida"))}>
+                      <span className="ic">❌</span>Saída 1x1 perdida
+                    </button>
+                  </>
+                )}
               </div>
             </Sheet>
           );
@@ -560,6 +642,35 @@ export function Consola({ live, roster, opponent, onViewSummary, ourLabel, sync,
 
       {sheet?.kind === "more" && (
         <Sheet title="Equipa" onClose={() => setSheet(null)}>
+          {!benchVisible && !awaitingKickoff && !state.finished && (
+            <>
+              {mode === "iphone-h" && (
+                <div className="actiongrid" style={{ marginTop: 0 }}>
+                  <button type="button" className="abtn" onClick={() => setSheet({ kind: "transicao", dir: "ofensiva" })}>
+                    Transição a favor <span className="cnt">{conta("transicao_favor").period} · {conta("transicao_favor").total}</span>
+                  </button>
+                  <button type="button" className="abtn" onClick={() => setSheet({ kind: "transicao", dir: "defensiva" })}>
+                    Transição contra <span className="cnt">{conta("transicao_contra").period} · {conta("transicao_contra").total}</span>
+                  </button>
+                </div>
+              )}
+              <p className="sub">Perdas e recuperações de bola (1 toque regista)</p>
+              {perdasBlock}
+              <button
+                type="button"
+                className={`btn block${goleiroLinhaMs !== null ? " primary" : ""}`}
+                style={{ marginTop: 10, minHeight: 48 }}
+                onClick={() => {
+                  if (goleiroLinhaMs !== null) live.doGoleiroLinhaFim();
+                  else live.doGoleiroLinhaInicio();
+                  setSheet(null);
+                }}
+              >
+                {goleiroLinhaMs !== null ? `Terminar GR-linha (${fmtMinSec(goleiroLinhaMs)})` : "Iniciar GR-linha"}
+              </button>
+              <p className="hint">"−" (anular o último de uma categoria) está no Resumo rápido.</p>
+            </>
+          )}
           <div className="actiongrid">
             {!awaitingKickoff && !state.finished && (
               <button
@@ -615,7 +726,25 @@ export function Consola({ live, roster, opponent, onViewSummary, ourLabel, sync,
       )}
 
       {sheet?.kind === "summary" && (
-        <SummarySheet events={state.events} period={state.period} onOpenFullSummary={onViewSummary} onClose={() => setSheet(null)} />
+        <SummarySheet
+          events={state.events}
+          period={state.period}
+          canAnular={!state.finished}
+          onAnular={(alvoId) => live.doAnulacao(alvoId)}
+          onOpenFullSummary={onViewSummary}
+          onClose={() => setSheet(null)}
+        />
+      )}
+
+      {sheet?.kind === "transicao" && (
+        <TransicaoSheet
+          dir={sheet.dir}
+          onClose={() => setSheet(null)}
+          onPick={(resultado, numeros) => {
+            live.doTransicao(sheet.dir, resultado, numeros);
+            setSheet(null);
+          }}
+        />
       )}
 
       {sheet?.kind === "add-convocado" && !state.finished && (

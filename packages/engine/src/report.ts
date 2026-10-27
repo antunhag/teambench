@@ -24,6 +24,13 @@ function goloTipoLabelComDetalhe(e: MatchEvent): string | null {
   return `${lbl}${numeros}${deserta}`;
 }
 
+const DESFECHO_LABEL: Record<string, string> = { defendido: "defendido", fora: "fora", bloqueado: "bloqueado" };
+const ZONA3_LABEL: Record<string, string> = { defesa: "defesa", meio: "meio-campo", ataque: "ataque" };
+
+function zonaSufixo(e: MatchEvent): string {
+  return e.zona ? ` [Zona ${e.zona}]` : "";
+}
+
 export function describeEvent(e: MatchEvent, playerById: PlayerLookup, format?: MatchFormat): string {
   const p = e.playerId ? playerById(e.playerId) : undefined;
   const pname = p ? `#${p.num} ${p.name}` : "";
@@ -78,16 +85,50 @@ export function describeEvent(e: MatchEvent, playerById: PlayerLookup, format?: 
       break;
     }
     case "cartao_amarelo":
-      body = `Cartão amarelo — ${pname}`;
+      body = `Cartão amarelo — ${pname}${zonaSufixo(e)}`;
       break;
     case "cartao_vermelho":
-      body = `Cartão vermelho — ${pname}`;
+      body = `Cartão vermelho — ${pname}${zonaSufixo(e)}`;
       break;
     case "falta":
-      body = `Falta cometida — ${pname}`;
+      body = `Falta cometida — ${pname}${zonaSufixo(e)}`;
       break;
     case "falta_sofrida":
-      body = `Falta sofrida — ${pname}`;
+      body = `Falta sofrida — ${pname}${zonaSufixo(e)}`;
+      break;
+    // Captura detalhada (specs/009-captura-detalhada/data-model.md)
+    case "remate":
+      body = `Remate ${DESFECHO_LABEL[e.desfecho ?? ""] ?? ""} — ${pname}${zonaSufixo(e)}`;
+      break;
+    case "remate_adv":
+      body = `Remate do adversário ${DESFECHO_LABEL[e.desfecho ?? ""] ?? ""}${zonaSufixo(e)}`;
+      break;
+    case "defesa":
+      body = `Defesa (remate do adversário defendido) — ${pname}${zonaSufixo(e)}`;
+      break;
+    case "saida":
+      body = `Saída 1x1 ${e.resultado === "ganha" ? "ganha" : "perdida"} — ${pname}${zonaSufixo(e)}`;
+      break;
+    case "transicao":
+      body =
+        `Transição ${e.dir === "defensiva" ? "contra" : "a favor"}` +
+        (e.transicaoNumeros ? ` ${e.transicaoNumeros}` : "") +
+        ` — ${e.resultado === "ganha" ? "com" : "sem"} finalização`;
+      break;
+    case "perda":
+      body = `Perda de bola — ${ZONA3_LABEL[e.zona3 ?? ""] ?? ""}`;
+      break;
+    case "recuperacao":
+      body = `Recuperação de bola — ${ZONA3_LABEL[e.zona3 ?? ""] ?? ""}`;
+      break;
+    case "goleiro_linha_inicio":
+      body = "Goleiro-linha — início";
+      break;
+    case "goleiro_linha_fim":
+      body = `Goleiro-linha — fim (${fmtMinSec((e.durSec || 0) * 1000)})`;
+      break;
+    case "anulacao":
+      body = "Anulação de um lance";
       break;
     case "lesao_inicio":
       body = `Atendimento iniciado — ${pname}`;
@@ -189,6 +230,12 @@ export function describeEvents(events: MatchEvent[], playerById: PlayerLookup, f
     let forDisplay = e.type === "golo" || e.type === "golo_sofrido" ? { ...e, lineup: after.slice() } : e;
     const d = duracoes.get(e.id);
     if (d !== undefined) forDisplay = e.type === "lesao_fim" ? { ...forDisplay, durSec: d } : { ...forDisplay, duracaoSec: d };
+    if (e.type === "anulacao") {
+      const alvo = events.find((x) => (x.clientEventId ?? x.id) === e.alvoId);
+      const alvoTxt = alvo ? describeEvent(alvo, playerById, format) : "lance desconhecido";
+      result.set(e.id, `[${eventStamp(e, format)}] Anulado: ${alvoTxt}${e.correcao ? " [correção]" : ""}`);
+      continue;
+    }
     result.set(e.id, describeEvent(forDisplay, playerById, format));
   }
   return result;

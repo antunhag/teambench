@@ -1385,3 +1385,117 @@ textarea.exportbox {
   font-weight: 400;
   color: var(--ink-dim);
 }
+
+/* ---------- Consola — Etapa 2c ---------- */
+.consola-team .tb-group {
+  flex: 1 1 0;
+  display: flex;
+  gap: 4px;
+  min-width: 0;
+}
+.consola-team .tb-group > .cbtn:first-child {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.consola .cbtn.minus {
+  flex: 0 0 48px;
+  font-size: 22px;
+  font-weight: 700;
+  padding: 0;
+}
+.consola .cbtn.trans {
+  border: 2px solid var(--accent);
+}
+.consola .cbtn.trans.contra {
+  border-color: var(--red);
+}
+.consola .cbtn.shot {
+  background: var(--surface-2);
+}
+.consola .cbtn.shot.gk {
+  border: 2px solid var(--gr);
+}
+/* Tablet vertical: barra em 2 filas (3 + 4). */
+.consola--tablet-v .consola-team .tb-group {
+  flex: 1 1 30%;
+}
+/* Densidade A: todas as ações à vista; no iPhone partem em 2 filas (≥ 48 px cada). */
+.consola-row.dens-a .consola-actions {
+  flex-wrap: wrap;
+}
+.consola-row.dens-a .consola-actions .cbtn {
+  flex: 1 1 48px;
+}
+.consola--iphone-v .consola-row.dens-a .consola-actions .cbtn {
+  flex-basis: 18%;
+}
+
+.consola-perdas {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.consola-perdas-row {
+  display: grid;
+  grid-template-columns: 52px repeat(3, 1fr);
+  gap: 6px;
+  align-items: center;
+}
+.consola-perdas-row .lbl {
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.consola .cbtn.perda,
+.sheet .cbtn.perda {
+  border: 2px solid var(--red);
+}
+.consola .cbtn.recuperacao,
+.sheet .cbtn.recuperacao {
+  border: 2px solid var(--accent);
+}
+.sheet .consola-perdas .cbtn {
+  min-height: 52px;
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--ink);
+  font: 600 14px/1.1 "Work Sans", system-ui, sans-serif;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+.sheet .consola-perdas .cbtn .cnt,
+.abtn .cnt {
+  display: block;
+  font-size: 11.5px;
+  font-weight: 500;
+  opacity: 0.8;
+}
+.consola-sheet-h {
+  margin: 12px 0 6px;
+  font-size: 14px;
+}
+.consola-presets {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
+  gap: 8px;
+}
+.consola-presets .abtn {
+  min-height: 52px;
+  font-size: 17px;
+  font-weight: 700;
+}
+.consola-presets .abtn.dim {
+  opacity: 0.75;
+}
+.consola-summary tr.sep td {
+  padding-top: 14px;
+  font-weight: 700;
+  text-align: left;
+}
+.consola-minus {
+  min-width: 48px;
+  min-height: 40px;
+  font-size: 18px;
+}

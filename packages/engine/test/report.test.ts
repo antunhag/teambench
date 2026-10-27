@@ -201,3 +201,23 @@ describe("durações depois de uma correção (jogo do Póvoa)", () => {
     expect(duracoesDerivadas([fimPausa]).has(fimPausa.id)).toBe(false);
   });
 });
+
+describe("describeEvent — tipos da captura detalhada (spec 009)", () => {
+  const who = () => ({ id: "p1", num: "7", name: "Dinis", pos: "Universal" });
+  it("descreve os novos tipos em português", () => {
+    const d = (e: MatchEvent) => describeEvent(e, who);
+    expect(d(createEvent("remate", "p1", 60_000, 1, 0, { desfecho: "fora", zona: 9 }))).toContain("Remate fora — #7 Dinis [Zona 9]");
+    expect(d(createEvent("remate_adv", null, 0, 1, 0, { desfecho: "bloqueado" }))).toContain("Remate do adversário bloqueado");
+    expect(d(createEvent("defesa", "p1", 0, 1, 0))).toContain("Defesa");
+    expect(d(createEvent("saida", "p1", 0, 1, 0, { resultado: "ganha" }))).toContain("Saída 1x1 ganha");
+    expect(d(createEvent("transicao", null, 0, 1, 0, { dir: "ofensiva", resultado: "perdida", transicaoNumeros: "3x1" }))).toContain("Transição a favor 3x1 — sem finalização");
+    expect(d(createEvent("perda", null, 0, 1, 0, { zona3: "meio" }))).toContain("Perda de bola — meio-campo");
+    expect(d(createEvent("goleiro_linha_fim", null, 0, 1, 0, { durSec: 75 }))).toContain("(01:15)");
+    expect(d(createEvent("falta", "p1", 0, 1, 0, { zona: 4 }))).toContain("Falta cometida — #7 Dinis [Zona 4]");
+  });
+  it("anulação nomeia o lance anulado", () => {
+    const t = createEvent("transicao", null, 1000, 1, 0, { dir: "defensiva", resultado: "ganha", transicaoNumeros: "2x2" });
+    const a = createEvent("anulacao", null, 2000, 1, 0, { alvoId: t.clientEventId });
+    expect(describeEvents([t, a], who).get(a.id)).toMatch(/Anulado: \[1ª Parte · 00:01\] Transição contra 2x2 — com finalização/);
+  });
+});

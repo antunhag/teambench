@@ -622,6 +622,15 @@ export function useLiveMatch(matchId: string, teamId: string, ownerId: string, f
     pendingZonaKey,
     setPendingZona,
     closePendingZona,
+    // Ações de equipa da Consola (sem jogador nem zona): entram na fila na hora.
+    doTransicao: (dir: "ofensiva" | "defensiva", resultado: "ganha" | "perdida", transicaoNumeros: string) =>
+      apply((s) => engine.doTransicao(s, dir, resultado, transicaoNumeros, now())),
+    doPerda: (zona3: engine.Zona3) => apply((s) => engine.doPerda(s, zona3, now())),
+    doRecuperacao: (zona3: engine.Zona3) => apply((s) => engine.doRecuperacao(s, zona3, now())),
+    doGoleiroLinhaInicio: () => apply((s) => engine.doGoleiroLinhaInicio(s, now())),
+    doGoleiroLinhaFim: () => apply((s) => engine.doGoleiroLinhaFim(s, now())),
+    /** "−" de uma categoria de equipa: regista uma anulação (nunca apaga). */
+    doAnulacao: (alvoId: string) => apply((s) => engine.doAnulacao(s, alvoId, now())),
     deferred: {
       doFoul: (playerId: string) => applyDeferred((s) => engine.doFoul(s, playerId, now())),
       doFoulSuffered: (playerId: string) => applyDeferred((s) => engine.doFoulSuffered(s, playerId, now())),
