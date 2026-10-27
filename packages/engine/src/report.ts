@@ -138,6 +138,38 @@ export function onCourtTimeline(events: MatchEvent[]): Map<string, { before: str
 }
 
 /**
+ * Durações recalculadas a partir das horas dos próprios eventos — fim de
+ * pausa (desde a "pausa" anterior da mesma parte), fim de parte (o ms do
+ * próprio fim) e fim de atendimento (desde o início do mesmo atleta). O valor
+ * gravado no evento (`duracaoSec`/`durSec`) é o do momento em que foi criado
+ * e fica velho quando a Registo corrige uma das horas (achado real: "Fim da
+ * pausa (02:18)" num pedido de tempo corrigido para 1:32). Minutos e placar
+ * já usavam as horas (replay.ts); só o texto e o eixo da timeline não.
+ */
+export function duracoesDerivadas(events: MatchEvent[]): Map<string, number> {
+  const sorted = [...events].sort((a, b) => (a.period - b.period) || (eventMs(a) - eventMs(b)) || (a.ts - b.ts));
+  const out = new Map<string, number>();
+  const pausaAberta = new Map<number, MatchEvent>();
+  const atendimentoAberto = new Map<string, MatchEvent>();
+  for (const e of sorted) {
+    if (e.type === "pausa") pausaAberta.set(e.period, e);
+    else if (e.type === "fim_pausa") {
+      const inicio = pausaAberta.get(e.period);
+      if (inicio) out.set(e.id, Math.max(0, Math.round((eventMs(e) - eventMs(inicio)) / 1000)));
+      pausaAberta.delete(e.period);
+    } else if (e.type === "fim_periodo") out.set(e.id, Math.round(eventMs(e) / 1000));
+    else if (e.type === "lesao_inicio") atendimentoAberto.set(`${e.period}|${e.playerId}`, e);
+    else if (e.type === "lesao_fim") {
+      const key = `${e.period}|${e.playerId}`;
+      const inicio = atendimentoAberto.get(key);
+      if (inicio) out.set(e.id, Math.max(0, Math.round((eventMs(e) - eventMs(inicio)) / 1000)));
+      atendimentoAberto.delete(key);
+    }
+  }
+  return out;
+}
+
+/**
  * Descreve TODOS os eventos de um jogo de uma vez, recalculando quem estava
  * em quadra em cada golo a partir da ordem cronológica ATUAL dos eventos —
  * nunca confiando no `lineup` gravado dentro do próprio evento no momento em
@@ -150,10 +182,13 @@ export function onCourtTimeline(events: MatchEvent[]): Map<string, { before: str
  */
 export function describeEvents(events: MatchEvent[], playerById: PlayerLookup, format?: MatchFormat): Map<string, string> {
   const timeline = onCourtTimeline(events);
+  const duracoes = duracoesDerivadas(events);
   const result = new Map<string, string>();
   for (const e of events) {
     const after = timeline.get(e.id)?.after ?? [];
-    const forDisplay = e.type === "golo" || e.type === "golo_sofrido" ? { ...e, lineup: after.slice() } : e;
+    let forDisplay = e.type === "golo" || e.type === "golo_sofrido" ? { ...e, lineup: after.slice() } : e;
+    const d = duracoes.get(e.id);
+    if (d !== undefined) forDisplay = e.type === "lesao_fim" ? { ...forDisplay, durSec: d } : { ...forDisplay, duracaoSec: d };
     result.set(e.id, describeEvent(forDisplay, playerById, format));
   }
   return result;

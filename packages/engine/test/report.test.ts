@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createEvent } from "../src/events";
-import { buildEventsExport, describeEvent, describeEvents, exportText, onCourtTimeline } from "../src/report";
+import { buildEventsExport, describeEvent, describeEvents, duracoesDerivadas, exportText, onCourtTimeline } from "../src/report";
 import type { MatchEvent, MatchRow, Player } from "../src/types";
 
 const salvador: Player = { id: "athlete-salvador", num: "30", name: "Salvador Silva Gonçalves", pos: "Ala Esquerda" };
@@ -178,5 +178,26 @@ describe("buildEventsExport", () => {
     expect(ev.playerName).toBeNull();
     expect(ev.outPlayerId).toBeNull();
     expect(ev.assistPlayerId).toBeNull();
+  });
+});
+
+describe("durações depois de uma correção (jogo do Póvoa)", () => {
+  // Pedido de tempo e fim de parte criados com uma hora e corrigidos depois na
+  // Registo: o `duracaoSec` gravado ficou o antigo (02:18, 32:34).
+  const pausa = { ...createEvent("pausa", null, 770_000, 1, 0, { label: "Pedido de Tempo — Adversário", reasonId: "tempo_advers" }), correcao: true };
+  const fimPausa = { ...createEvent("fim_pausa", null, 862_000, 1, 0, { label: "Pedido de Tempo — Adversário", duracaoSec: 138 }), correcao: true };
+  const fim = { ...createEvent("fim_periodo", null, 1_950_000, 1, 0, { label: "Fim da parte 1", duracaoSec: 1954 }), correcao: true };
+  const lesIni = createEvent("lesao_inicio", "p1", 100_000, 1, 0);
+  const lesFim = createEvent("lesao_fim", "p1", 160_000, 1, 0, { durSec: 999 });
+
+  it("o texto usa as horas atuais, não a duração gravada", () => {
+    const d = describeEvents([pausa, fimPausa, lesIni, lesFim, fim], () => ({ id: "p1", num: "1", name: "A", pos: "Universal" }));
+    expect(d.get(fimPausa.id)).toContain("(01:32)");
+    expect(d.get(fim.id)).toContain("(32:30 jogados)");
+    expect(d.get(lesFim.id)).toContain("(1 min)");
+  });
+
+  it("sem pausa a abrir, fica a duração gravada", () => {
+    expect(duracoesDerivadas([fimPausa]).has(fimPausa.id)).toBe(false);
   });
 });

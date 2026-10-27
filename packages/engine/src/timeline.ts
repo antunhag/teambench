@@ -73,7 +73,9 @@ export function buildTimelineData(events: MatchEvent[], playersList: Player[], t
   const periodNums = [...periods.keys()].sort((a, b) => a - b);
   const periodDur = new Map<number, number>();
   events.forEach((e) => {
-    if (e.type === "fim_periodo") periodDur.set(e.period || 1, e.duracaoSec || 0);
+    // Pelo ms do próprio fim, não pelo `duracaoSec` gravado — esse fica velho
+    // se a Registo corrigir a hora do fim (ver duracoesDerivadas em report.ts).
+    if (e.type === "fim_periodo") periodDur.set(e.period || 1, e.ms ? Math.round(e.ms / 1000) : e.duracaoSec || 0);
   });
 
   const onCourtSet = new Set(titularIds);
