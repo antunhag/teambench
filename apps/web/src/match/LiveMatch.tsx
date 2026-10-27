@@ -306,22 +306,28 @@ export function LiveMatch({ live, roster, opponent, onViewSummary, ourLabel }: P
       )}
 
       {live.manual && !awaitingKickoff && !state.finished && (
-        <div className="card" style={{ marginTop: 8, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
-          <span className="hint" style={{ margin: 0 }}>🎬 Tempo de jogo:</span>
-          <button type="button" className="btn sm ghost" onClick={() => live.setManualElapsedMs(live.manualElapsedMs - 10000)}>
-            -10s
-          </button>
-          <input
-            type="text"
-            inputMode="numeric"
-            value={manualInput}
-            onChange={(e) => setManualInput((e.target as HTMLInputElement).value)}
-            onBlur={applyManualInput}
-            onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
-            style={{ width: 64, textAlign: "center" }}
-          />
-          <button type="button" className="btn sm ghost" onClick={() => live.setManualElapsedMs(live.manualElapsedMs + 10000)}>
-            +10s
+        <div className="card" style={{ marginTop: 8, display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+            <span className="hint" style={{ margin: 0 }}>🎬 Tempo de jogo:</span>
+            <button type="button" className="btn sm ghost" onClick={() => live.setManualElapsedMs(live.manualElapsedMs - 10000)}>
+              -10s
+            </button>
+            <input
+              type="text"
+              inputMode="numeric"
+              value={manualInput}
+              onChange={(e) => setManualInput((e.target as HTMLInputElement).value)}
+              onBlur={applyManualInput}
+              onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
+              style={{ width: 64, textAlign: "center" }}
+            />
+            <button type="button" className="btn sm ghost" onClick={() => live.setManualElapsedMs(live.manualElapsedMs + 10000)}>
+              +10s
+            </button>
+          </div>
+          {/* Única saída do modo manual no meio da parte (antes só dava terminando a parte inteira) — mantém o tempo decorrido atual e volta a avançar com o relógio real dali em diante. */}
+          <button type="button" className="btn sm" onClick={() => live.exitManualMode()}>
+            ↩️ Voltar ao tempo real
           </button>
         </div>
       )}
