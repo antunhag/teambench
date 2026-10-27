@@ -131,6 +131,24 @@ ignora o cache local e confia sempre no Supabase — seguro porque um jogo
 `finished` nunca mais recebe uma ação local legítima por esse caminho (só a
 Registo mexe nele a partir daí).
 
+**Atualização (jogo do Póvoa, specs/009):** `finish_live_match` (migração
+`0019`) só passa de `live` para `finished`; um jogo que nunca chegou a `live`
+ficava com a cópia local de antes das correções. Agora `checkRemote` também
+vai ao servidor quando o próprio aparelho já tem o jogo terminado
+(`state.finished`), e **junta em vez de substituir**:
+`engine.juntarComServidor` = eventos do servidor + eventos locais ainda por
+sincronizar (fila lida antes e depois da leitura, mais o lance à espera de
+zona da Consola). Fila ou quarentena ilegível, ou quarentena com itens, mantém
+todos os eventos locais — nunca esconde um lance que ainda não chegou ao
+servidor. Com cópia local, a leitura tem prazo de 8 s (rede do pavilhão que
+liga mas não responde). Jogos a decorrer: inalterado (a cópia local manda).
+
+**Durações mostradas** ("Fim da pausa (…)", "Fim da parte (… jogados)",
+"Atendimento terminado (…)", eixo da Timeline) são recalculadas das horas dos
+próprios eventos (`duracoesDerivadas`, `report.ts`) — o valor gravado na
+criação fica velho quando a Registo corrige uma hora. O Resumo do jogo lê
+`match_events` sem os eventos de escalação (`semEventosDeEscalacao`).
+
 **Pausa só desconta minutos quando é pedido de tempo de verdade** — `pause()`/
 `endPause()` (`packages/engine/src/liveMatch.ts`) nunca param o relógio da
 parte (ver comentário na própria função); em vez disso, ao fechar a pausa,
@@ -216,6 +234,25 @@ tipo de evento novo, nenhuma alteração no motor nem na base de dados.
   das folhas), fora da `.page` de 760 px.
 - "Desfazer" usa o `undo()` de sempre; desativado a meio de um fluxo e quando o
   último evento é um limite de parte (o relógio nunca recua).
+
+Etapa 2 (em curso) — **novos tipos de evento, sem migração** (`match_events.type`
+é text sem CHECK): `remate`, `remate_adv`, `defesa`, `saida`, `transicao`,
+`perda`, `recuperacao`, `goleiro_linha_inicio/fim`, `anulacao`; zona opcional
+(1-12) também em faltas e cartões. Ações puras em `liveMatch.ts`; entrada
+inválida devolve o estado sem evento.
+
+- **"−" por categoria = evento `anulacao`** com `alvoId` (nunca apaga nem
+  altera o original; `data_entry` não pode apagar — migração `0011`).
+  `eventosEfetivos` (`packages/engine/src/annul.ts`) tira as anulações e os
+  eventos anulados (anular uma anulação reativa o original); placar
+  (`recomputeScoreFor`) e contagens por categoria usam essa projeção.
+- **Zona depois do lance sem UPDATE** (`consola/deferredEnqueue.ts` +
+  `useLiveMatch.applyDeferred`): o lance entra logo no estado local, mas só vai
+  para a fila quando a zona é escolhida, o painel fecha, há outra ação, passam
+  ~10 s, a app vai para segundo plano/fecha, a tela desmonta, ou no arranque
+  seguinte (chave `teambench.liveMatch.pending.<matchId>`). A zona entra no
+  evento ANTES de ser enfileirado — um item enfileirado nunca é recalculado
+  (`outbox.ts`, guarda `0026`). O "Jogo ao vivo" não usa este caminho.
 
 ### Ciclo de vida de `matches.status`
 
@@ -309,6 +346,13 @@ mesmos dois triggers sem alterá-los — ambos já disparam em qualquer
 `UPDATE OF role`, não só no caminho do convite.
 
 ### Planeamento de rotação e aptidão
+
+**Importar plano de texto** (planeador): `engine.parseRotationText`
+(`rotationImport.ts`) lê "Vaga: Atleta início-fim, …" (com "Parte N" opcional
+ou aplicado a todas as partes), encontra os atletas no plantel (nome, prefixo
+único ou #número), recusa ambíguos/inexistentes e valida limites, sobreposições
+e atleta em duas vagas; grava pelo mesmo `saveStints` depois de pré-visualizar
+e confirmar.
 
 `rotation_plans`/`rotation_plan_stints` guardam um plano PRÉ-jogo opcional
 (4 vagas fixas de linha: Fixo, Ala Esquerda, Ala Direita, Pivô — guarda-redes
