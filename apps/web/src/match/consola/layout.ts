@@ -25,15 +25,26 @@ export function consolaMode(width: number, height: number): ConsolaMode {
 }
 
 /**
- * Espaço vertical que cada linha de jogador ocupa além do próprio botão
- * (nome/minutos por cima no iPhone vertical, margens; mais justo no iPhone
- * deitado, onde a altura é o recurso escasso). Tem de
- * bater com `.consola-row` em theme.css.
+ * Espaço vertical que cada cartão de jogador ocupa além do próprio botão
+ * (Consola v2: o nome fica ao lado das ações em todos os modos). Tem de
+ * bater com `.cv-card`/`.cv-players` em theme.css.
  */
 export function rowChrome(mode: ConsolaMode): number {
-  if (mode === "iphone-v") return 30;
-  if (mode === "iphone-h") return 6;
-  return 10;
+  // padding + borda do cartão (.cv-card) + espaço entre cartões (.cv-players gap)
+  if (mode === "iphone-h") return 1 + 1 + 2 + 2;
+  if (mode === "iphone-v") return 3 + 3 + 2 + 4;
+  return 6 + 6 + 2 + 6;
+}
+
+/**
+ * Altura mínima do bloco do nome (número, nome em até 2 linhas, posição e
+ * minutos): o cartão nunca fica mais baixo do que isto, mesmo com botões
+ * menores. Tem de bater com `.cv-who` em theme.css.
+ */
+export function whoMin(mode: ConsolaMode): number {
+  if (mode === "iphone-h") return 40;
+  if (mode === "iphone-v") return 52;
+  return 62;
 }
 
 /**
@@ -45,11 +56,11 @@ export function rowChrome(mode: ConsolaMode): number {
  */
 export function pickButtonSize(availableHeight: number, mode: ConsolaMode, rows = 5): number {
   for (const size of BUTTON_SIZES) {
-    if (rows * (size + rowChrome(mode)) <= availableHeight) return size;
+    if (rows * (Math.max(size, whoMin(mode)) + rowChrome(mode)) <= availableHeight) return size;
   }
   return MIN_BUTTON;
 }
 
 export function rowsFit(availableHeight: number, mode: ConsolaMode, size: number, rows = 5): boolean {
-  return rows * (size + rowChrome(mode)) <= availableHeight;
+  return rows * (Math.max(size, whoMin(mode)) + rowChrome(mode)) <= availableHeight;
 }

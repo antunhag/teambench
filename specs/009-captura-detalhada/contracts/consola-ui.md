@@ -1,5 +1,9 @@
 # Contrato de UI: Consola (revisto 2026-10-25)
 
+> **Visual e disposição substituídos em 2026-11-01** por [consola-visual.md](./consola-visual.md)
+> (v2 aprovada). Continuam válidas aqui as regras de interação que a v2 não altera: zona rápida
+> não modal e opcional, envio adiado, vaga com confirmação, cancelar ≠ concluir, desfazer.
+
 Contrato de interação da Consola, aferido com o protótipo `docs/prototipos/consola-prototipo.html`.
 "Toques" contam a partir do ecrã principal sem nada aberto.
 

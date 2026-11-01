@@ -846,12 +846,31 @@ textarea.exportbox {
   color: var(--red);
 }
 
-/* ---------- Consola (specs/009-captura-detalhada/) ----------
-   Camada de ecrã inteiro, abaixo das folhas (.overlay, z-index 50). O
-   tamanho dos botões vem de --cbtn (48–64 px), calculado em consola/layout.ts;
-   o espaço extra de cada linha tem de bater com rowChrome() desse ficheiro
-   (iPhone vertical 30 px; restantes 10 px). Sem hover, sem desativar zoom. */
+/* ---------- Consola v2 (specs/009-captura-detalhada/contracts/consola-visual.md) ----------
+   Tema escuro SÓ na Consola: redefine os tokens da app dentro de .consola, por
+   isso as folhas (.overlay/.sheet) abertas a partir dela também ficam escuras.
+   Cores com significado fixo: verde = a nosso favor; vermelho = contra nós;
+   ciano = remate nosso; violeta = remate deles; âmbar = falta recebida e
+   GR-linha; azul = guarda-redes. Alvos ≥ 48 px; o tamanho das ações vem de
+   --cbtn (consola/layout.ts) e o espaço extra de cada cartão tem de bater com
+   rowChrome() desse ficheiro. Sem hover; zoom não desativado. */
 .consola {
+  --bg: #0b1220;
+  --surface: #111a2e;
+  --surface-2: #16213a;
+  --ink: #e8eef8;
+  --ink-dim: #8b9bb7;
+  --line: #24324f;
+  --accent: #4cc9f0;
+  --accent-ink: #04202c;
+  --red: #f87171;
+  --yellow: #fbbf24;
+  --gr: #60a5fa;
+  --cv-green: #34d399;
+  --cv-cyan: #4cc9f0;
+  --cv-violet: #a78bfa;
+  --cv-amber: #fbbf24;
+  color-scheme: dark;
   position: fixed;
   inset: 0;
   z-index: 40;
@@ -864,431 +883,696 @@ textarea.exportbox {
     calc(6px + env(safe-area-inset-bottom, 0px)) calc(8px + env(safe-area-inset-left, 0px));
   overflow: hidden;
   touch-action: manipulation;
+  font-family: "Work Sans", system-ui, sans-serif;
 }
-.consola .cbtn {
-  min-width: 48px;
-  min-height: 48px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--surface);
-  color: var(--ink);
-  font: 600 14px/1.1 "Work Sans", system-ui, sans-serif;
-  padding: 4px 6px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  hyphens: manual;
-  word-break: keep-all;
-  overflow-wrap: normal;
+.consola button {
+  font-family: inherit;
+  color: inherit;
   cursor: pointer;
 }
-.consola .cbtn:disabled {
+.consola button:disabled {
   opacity: 0.35;
   cursor: default;
 }
-.consola .cbtn .cnt {
-  font-size: 11.5px;
-  font-weight: 500;
-  opacity: 0.8;
+.cv-dim {
+  color: var(--ink-dim);
+  font-size: 13px;
+}
+
+/* Topo */
+.cv-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 4px 8px;
+  flex: 0 0 auto;
+}
+.cv-score {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-weight: 800;
+}
+.cv-score .t {
+  font-size: 12.5px;
+  color: var(--ink-dim);
+  font-weight: 600;
+  max-width: 90px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cv-score .n {
+  font-size: 28px;
   font-variant-numeric: tabular-nums;
 }
-.consola .cbtn.goal,
-.consola .cbtn.kick {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--accent-ink);
-}
-.consola .cbtn.opp {
-  border: 2px solid var(--red);
-  color: var(--red);
-}
-.consola .cbtn.sai {
-  flex: 1 1 auto;
-  background: var(--red);
-  border-color: var(--red);
-  color: #fff;
-  font-size: 17px;
-  letter-spacing: 0.04em;
-}
-.consola .cbtn.warn {
-  background: var(--yellow);
-  border-color: var(--yellow);
-  color: #141414;
-}
-.consola .cbtn.yellow,
-.consola .cbtn.red {
-  font-size: 20px;
-}
-.consola .cbtn.selected {
-  outline: 3px solid var(--accent);
-  outline-offset: -1px;
-}
-
-.consola-head {
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
-  grid-template-areas: "a c b" "s s s";
-  align-items: center;
-  gap: 2px 8px;
-}
-.consola-head .score:first-child {
-  grid-area: a;
-}
-.consola-head .clock {
-  grid-area: c;
-}
-.consola-head .score:nth-child(3) {
-  grid-area: b;
-  text-align: right;
-}
-.consola-head .side {
-  grid-area: s;
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
-  font-size: 12.5px;
-}
-.consola-head .score {
+.cv-clock {
   display: flex;
   flex-direction: column;
-  min-width: 0;
+  align-items: center;
 }
-.consola-head .lbl {
+.cv-clock .p {
+  font-size: 10.5px;
+  color: var(--ink-dim);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.cv-clock .t {
+  font-size: 36px;
+  font-weight: 800;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.cv-fouls {
   font-size: 11.5px;
   color: var(--ink-dim);
-  overflow-wrap: anywhere;
+  text-align: center;
 }
-.consola-head .val {
-  font: 700 26px/1 "Oswald", system-ui, sans-serif;
+.cv-fouls b {
+  display: block;
+  font-size: 19px;
+  color: var(--ink);
 }
-.consola-head .clock {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-.consola-head .time {
-  font: 700 28px/1 "Oswald", system-ui, sans-serif;
-}
-.consola-head .fouls.warn {
+.cv-fouls.warn b {
   color: var(--red);
-  font-weight: 700;
 }
-.consola-head .sync.pending {
-  color: var(--ink-dim);
-}
-
-.consola-team {
-  display: flex;
-  gap: 6px;
-}
-.consola-team .cbtn {
-  flex: 1 1 0;
-  min-height: var(--cbtn, 48px);
-}
-
-.consola-last {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  height: 52px;
-  flex: 0 0 auto;
-  background: var(--surface-2);
-  border-radius: 10px;
-  padding: 2px 4px 2px 10px;
-}
-.consola-last.flow {
-  background: var(--yellow);
-  color: #141414;
-}
-.consola-last .txt {
+.cv-last {
   flex: 1 1 auto;
   min-width: 0;
-  font-size: 13.5px;
+  font-size: 13px;
+  color: var(--ink);
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
-.consola-banner {
+.cv-pill {
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 99px;
+  border: 1px solid var(--cv-green);
+  color: var(--cv-green);
+  white-space: nowrap;
+}
+.cv-pill.pending {
+  border-color: var(--cv-amber);
+  color: var(--cv-amber);
+}
+.cv-ghost {
+  min-height: 48px;
+  min-width: 48px;
+  padding: 0 12px;
+  border-radius: 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  font-weight: 700;
+  font-size: 14px;
+  white-space: nowrap;
+}
+.cv-ghost.gl {
+  border-color: var(--cv-amber);
+  color: var(--cv-amber);
+}
+.cv-ghost.gl.on,
+.cv-ghost.warn {
+  background: var(--cv-amber);
+  color: #241a02;
+}
+.cv-kick {
+  min-height: 56px;
+  border-radius: 14px;
+  border: 0;
+  background: var(--cv-green);
+  color: #052e1f;
+  font-size: 18px;
+  font-weight: 800;
+  flex: 0 0 auto;
+}
+.cv-banner {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 4px 4px 4px 10px;
-  border-radius: 10px;
+  padding: 4px 4px 4px 12px;
+  border-radius: 12px;
   background: var(--surface-2);
+  border: 1px solid var(--line);
   font-size: 13.5px;
+  flex: 0 0 auto;
 }
-.consola-banner.done {
-  background: var(--accent);
-  color: var(--accent-ink);
+.cv-banner.flow {
+  background: var(--cv-cyan);
+  color: #04202c;
+  font-weight: 600;
 }
-.consola-banner.error {
+.cv-banner.flow .cv-ghost {
+  background: rgba(255, 255, 255, 0.5);
+  color: #04202c;
+}
+.cv-banner.done {
+  background: var(--cv-green);
+  color: #052e1f;
+  font-weight: 700;
+}
+.cv-banner.error {
   background: var(--red);
   color: #fff;
-  padding: 8px 10px;
+  padding: 8px 12px;
 }
 
-.consola-body {
+/* Corpo */
+.cv-main {
   flex: 1 1 auto;
   min-height: 0;
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: 1fr 540px;
   gap: 8px;
 }
-.consola-rows {
+.cv-left {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 0;
+  min-width: 0;
+}
+.cv-players {
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
+  gap: 6px;
 }
-.consola-row {
+.cv-card {
   display: grid;
-  grid-template-columns: minmax(120px, 190px) 1fr;
-  align-items: center;
+  grid-template-columns: 128px 1fr;
   gap: 8px;
-  padding: 5px 0;
-  box-shadow: inset 0 -1px 0 var(--line);
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 6px 6px 6px 10px;
 }
-.consola-who {
-  display: flex;
-  flex-direction: column;
+.cv-card.gk {
+  border-color: color-mix(in srgb, var(--gr) 55%, var(--line));
+}
+.cv-card.treat {
+  border-color: var(--red);
+}
+.cv-card.vacant {
+  border-style: dashed;
+}
+.cv-who {
+  display: grid;
+  grid-template-columns: 1fr 48px;
+  align-items: center;
   min-width: 0;
-  line-height: 1.15;
 }
-.consola-who .n {
+.cv-who > div {
+  min-width: 0;
+}
+.cv-who .num {
+  display: block;
+  font-size: 17px;
+  font-weight: 800;
+}
+.cv-who .nm {
+  display: block;
+  font-size: 14.5px;
   font-weight: 700;
-  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.consola-who .nm {
-  font-weight: 600;
-  font-size: 15px;
-  overflow-wrap: anywhere;
-}
-.consola-who .meta {
+.cv-who .meta {
+  display: block;
   font-size: 12px;
   color: var(--ink-dim);
 }
-.consola-row.gr .consola-who .n,
-.consola-row.gr .consola-who .nm {
+.cv-card.gk .num,
+.cv-card.gk .nm {
   color: var(--gr);
 }
-.consola-row.treat {
-  background: color-mix(in srgb, var(--red) 10%, transparent);
-}
-.consola-row.vacant .consola-who .nm {
+.cv-card.vacant .nm {
   color: var(--red);
 }
-.consola-vacant-hint {
+.cv-dots {
+  height: 48px;
+  border-radius: 12px;
+  background: transparent;
+  border: 1px solid var(--line);
+  font-size: 20px;
+}
+.cv-who.tap {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  min-height: 48px;
+  height: 100%;
+  border-radius: 10px;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  text-align: left;
+}
+.cv-acts {
+  display: flex;
+  gap: 6px;
+  min-width: 0;
+}
+.cv-a {
+  flex: 1 1 0;
+  min-width: 0;
+  height: var(--cbtn, 48px);
+  min-height: 48px;
+  border-radius: 12px;
+  border: 2px solid var(--line);
+  background: var(--surface-2);
+  font-weight: 800;
+  font-size: 15px;
+  line-height: 1.1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 0 4px;
+  text-align: center;
+  hyphens: manual;
+  word-break: keep-all;
+}
+.cv-a small {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink-dim);
+}
+.cv-a.goal {
+  background: var(--cv-green);
+  border-color: var(--cv-green);
+  color: #052e1f;
+}
+.cv-a.shot {
+  border-color: var(--cv-cyan);
+  color: var(--cv-cyan);
+}
+.cv-a.win {
+  border-color: var(--cv-green);
+  color: var(--cv-green);
+}
+.cv-a.lose {
+  border-color: var(--red);
+  color: var(--red);
+}
+.cv-a.foul {
+  border-color: color-mix(in srgb, var(--red) 70%, var(--line));
+}
+.cv-a.fouled {
+  border-color: color-mix(in srgb, var(--cv-amber) 70%, var(--line));
+}
+.cv-a.close {
+  flex: 0 0 var(--cbtn, 48px);
+  font-size: 20px;
+}
+.cv-a.sai {
+  background: var(--red);
+  border-color: var(--red);
+  color: #fff;
+  font-size: 18px;
+  letter-spacing: 0.04em;
+}
+.cv-vacant {
   flex: 1;
   height: var(--cbtn, 48px);
   display: flex;
   align-items: center;
   justify-content: center;
   border: 2px dashed var(--line);
-  border-radius: 10px;
+  border-radius: 12px;
   font-size: 13px;
   color: var(--ink-dim);
 }
-.consola-actions {
-  display: flex;
-  gap: 6px;
-  min-width: 0;
-}
-.consola-actions .cbtn {
-  flex: 1 1 0;
-  height: var(--cbtn, 48px);
-}
-.consola-actions .cbtn.more {
-  flex: 0 0 var(--cbtn, 48px);
-  font-size: 22px;
-}
 
-.consola-bench-title {
-  font: 600 13px "Oswald", system-ui, sans-serif;
-  text-transform: uppercase;
-  margin-bottom: 4px;
-}
-.consola-bench-list {
+/* Banco */
+.cv-bench {
   display: flex;
+  gap: 6px;
+  flex: 0 0 auto;
+  overflow-x: auto;
+}
+.cv-bench.in-sheet {
   flex-wrap: wrap;
-  gap: 6px;
+  overflow: visible;
 }
-.consola-bench-list .cbtn.bench {
-  flex: 1 1 140px;
-  flex-direction: row;
-  justify-content: space-between;
-  gap: 6px;
-  padding: 4px 10px;
+.cv-bp {
+  position: relative;
+  flex: 1 0 128px;
+  min-height: 52px;
+  border-radius: 12px;
+  background: var(--surface-2);
+  border: 1px dashed var(--line);
+  text-align: left;
+  padding: 4px 8px;
 }
-.consola .cbtn.bench.gr {
+.cv-bp b {
+  display: block;
+  padding-right: 20px;
+  font-size: 13.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cv-bp > span {
+  display: block;
+  font-size: 11.5px;
+  color: var(--ink-dim);
+}
+.cv-bp .rest {
+  color: var(--cv-amber);
+  font-weight: 700;
+}
+.cv-bp.gk b {
   color: var(--gr);
 }
-.consola .cbtn.bench.entra {
-  border: 2px solid var(--accent);
+.cv-bp.sel {
+  border: 2px solid var(--cv-cyan);
 }
-.sheet .consola-bench-list .cbtn {
-  min-height: 48px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--surface);
-  color: var(--ink);
-  font: 600 14px "Work Sans", system-ui, sans-serif;
+.cv-bp.entra {
+  border: 2px solid var(--cv-cyan);
 }
-.sheet .consola-bench-list .cbtn.selected {
-  outline: 3px solid var(--accent);
-}
-.consola-confirm {
-  min-height: 52px;
+.cv-bp .q {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--cv-cyan);
+  color: #04202c;
+  font-size: 12px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-/* iPhone vertical: nome por cima, ações numa fila (rowChrome = 30 px). */
-.consola--iphone-v .consola-row {
-  grid-template-columns: 1fr;
-  gap: 0;
-  padding: 4px 0;
-}
-.consola--iphone-v .consola-who {
-  flex-direction: row;
-  align-items: baseline;
+/* Registo rápido */
+.cv-right {
+  display: flex;
+  flex-direction: column;
   gap: 6px;
-  height: 22px;
-  overflow: hidden;
+  min-height: 0;
+  overflow-y: auto;
 }
-.consola--iphone-v .consola-who .nm {
-  overflow-wrap: normal;
-  white-space: nowrap;
+.cv-panel {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 6px 8px;
+}
+.sheet .cv-panel {
+  margin-bottom: 8px;
+}
+.cv-panel h4 {
+  margin: 0 0 4px;
+  font-size: 10.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+  font-weight: 700;
+}
+.cv-trow {
+  display: grid;
+  grid-template-columns: 104px repeat(5, minmax(0, 1fr)) 48px;
+  gap: 5px;
+  align-items: stretch;
+}
+.cv-trow + .cv-trow,
+.cv-prrow + .cv-prrow {
+  margin-top: 4px;
+}
+.cv-trow .lab {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  font-size: 11.5px;
+  font-weight: 700;
+}
+.cv-trow .lab b {
+  font-size: 19px;
+  font-variant-numeric: tabular-nums;
+}
+.cv-trow .lab b em,
+.cv-tile .v em {
+  font-style: normal;
+  font-size: 11px;
+  color: var(--ink-dim);
+  font-weight: 600;
+  margin-left: 3px;
+}
+.cv-trow.pos .lab {
+  color: var(--cv-green);
+}
+.cv-trow.neg .lab {
+  color: var(--red);
+}
+.cv-chip {
+  min-height: 48px;
+  border-radius: 10px;
+  border: 2px solid var(--line);
+  background: var(--surface-2);
+  font-weight: 800;
+  font-size: 16px;
+}
+.cv-trow.pos .cv-chip {
+  border-color: color-mix(in srgb, var(--cv-green) 55%, var(--line));
+}
+.cv-trow.neg .cv-chip {
+  border-color: color-mix(in srgb, var(--red) 55%, var(--line));
+}
+.cv-chip.more {
+  font-size: 18px;
+  color: var(--ink-dim);
+}
+.cv-mn {
+  min-height: 48px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.03);
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--ink-dim);
+}
+.cv-tiles {
+  display: grid;
+  gap: 6px;
+}
+.cv-tiles.c3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.cv-tiles.c4 {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.cv-tile {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 48px;
+  border-radius: 12px;
   overflow: hidden;
-  text-overflow: ellipsis;
+  border: 2px solid var(--line);
+  background: var(--surface-2);
+}
+.cv-tile .plus {
+  border: 0;
+  background: transparent;
+  text-align: left;
+  padding: 2px 8px;
+  min-height: 48px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
   min-width: 0;
 }
-.consola--iphone-v .consola-who .meta {
-  margin-left: auto;
+.cv-tile .k {
+  font-size: 12px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
-.consola--iphone-v .consola-actions .cbtn {
-  font-size: 13px;
-}
-.consola-dock {
-  display: flex;
-  gap: 6px;
-}
-.consola-dock .cbtn {
-  flex: 1 1 0;
-}
-.consola-dock .cbtn:last-child {
-  flex: 0 0 52px;
+.cv-tile .v {
   font-size: 20px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
 }
-
-/* iPhone horizontal: sem barra; cabeçalho e último evento numa só faixa;
-   coluna lateral com equipa/banco/resumo; rowChrome = 6 px. */
-.consola-top {
-  display: flex;
-  gap: 8px;
+.cv-tile .minus {
+  border: 0;
+  border-left: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.03);
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--ink-dim);
+}
+.cv-tile.pos {
+  border-color: color-mix(in srgb, var(--cv-green) 65%, var(--line));
+}
+.cv-tile.pos .k {
+  color: var(--cv-green);
+}
+.cv-tile.neg {
+  border-color: color-mix(in srgb, var(--red) 65%, var(--line));
+}
+.cv-tile.neg .k {
+  color: var(--red);
+}
+.cv-tile.vi {
+  border-color: color-mix(in srgb, var(--cv-violet) 65%, var(--line));
+}
+.cv-tile.vi .k {
+  color: var(--cv-violet);
+}
+.cv-prrow {
+  display: grid;
+  grid-template-columns: 96px 1fr;
+  gap: 5px;
   align-items: center;
 }
-.consola-top .consola-head {
+.cv-prrow .lab {
+  font-size: 12px;
+  font-weight: 700;
+}
+.cv-prrow .lab.pos {
+  color: var(--cv-green);
+}
+.cv-prrow .lab.neg {
+  color: var(--red);
+}
+.cv-sheet-h {
+  margin: 12px 0 6px;
+  font-size: 14px;
+}
+.cv-presets {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
+  gap: 8px;
+}
+.cv-presets .cv-chip {
+  min-height: 52px;
+}
+.cv-presets .cv-chip.quick {
+  border-color: var(--cv-cyan);
+}
+
+/* iPhone: faixa de 3 mosaicos, doca, coluna lateral (deitado) */
+.cv-phonebar {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
   flex: 0 0 auto;
 }
-.consola-top .consola-last {
-  flex: 1 1 auto;
-  min-width: 0;
-}
-.consola--iphone-h .consola-row {
-  padding: 3px 0;
-}
-.consola--iphone-h .consola-head {
-  grid-template-columns: auto auto auto 1fr;
-  grid-template-areas: "a c b s";
-}
-.consola--iphone-h .consola-head .side {
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 0;
-}
-.consola--iphone-h .consola-head .val,
-.consola--iphone-h .consola-head .time {
-  font-size: 24px;
-}
-.consola--iphone-h .consola-body {
-  flex-direction: row;
-}
-.consola--iphone-h .consola-row {
-  grid-template-columns: 120px 1fr;
-}
-.consola--iphone-h .consola-who {
+.cv-dock {
   display: grid;
-  grid-template-columns: auto 1fr;
-  column-gap: 4px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+  flex: 0 0 auto;
 }
-.consola--iphone-h .consola-who .nm {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  overflow-wrap: normal;
+.cv-dock .cv-ghost {
+  padding: 0 4px;
 }
-.consola--iphone-h .consola-who .meta {
-  grid-column: 1 / -1;
-}
-.consola-side {
-  flex: 0 0 150px;
+.cv-side {
   display: flex;
   flex-direction: column;
   gap: 6px;
-}
-.consola-side .cbtn {
-  flex: 1 1 0;
+  min-height: 0;
+  overflow-y: auto;
 }
 
-/* Tablet: cronómetro maior; banco sempre visível. */
-.consola--tablet-v .consola-head,
-.consola--tablet-h .consola-head {
-  grid-template-columns: 1fr auto 1fr auto;
-  grid-template-areas: "a c b s";
+
+.cv--iphone-v .cv-top {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  gap: 2px 8px;
+  padding: 4px 6px;
 }
-.consola--tablet-v .consola-head .side,
-.consola--tablet-h .consola-head .side {
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 2px;
+.cv--iphone-v .cv-last {
+  grid-column: 1 / span 3;
+  grid-row: 2;
+  font-size: 12.5px;
+}
+.cv--iphone-v .cv-pill {
+  display: none;
+}
+.cv--iphone-v .cv-top .undo {
+  grid-column: 4;
+  grid-row: 1 / span 2;
+  padding: 0 8px;
+}
+.cv--iphone-v .cv-score .n,
+.cv--iphone-h .cv-score .n {
+  font-size: 22px;
+}
+.cv--iphone-v .cv-clock .t,
+.cv--iphone-h .cv-clock .t {
+  font-size: 28px;
+}
+.cv--iphone-v .cv-main,
+.cv--iphone-h .cv-main {
+  grid-template-columns: 1fr;
+}
+.cv--iphone-h .cv-main {
+  grid-template-columns: 1fr 150px;
+}
+.cv--iphone-h .cv-pill {
+  display: none;
+}
+.cv--iphone-v .cv-card,
+.cv--iphone-h .cv-card {
+  grid-template-columns: 76px 1fr;
+  gap: 4px;
+  padding: 3px 3px 3px 6px;
+}
+.cv--iphone-v .cv-who .num,
+.cv--iphone-h .cv-who .num {
   font-size: 14px;
 }
-.consola--tablet-v .consola-head .time,
-.consola--tablet-h .consola-head .time {
-  font-size: 40px;
+.cv--iphone-v .cv-who .nm,
+.cv--iphone-h .cv-who .nm {
+  font-size: 12.5px;
+  max-width: 72px;
 }
-.consola--tablet-v .consola-head .val,
-.consola--tablet-h .consola-head .val {
-  font-size: 34px;
+.cv--iphone-v .cv-who .meta,
+.cv--iphone-h .cv-who .meta {
+  font-size: 11px;
 }
-.consola--tablet-v .consola-team,
-.consola--tablet-h .consola-team {
-  flex-wrap: wrap;
+.cv--iphone-v .cv-acts,
+.cv--iphone-h .cv-acts {
+  gap: 4px;
 }
-.consola--tablet-v .consola-team .cbtn {
-  flex: 1 1 30%;
+.cv--iphone-v .cv-a,
+.cv--iphone-h .cv-a {
+  font-size: 13px;
+  padding: 0 2px;
 }
-.consola--tablet-v .consola-bench {
-  flex: 0 0 auto;
-  max-height: 30%;
-  overflow-y: auto;
+.cv--iphone-v .cv-players,
+.cv--iphone-h .cv-players {
+  gap: 4px;
 }
-.consola--tablet-h .consola-body {
-  flex-direction: row;
+.cv--iphone-v .cv-tile .k {
+  font-size: 11px;
+  white-space: normal;
+  line-height: 1.05;
 }
-.consola--tablet-h .consola-bench {
-  flex: 0 0 240px;
-  overflow-y: auto;
+.cv--iphone-v .cv-tile .plus {
+  padding: 2px 6px;
 }
-.consola--tablet-h .consola-bench .cbtn.bench {
-  flex-basis: 100%;
+.cv--iphone-h .cv-side .cv-tile .plus {
+  min-height: 48px;
 }
 
-/* Grelha de zonas de referência: quadra deitada, nossa baliza à esquerda. */
+/* Grelha de zonas (GoalSheet, ZonePanel): nossa baliza à esquerda. */
 .consola-zones-legend {
   display: flex;
   justify-content: space-between;
@@ -1326,23 +1610,6 @@ textarea.exportbox {
   font-size: 16px;
   cursor: pointer;
 }
-.consola-summary {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 14px;
-}
-.consola-summary th,
-.consola-summary td {
-  padding: 8px 4px;
-  border-bottom: 1px solid var(--line);
-  text-align: right;
-}
-.consola-summary th:first-child,
-.consola-summary td:first-child {
-  text-align: left;
-}
-
-/* Zona rápida da Consola: não modal, por cima da parte de baixo, sem fundo. */
 .consola-zq {
   position: fixed;
   z-index: 45;
@@ -1350,22 +1617,22 @@ textarea.exportbox {
   bottom: calc(8px + env(safe-area-inset-bottom, 0px));
   width: min(440px, calc(100vw - 16px));
   background: var(--surface);
-  border: 1px solid var(--line);
+  border: 1px solid var(--cv-cyan);
   border-radius: 14px;
-  box-shadow: var(--shadow);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.5);
   padding: 8px;
 }
-.consola--iphone-v .consola-zq {
+.cv--iphone-v .consola-zq {
   left: calc(6px + env(safe-area-inset-left, 0px));
   right: calc(6px + env(safe-area-inset-right, 0px));
   bottom: env(safe-area-inset-bottom, 0px);
   width: auto;
 }
-.consola--iphone-h .consola-zq {
+.cv--iphone-h .consola-zq {
   right: calc(166px + env(safe-area-inset-right, 0px));
   width: min(400px, calc(100vw - 190px));
 }
-.consola--iphone-h .consola-zq .consola-zones-col .zbtn {
+.cv--iphone-h .consola-zq .consola-zones-col .zbtn {
   min-height: 48px;
 }
 .consola-zq-head {
@@ -1385,109 +1652,30 @@ textarea.exportbox {
   font-weight: 400;
   color: var(--ink-dim);
 }
-
-/* ---------- Consola — Etapa 2c ---------- */
-.consola-team .tb-group {
-  flex: 1 1 0;
-  display: flex;
-  gap: 4px;
-  min-width: 0;
-}
-.consola-team .tb-group > .cbtn:first-child {
-  flex: 1 1 auto;
-  min-width: 0;
-}
-.consola .cbtn.minus {
-  flex: 0 0 48px;
-  font-size: 22px;
-  font-weight: 700;
-  padding: 0;
-}
-.consola .cbtn.trans {
-  border: 2px solid var(--accent);
-}
-.consola .cbtn.trans.contra {
-  border-color: var(--red);
-}
-.consola .cbtn.shot {
+.consola-zq-head .cbtn {
+  min-width: 48px;
+  min-height: 48px;
+  border-radius: 12px;
   background: var(--surface-2);
-}
-.consola .cbtn.shot.gk {
-  border: 2px solid var(--gr);
-}
-/* Tablet vertical: barra em 2 filas (3 + 4). */
-.consola--tablet-v .consola-team .tb-group {
-  flex: 1 1 30%;
-}
-/* Densidade A: todas as ações à vista; no iPhone partem em 2 filas (≥ 48 px cada). */
-.consola-row.dens-a .consola-actions {
-  flex-wrap: wrap;
-}
-.consola-row.dens-a .consola-actions .cbtn {
-  flex: 1 1 48px;
-}
-.consola--iphone-v .consola-row.dens-a .consola-actions .cbtn {
-  flex-basis: 18%;
+  border: 1px solid var(--line);
+  font-size: 18px;
 }
 
-.consola-perdas {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-bottom: 10px;
-}
-.consola-perdas-row {
-  display: grid;
-  grid-template-columns: 52px repeat(3, 1fr);
-  gap: 6px;
-  align-items: center;
-}
-.consola-perdas-row .lbl {
-  font-size: 12.5px;
-  font-weight: 600;
-}
-.consola .cbtn.perda,
-.sheet .cbtn.perda {
-  border: 2px solid var(--red);
-}
-.consola .cbtn.recuperacao,
-.sheet .cbtn.recuperacao {
-  border: 2px solid var(--accent);
-}
-.sheet .consola-perdas .cbtn {
-  min-height: 52px;
-  border-radius: 10px;
-  background: var(--surface);
-  color: var(--ink);
-  font: 600 14px/1.1 "Work Sans", system-ui, sans-serif;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-}
-.sheet .consola-perdas .cbtn .cnt,
-.abtn .cnt {
-  display: block;
-  font-size: 11.5px;
-  font-weight: 500;
-  opacity: 0.8;
-}
-.consola-sheet-h {
-  margin: 12px 0 6px;
+/* Resumo rápido */
+.consola-summary {
+  width: 100%;
+  border-collapse: collapse;
   font-size: 14px;
 }
-.consola-presets {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
-  gap: 8px;
+.consola-summary th,
+.consola-summary td {
+  padding: 8px 4px;
+  border-bottom: 1px solid var(--line);
+  text-align: right;
 }
-.consola-presets .abtn {
-  min-height: 52px;
-  font-size: 17px;
-  font-weight: 700;
-}
-.consola-presets .abtn.dim {
-  opacity: 0.75;
+.consola-summary th:first-child,
+.consola-summary td:first-child {
+  text-align: left;
 }
 .consola-summary tr.sep td {
   padding-top: 14px;
@@ -1498,4 +1686,121 @@ textarea.exportbox {
   min-width: 48px;
   min-height: 40px;
   font-size: 18px;
+}
+.consola .sheet {
+  border: 1px solid var(--line);
+}
+
+/* Ajustes por modo (medidos no harness: sem scroll, nada cortado, alvos ≥ 48 px) */
+.cv--iphone-v .cv-score .t {
+  display: none;
+}
+.cv--iphone-v .cv-score .n {
+  white-space: nowrap;
+}
+.cv--iphone-v .cv-top .undo {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  line-height: 1.05;
+  font-size: 12px;
+  min-width: 64px;
+}
+.cv--iphone-v .cv-top .undo .ic {
+  font-size: 16px;
+}
+.cv--iphone-v .cv-who .nm,
+.cv--iphone-h .cv-who .nm {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.cv--iphone-h .cv-card {
+  padding: 1px 3px 1px 6px;
+}
+.cv--iphone-h .cv-players {
+  gap: 2px;
+}
+.cv--iphone-h .cv-who .meta {
+  display: none;
+}
+.cv--iphone-h .cv-score .t {
+  max-width: 60px;
+}
+/* Tablet em pé: topo em 2 filas; jogadores ocupam o espaço que sobra, registo rápido por baixo */
+.cv--tablet-v .cv-top {
+  display: grid;
+  grid-template-columns: auto auto auto 1fr auto auto auto;
+  grid-template-areas:
+    "score clock fouls pill pill undo cfg"
+    "last last last last gl pz end";
+  gap: 4px 10px;
+}
+.cv--tablet-v .cv-score {
+  grid-area: score;
+}
+.cv--tablet-v .cv-clock {
+  grid-area: clock;
+}
+.cv--tablet-v .cv-fouls {
+  grid-area: fouls;
+}
+.cv--tablet-v .cv-last {
+  grid-area: last;
+}
+.cv--tablet-v .cv-pill {
+  grid-area: pill;
+  justify-self: end;
+}
+.cv--tablet-v .cv-top .gl {
+  grid-area: gl;
+}
+.cv--tablet-v .cv-top .pz {
+  grid-area: pz;
+}
+.cv--tablet-v .cv-top .end {
+  grid-area: end;
+}
+.cv--tablet-v .cv-top .undo {
+  grid-area: undo;
+}
+.cv--tablet-v .cv-top .cfg {
+  grid-area: cfg;
+}
+.cv--tablet-v .cv-main {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.cv--tablet-v .cv-left {
+  flex: 1 1 auto;
+}
+.cv--tablet-v .cv-players {
+  flex: 1 1 auto;
+  overflow-y: auto;
+}
+.cv--tablet-v .cv-right {
+  flex: 0 0 auto;
+  overflow: visible;
+}
+
+/* Rótulos e nomes partem em 2 linhas em vez de ficarem cortados com "…" */
+.cv-tile .k,
+.cv-who .nm {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.05;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.cv-tile .k {
+  overflow-wrap: normal;
+  word-break: keep-all;
+}
+.cv--tablet-h .cv-tiles.c4 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }

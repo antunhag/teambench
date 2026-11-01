@@ -7,11 +7,24 @@
  *
  * O componente traduz cada `FlowEffect` numa ação de useLiveMatch; este
  * módulo nunca regista nada sozinho.
+ *
+ * Troca de linha (contracts/consola-visual.md, decisão 8): com a quadra
+ * cheia, tocar em vários atletas do banco põe-nos numa fila (1, 2, 3, 4);
+ * cada "SAI" fecha um par com o primeiro da fila, pela ordem. Tocar de novo
+ * num atleta já na fila tira-o. Cancelar limpa a fila inteira.
  */
 
+export const MAX_FILA_TROCA = 4;
+
+export interface Entrada {
+  inId: string;
+  /** Instante do toque no banco — tempo gravado na substituição (regra do LiveMatch). */
+  openedAtMs: number;
+}
+
 export type Flow =
-  /** Tocou num atleta do banco com a quadra cheia: falta escolher quem sai ("SAI" nas linhas). */
-  | { kind: "pick-out"; inId: string; openedAtMs: number }
+  /** Atletas do banco à espera de entrar (quadra cheia): cada "SAI" fecha um par com o 1.º da fila. */
+  | { kind: "pick-out"; queue: Entrada[] }
   /** Escolheu quem sai (⋯ → Substituir): falta escolher quem entra, no banco. */
   | { kind: "pick-in"; outId: string; openedAtMs: number }
   /** Quadra com vaga (ex.: vermelho): reposição só com escolha + confirmação. */
@@ -56,10 +69,22 @@ export function stepFlow(flow: Flow, ev: FlowEvent, ctx: FlowContext): FlowStep 
         return { flow: null, effect: { type: "sub", outId: flow.outId, inId: ev.inId, atMs: flow.openedAtMs } };
       }
       if (ctx.onCourtCount < 5) return { flow: { kind: "vacancy", inId: ev.inId }, effect: null };
-      return { flow: { kind: "pick-out", inId: ev.inId, openedAtMs: ev.nowMs }, effect: null };
+      if (flow?.kind === "pick-out") {
+        if (flow.queue.some((q) => q.inId === ev.inId)) {
+          const queue = flow.queue.filter((q) => q.inId !== ev.inId);
+          return { flow: queue.length ? { kind: "pick-out", queue } : null, effect: null };
+        }
+        if (flow.queue.length >= MAX_FILA_TROCA) return { flow, effect: null };
+        return { flow: { kind: "pick-out", queue: [...flow.queue, { inId: ev.inId, openedAtMs: ev.nowMs }] }, effect: null };
+      }
+      return { flow: { kind: "pick-out", queue: [{ inId: ev.inId, openedAtMs: ev.nowMs }] }, effect: null };
     case "out":
       if (flow?.kind === "pick-out") {
-        return { flow: null, effect: { type: "sub", outId: ev.outId, inId: flow.inId, atMs: flow.openedAtMs } };
+        const [first, ...rest] = flow.queue;
+        return {
+          flow: rest.length ? { kind: "pick-out", queue: rest } : null,
+          effect: { type: "sub", outId: ev.outId, inId: first.inId, atMs: first.openedAtMs },
+        };
       }
       return { flow: { kind: "pick-in", outId: ev.outId, openedAtMs: ev.nowMs }, effect: null };
     case "confirm":

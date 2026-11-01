@@ -1,37 +1,40 @@
 /**
  * Consola — segunda tela de registo ao vivo (specs/009-captura-detalhada/).
  * Usa o mesmo useLiveMatch montado pelo mesmo MatchFlow do "Jogo ao vivo"
- * (mesma trava, mesma fila). Etapa 1: as ações de sempre (apito, golos,
- * cartões, faltas, atendimento, substituições, pausas, partes). Etapa 2: os
- * tipos novos da captura detalhada (remates, remates deles, defesa, saída,
- * transições, perdas/recuperações, GR-linha, "−" = anulação), com zona
- * opcional e envio adiado para a fila (ver consola/deferredEnqueue.ts).
+ * (mesma trava, mesma fila). Visual v2 aprovado em 2026-11-01:
+ * contracts/consola-visual.md + docs/prototipos/consola-v2-maqueta.html
+ * (tema escuro, cartões de jogador, registo rápido de equipa com mosaicos
+ * "+" e "−", transições em 1 toque já com a superioridade, banco sempre à
+ * vista com troca de linha). Lances com zona opcional seguem o envio adiado
+ * para a fila (consola/deferredEnqueue.ts).
  *
  * Ocupa o ecrã inteiro (camada fixa abaixo das folhas `.overlay`) porque a
- * `.page` normal tem no máximo 760 px e leva topo/abas por cima — no iPhone
- * a altura útil e no tablet deitado a largura não chegavam.
+ * `.page` normal tem no máximo 760 px e leva topo/abas por cima.
  */
 import {
   contarCategoria,
   describeEvents,
+  eventosEfetivos,
   goleiroLinhaAtivo,
   isLastPeriod,
   timeoutUsedInPeriod,
   ultimoDaCategoria,
   type CategoriaEquipa,
+  type MatchEvent,
   type Zona3,
 } from "@teambench/engine";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import type { useOutboxSync } from "../sync/useOutboxSync";
 import { isGoalkeeper } from "../team/positions";
 import type { PlayerRow } from "../team/usePlayers";
-import { ConsolaRow, type Density, type RowAction } from "./consola/ConsolaRow";
+import { benchSeconds } from "./consola/bench";
+import { BenchStrip, type BenchItem } from "./consola/BenchStrip";
 import { reconcileSlots, stepFlow, type Flow, type FlowEvent } from "./consola/flows";
 import { GoalSheet, type GoalDraft } from "./consola/GoalSheet";
 import { consolaMode, pickButtonSize, rowsFit, type ConsolaMode } from "./consola/layout";
-import { PerdasBlock } from "./consola/PerdasBlock";
+import { PlayerCard, type CardAction } from "./consola/PlayerCard";
+import { AdversarioCard, BolaCard, Tile, TransitionsCard, type AdvKey, type Contagem, type TransKey } from "./consola/QuickPanel";
 import { SummarySheet } from "./consola/SummarySheet";
-import { TeamBar } from "./consola/TeamBar";
 import { TransicaoSheet } from "./consola/TransicaoSheet";
 import { ZonePanel } from "./consola/ZonePanel";
 import { PlayerChip, Sheet } from "./PickerUI";
@@ -48,16 +51,16 @@ interface Props {
   matchId: string;
 }
 
-type Sheetkind =
+type SheetKind =
   | { kind: "goal"; draft: GoalDraft }
   | { kind: "player"; playerId: string }
   | { kind: "pause" }
-  | { kind: "more" }
+  | { kind: "equipa" }
   | { kind: "bench" }
   | { kind: "summary" }
   | { kind: "add-convocado" }
   | { kind: "settings" }
-  | { kind: "transicao"; dir: "ofensiva" | "defensiva" }
+  | { kind: "transicao"; dir: "ofensiva" | "defensiva"; resultado?: "ganha" | "perdida" }
   | null;
 
 function fmtMinSec(ms: number): string {
@@ -67,8 +70,8 @@ function fmtMinSec(ms: number): string {
   return `${m < 10 ? "0" : ""}${m}:${s < 10 ? "0" : ""}${s}`;
 }
 
-// Preferências e posição das linhas são estado de UI deste aparelho, nunca
-// dados do jogo: se o localStorage falhar, a Consola funciona na mesma.
+// Posição das linhas é estado de UI deste aparelho, nunca dados do jogo: se
+// o localStorage falhar, a Consola funciona na mesma.
 function readLocal<T>(key: string, fallback: T): T {
   try {
     const raw = localStorage.getItem(key);
@@ -81,7 +84,7 @@ function writeLocal(key: string, value: unknown) {
   try {
     localStorage.setItem(key, JSON.stringify(value));
   } catch {
-    // sem armazenamento: só se perde a preferência/ordem visual
+    // sem armazenamento: só se perde a ordem visual
   }
 }
 
@@ -90,6 +93,13 @@ function viewport() {
   return { w: el.clientWidth, h: el.clientHeight };
 }
 
+const TRANS: Record<TransKey, { dir: "ofensiva" | "defensiva"; resultado: "ganha" | "perdida" }> = {
+  favor_ganha: { dir: "ofensiva", resultado: "ganha" },
+  favor_perdida: { dir: "ofensiva", resultado: "perdida" },
+  contra_ganha: { dir: "defensiva", resultado: "ganha" },
+  contra_perdida: { dir: "defensiva", resultado: "perdida" },
+};
+
 export function Consola({ live, roster, opponent, onViewSummary, ourLabel, sync, onLeave, matchId }: Props) {
   const { state, elapsedMs } = live;
   const byId = new Map(roster.map((p) => [p.id, p]));
@@ -97,13 +107,8 @@ export function Consola({ live, roster, opponent, onViewSummary, ourLabel, sync,
   const preKickoff = !state.started;
   const awaitingKickoff = !state.clock.running && !state.finished;
 
-  const [sheet, setSheet] = useState<Sheetkind>(null);
+  const [sheet, setSheet] = useState<SheetKind>(null);
   const [flow, setFlow] = useState<Flow>(null);
-  const [density, setDensityState] = useState<Density>(() => readLocal<Density>("teambench.consola.density", "B"));
-  function setDensity(d: Density) {
-    setDensityState(d);
-    writeLocal("teambench.consola.density", d);
-  }
 
   // Posição fixa das linhas (ver reconcileSlots): o GR fica na 1ª linha só
   // na primeira arrumação; depois cada um mantém a sua.
@@ -130,6 +135,7 @@ export function Consola({ live, roster, opponent, onViewSummary, ourLabel, sync,
     };
   }, []);
   const mode: ConsolaMode = consolaMode(vp.w, vp.h);
+  const phone = mode === "iphone-v" || mode === "iphone-h";
   const rowsRef = useRef<HTMLDivElement>(null);
   const [btn, setBtn] = useState(48);
   const [overflow, setOverflow] = useState(false);
@@ -143,36 +149,41 @@ export function Consola({ live, roster, opponent, onViewSummary, ourLabel, sync,
   });
 
   // ---- contagens (sempre sobre os eventos efetivos: sem anulados) ----
-  const conta = (cat: CategoriaEquipa) => contarCategoria(state.events, cat, state.period);
+  const efetivos = eventosEfetivos(state.events);
+  const conta = (cat: CategoriaEquipa): Contagem => contarCategoria(state.events, cat, state.period);
   const podeAnular = (cat: CategoriaEquipa) => !state.finished && ultimoDaCategoria(state.events, cat) !== null;
-  const oppGoals = conta("golo_sofrido");
-  const zonas3: Zona3[] = ["defesa", "meio", "ataque"];
-  const perdasContagens = {
-    perda: Object.fromEntries(zonas3.map((z) => [z, conta(`perda_${z}`)])) as Record<Zona3, { period: number; total: number }>,
-    recuperacao: Object.fromEntries(zonas3.map((z) => [z, conta(`recuperacao_${z}`)])) as Record<Zona3, { period: number; total: number }>,
-  };
-  const glInicio = goleiroLinhaAtivo(state.events, state.period);
-  const goleiroLinhaMs = glInicio ? elapsedMs - glInicio.ms : null;
-  /** "−": anula o último lance efetivo da categoria (evento novo; nunca apaga). */
   function anular(cat: CategoriaEquipa) {
     const alvo = ultimoDaCategoria(state.events, cat);
     if (alvo) live.doAnulacao(alvo.clientEventId ?? alvo.id);
   }
-  const perdasBlock = (
-    <PerdasBlock
-      contagens={perdasContagens}
-      disabled={state.finished || awaitingKickoff}
-      onPerda={(z) => {
-        live.doPerda(z);
-        if (!benchVisible) setSheet(null);
-      }}
-      onRecuperacao={(z) => {
-        live.doRecuperacao(z);
-        if (!benchVisible) setSheet(null);
-      }}
-    />
-  );
-  const goalsFor = (id: string) => state.events.filter((e) => e.type === "golo" && e.playerId === id).length;
+  // Transições por direção E resultado (as filas do cartão): a categoria do
+  // motor é só por direção, por isso filtra-se aqui o resultado.
+  const transDe = (k: TransKey) => efetivos.filter((e) => e.type === "transicao" && e.dir === TRANS[k].dir && e.resultado === TRANS[k].resultado);
+  const transKeys = Object.keys(TRANS) as TransKey[];
+  const transCounts = Object.fromEntries(
+    transKeys.map((k) => {
+      const l = transDe(k);
+      return [k, { period: l.filter((e) => e.period === state.period).length, total: l.length }];
+    })
+  ) as Record<TransKey, Contagem>;
+  const ultimaTrans = (k: TransKey): MatchEvent | undefined => { const l = transDe(k); return l[l.length - 1]; };
+  const transCanMinus = Object.fromEntries(transKeys.map((k) => [k, !state.finished && !!ultimaTrans(k)])) as Record<TransKey, boolean>;
+
+  const advKeys: AdvKey[] = ["golo_sofrido", "remate_adv_defendido", "remate_adv_fora", "remate_adv_bloqueado"];
+  const advCounts = Object.fromEntries(advKeys.map((k) => [k, conta(k)])) as Record<AdvKey, Contagem>;
+  const advCanMinus = Object.fromEntries(advKeys.map((k) => [k, podeAnular(k)])) as Record<AdvKey, boolean>;
+  const zonas3: Zona3[] = ["defesa", "meio", "ataque"];
+  const bolaCounts = {
+    perda: Object.fromEntries(zonas3.map((z) => [z, conta(`perda_${z}`)])) as Record<Zona3, Contagem>,
+    recuperacao: Object.fromEntries(zonas3.map((z) => [z, conta(`recuperacao_${z}`)])) as Record<Zona3, Contagem>,
+  };
+  const bolaCanMinus = {
+    perda: Object.fromEntries(zonas3.map((z) => [z, podeAnular(`perda_${z}`)])) as Record<Zona3, boolean>,
+    recuperacao: Object.fromEntries(zonas3.map((z) => [z, podeAnular(`recuperacao_${z}`)])) as Record<Zona3, boolean>,
+  };
+  const glInicio = goleiroLinhaAtivo(state.events, state.period);
+  const goleiroLinhaMs = glInicio ? elapsedMs - glInicio.ms : null;
+  const goalsFor = (id: string) => efetivos.filter((e) => e.type === "golo" && e.playerId === id).length;
   const timeoutNosUsed = timeoutUsedInPeriod(state.events, state.period, "tempo_nos");
   const timeoutAdversUsed = timeoutUsedInPeriod(state.events, state.period, "tempo_advers");
   const PAUSE_REASONS = [
@@ -182,14 +193,21 @@ export function Consola({ live, roster, opponent, onViewSummary, ourLabel, sync,
   ];
 
   const onCourtPlayers = state.onCourt.map((id) => byId.get(id)).filter((p): p is PlayerRow => !!p);
+  const gkEmQuadra = onCourtPlayers.find((p) => isGoalkeeper(p.position)) ?? null;
   const bench = state.convocadoIds
     .filter((id) => !state.onCourt.includes(id))
     .map((id) => byId.get(id))
     .filter((p): p is PlayerRow => !!p);
+  const benchItems: BenchItem[] = bench.map((p) => ({
+    player: p,
+    minutes: Math.floor(live.playerSeconds(p.id) / 60),
+    benchSec: benchSeconds(state.events, p.id, state.period, elapsedMs),
+  }));
 
   const nowMsForEvent = () => (live.manual ? live.manualElapsedMs : Date.now());
+  const recording = !state.finished && !awaitingKickoff;
 
-  // ---- fluxos de substituição / vaga ----
+  // ---- fluxos de substituição / troca de linha / vaga ----
   function runFlow(ev: FlowEvent) {
     const step = stepFlow(flow, ev, { onCourtCount: state.onCourt.length, preKickoff });
     setFlow(step.flow);
@@ -199,55 +217,53 @@ export function Consola({ live, roster, opponent, onViewSummary, ourLabel, sync,
     else if (fx?.type === "toggleTitular") live.toggleTitular(fx.playerId);
     return step.flow;
   }
-  const benchVisible = mode === "tablet-v" || mode === "tablet-h";
-
   function benchTap(id: string) {
-    const next = runFlow({ type: "bench", inId: id, nowMs: nowMsForEvent() });
-    // No iPhone o banco é uma folha: fecha-se para mostrar o "SAI" nas linhas.
-    setSheet(null);
-    return next;
+    runFlow({ type: "bench", inId: id, nowMs: nowMsForEvent() });
+    // No iPhone o banco é uma folha: fecha-se para mostrar o "SAI" nos cartões.
+    if (phone) setSheet(null);
   }
   function startSubFromPlayer(id: string) {
     const next = runFlow({ type: "out", outId: id, nowMs: nowMsForEvent() });
-    setSheet(next?.kind === "pick-in" && !benchVisible ? { kind: "bench" } : null);
+    setSheet(next?.kind === "pick-in" && phone ? { kind: "bench" } : null);
   }
   function cancelFlow() {
     runFlow({ type: "cancel" });
   }
+  const queue = flow?.kind === "pick-out" ? flow.queue.map((q) => q.inId) : [];
 
-  // `onAction` estável: as linhas são `memo` e não voltam a desenhar a cada
+  function openGoalSofrido() {
+    setSheet({ kind: "goal", draft: { side: "adv", scorerId: null, openedAtMs: nowMsForEvent() } });
+  }
+  function adversario(k: AdvKey) {
+    if (k === "golo_sofrido") openGoalSofrido();
+    // "Defendido" = defesa do GR em quadra (decisão 6); fora/bloqueado sem jogador nosso.
+    else if (k === "remate_adv_defendido") {
+      if (gkEmQuadra) live.deferred.doDefesa(gkEmQuadra.id);
+    } else live.deferred.doRemateAdv(k === "remate_adv_fora" ? "fora" : "bloqueado");
+  }
+  function bola(tipo: "perda" | "recuperacao", z: Zona3) {
+    if (tipo === "perda") live.doPerda(z);
+    else live.doRecuperacao(z);
+  }
+  function toggleGoleiroLinha() {
+    if (goleiroLinhaMs !== null) live.doGoleiroLinhaFim();
+    else live.doGoleiroLinhaInicio();
+  }
+
+  // `onAction` estável: os cartões são `memo` e não voltam a desenhar a cada
   // segundo do relógio; o handler lê sempre o estado mais recente pelo ref.
-  const handlerRef = useRef<(id: string, a: RowAction) => void>(() => {});
-  handlerRef.current = (id: string, a: RowAction) => {
+  const handlerRef = useRef<(id: string, a: CardAction) => void>(() => {});
+  handlerRef.current = (id: string, a: CardAction) => {
     switch (a) {
       case "golo":
         setSheet({ kind: "goal", draft: { side: "nos", scorerId: id, openedAtMs: nowMsForEvent() } });
         break;
-      case "golo_sofrido":
-        setSheet({ kind: "goal", draft: { side: "adv", scorerId: null, openedAtMs: nowMsForEvent() } });
-        break;
-      // Lances com zona opcional: ficam à espera da zona (painel) antes de
-      // irem para a fila — ver deferredEnqueue.ts.
+      // Lances com zona opcional: ficam à espera da zona antes de irem para a fila.
       case "falta":
         live.deferred.doFoul(id);
         break;
       case "falta_sofrida":
         live.deferred.doFoulSuffered(id);
-        break;
-      case "amarelo":
-        live.deferred.doCard(id, "amarelo");
-        break;
-      case "vermelho":
-        live.deferred.doCard(id, "vermelho");
-        break;
-      case "mais":
-        setSheet({ kind: "player", playerId: id });
-        break;
-      case "sai":
-        runFlow({ type: "out", outId: id, nowMs: nowMsForEvent() });
-        break;
-      case "tirar":
-        runFlow({ type: "out", outId: id, nowMs: nowMsForEvent() });
         break;
       case "remate_defendido":
         live.deferred.doRemate(id, "defendido");
@@ -258,30 +274,31 @@ export function Consola({ live, roster, opponent, onViewSummary, ourLabel, sync,
       case "remate_bloqueado":
         live.deferred.doRemate(id, "bloqueado");
         break;
-      // Remates do adversário (linha do GR): defendido conta para o GR em
-      // campo; fora/bloqueado não têm jogador nosso (FR-024).
-      case "defesa":
-        live.deferred.doDefesa(id);
+      case "saida_ganha":
+        live.deferred.doSaida(id, "ganha");
         break;
-      case "remate_adv_fora":
-        live.deferred.doRemateAdv("fora");
+      case "saida_perdida":
+        live.deferred.doSaida(id, "perdida");
         break;
-      case "remate_adv_bloqueado":
-        live.deferred.doRemateAdv("bloqueado");
+      case "mais":
+        setSheet({ kind: "player", playerId: id });
+        break;
+      case "sai":
+      case "tirar":
+        runFlow({ type: "out", outId: id, nowMs: nowMsForEvent() });
         break;
     }
   };
-  const onAction = useCallback((id: string, a: RowAction) => handlerRef.current(id, a), []);
+  const onAction = useCallback((id: string, a: CardAction) => handlerRef.current(id, a), []);
 
-  // ---- último evento + desfazer ----
+  // ---- último lance + desfazer ----
   const lookup = (id: string) => {
     const p = byId.get(id);
     return p ? { id: p.id, num: p.num ?? "", name: p.name, pos: p.position ?? "Universal" } : undefined;
   };
   const last = state.events[state.events.length - 1];
-  // describeEvents é o texto do registo do "Jogo ao vivo"; na faixa curta
-  // tira-se o prefixo "[1ª Parte · mm:ss]" (a hora já aparece à frente) e a
-  // lista "| em quadra: …", que não cabem numa linha de telefone.
+  // Texto do registo sem o prefixo "[1ª Parte · mm:ss]" (a hora já vem à
+  // frente) nem a lista "| em quadra: …", que não cabem na faixa.
   const lastText = last
     ? describeEvents(state.events, lookup, live.format)
         .get(last.id)
@@ -293,7 +310,7 @@ export function Consola({ live, roster, opponent, onViewSummary, ourLabel, sync,
   const lastIsBoundary = last?.type === "kickoff" || last?.type === "fim_periodo";
   const canUndo = live.canUndo && !lastIsBoundary && flow === null && !state.finished;
 
-  const rowMode = (): "events" | "pick-out" | "prekickoff" | "off" | "done" => {
+  const cardMode = (): "events" | "pick-out" | "prekickoff" | "off" | "done" => {
     if (state.finished) return "done";
     if (preKickoff) return "prekickoff";
     if (flow?.kind === "pick-out") return "pick-out";
@@ -302,204 +319,268 @@ export function Consola({ live, roster, opponent, onViewSummary, ourLabel, sync,
   };
 
   const pauseMs = state.activePause ? elapsedMs - state.activePause.startedAtMs : 0;
+  const nm = (id: string) => `#${byId.get(id)?.num} ${byId.get(id)?.name}`;
   const flowText =
     flow?.kind === "pick-out"
-      ? `Entra #${byId.get(flow.inId)?.num} ${byId.get(flow.inId)?.name} — toca em SAI na linha de quem sai`
+      ? flow.queue.length > 1
+        ? `Troca de linha — entram ${flow.queue.map((q, i) => `${i + 1}. ${nm(q.inId)}`).join(", ")}. Toca em SAI pela mesma ordem`
+        : `Entra ${nm(flow.queue[0].inId)} — toca em SAI no cartão de quem sai (ou junta mais do banco)`
       : flow?.kind === "pick-in"
-        ? `Sai #${byId.get(flow.outId)?.num} ${byId.get(flow.outId)?.name} — escolhe no banco quem entra`
+        ? `Sai ${nm(flow.outId)} — escolhe no banco quem entra`
         : null;
-
   const syncText = sync.pending > 0 ? (sync.syncing ? "A sincronizar…" : `${sync.pending} por sincronizar`) : "Sincronizado";
 
-  const benchList = (
-    <div className="consola-bench-list">
-      {bench.map((p) => (
-        <button
-          key={p.id}
-          type="button"
-          className={`cbtn bench${isGoalkeeper(p.position) ? " gr" : ""}${flow?.kind === "pick-in" ? " entra" : ""}${flow?.kind === "pick-out" && flow.inId === p.id ? " selected" : ""}`}
-          disabled={state.finished}
-          onClick={() => benchTap(p.id)}
-        >
-          <span>#{p.num} {p.name}</span>
-          <span className="cnt">{Math.floor(live.playerSeconds(p.id) / 60)}'</span>
-        </button>
-      ))}
-      {bench.length === 0 && <span className="hint">Ninguém no banco.</span>}
-    </div>
+  // ---- blocos ----
+  const lastLine = (
+    <span className="cv-last">
+      {state.activePause
+        ? `⏱ ${state.activePause.label} · ${fmtMinSec(pauseMs)}`
+        : last
+          ? `${String(last.min).padStart(2, "0")}:${String(last.sec).padStart(2, "0")} · ${lastText ?? last.type}`
+          : preKickoff
+            ? `Cinco inicial ${state.onCourt.length}/5 — toca no banco para pôr, "Tirar do cinco" para tirar`
+            : "Sem lances ainda"}
+    </span>
+  );
+  const glBtn = (
+    <button type="button" className={`cv-ghost gl${goleiroLinhaMs !== null ? " on" : ""}`} disabled={!recording} onClick={toggleGoleiroLinha}>
+      {goleiroLinhaMs !== null ? `GR-linha ${fmtMinSec(goleiroLinhaMs)} ■` : "GR-linha"}
+    </button>
+  );
+  const pauseBtn = (
+    <button
+      type="button"
+      className={`cv-ghost pz${state.activePause ? " warn" : ""}`}
+      disabled={!recording}
+      onClick={() => (state.activePause ? live.endPause() : setSheet({ kind: "pause" }))}
+    >
+      {state.activePause ? "▶ Retomar" : "⏸ Pausa"}
+    </button>
+  );
+  const endBtn = (
+    <button type="button" className="cv-ghost end" disabled={!recording} onClick={() => live.endPeriod()}>
+      {isFinalPeriod ? "Terminar jogo" : "Fim da parte"}
+    </button>
+  );
+  const undoBtn = (
+    <button type="button" className="cv-ghost undo" disabled={!canUndo} onClick={live.undo}>
+      <span className="ic">↩</span> <span>Desfazer</span>
+    </button>
   );
 
-  const headEl = (
-    <header className="consola-head">
-      <div className="score">
-        <span className="lbl">{ourLabel}</span>
-        <span className="val num">{state.score.nos}</span>
+  const top = (
+    <header className="cv-top">
+      <div className="cv-score">
+        <span className="t">{ourLabel}</span>
+        <span className="n">
+          {state.score.nos}–{state.score.advers}
+        </span>
+        <span className="t">{opponent || "Adv."}</span>
       </div>
-      <div className="clock">
-        <span className="lbl">Parte {state.period}{state.activePause ? " · pausa" : ""}</span>
-        <span className="time num">{fmtMinSec(elapsedMs)}</span>
+      <div className="cv-clock">
+        <span className="p">
+          {state.period}.ª parte{state.activePause ? " · pausa" : ""}
+        </span>
+        <span className="t">{fmtMinSec(elapsedMs)}</span>
       </div>
-      <div className="score">
-        <span className="lbl">{opponent || "Advers."}</span>
-        <span className="val num">{state.score.advers}</span>
+      <div className={`cv-fouls${state.periodFouls >= 5 ? " warn" : ""}`}>
+        Faltas
+        <b>
+          {state.periodFouls} · {state.periodFoulsAdvers}
+        </b>
       </div>
-      <div className="side">
-        <span className={`fouls${state.periodFouls >= 5 ? " warn" : ""}`}>Faltas {state.periodFouls}·{state.periodFoulsAdvers}</span>
-        <span className={`sync${sync.pending > 0 ? " pending" : ""}`}>{syncText}</span>
-      </div>
+      {lastLine}
+      <span className={`cv-pill${sync.pending > 0 ? " pending" : ""}`}>{syncText}</span>
+      {!phone && (
+        <>
+          {glBtn}
+          {pauseBtn}
+          {endBtn}
+        </>
+      )}
+      {undoBtn}
+      {!phone && (
+        <button type="button" className="cv-ghost cfg" aria-label="Definições" onClick={() => setSheet({ kind: "settings" })}>
+          ⚙
+        </button>
+      )}
     </header>
   );
 
-  const lastEl = (
-    <div className={`consola-last${flowText ? " flow" : ""}`}>
-      {flowText ? (
-        <>
-          <span className="txt">{flowText}</span>
-          <button type="button" className="cbtn" onClick={cancelFlow}>Cancelar</button>
-        </>
-      ) : (
-        <>
-          <span className="txt">
-            {state.activePause
-              ? `⏱ ${state.activePause.label} · ${fmtMinSec(pauseMs)}`
-              : last
-                ? `${String(last.min).padStart(2, "0")}:${String(last.sec).padStart(2, "0")} · ${lastText ?? last.type}`
-                : preKickoff
-                  ? `Cinco inicial ${state.onCourt.length}/5 — toca no banco para pôr, "Tirar do cinco" para tirar`
-                  : "Sem eventos ainda"}
-          </span>
-          <button type="button" className="cbtn" disabled={!canUndo} onClick={live.undo}>
-            ↩ Desfazer
-          </button>
-          {mode === "tablet-v" || mode === "tablet-h" ? (
-            <button type="button" className="cbtn" onClick={() => setSheet({ kind: "summary" })}>Resumo</button>
-          ) : null}
-        </>
-      )}
+  const transitions = (
+    <TransitionsCard
+      counts={transCounts}
+      canMinus={transCanMinus}
+      disabled={!recording}
+      onPick={(k, n) => live.doTransicao(TRANS[k].dir, TRANS[k].resultado, n)}
+      onMore={(k) => setSheet({ kind: "transicao", dir: TRANS[k].dir, resultado: TRANS[k].resultado })}
+      onMinus={(k) => {
+        const alvo = ultimaTrans(k);
+        if (alvo) live.doAnulacao(alvo.clientEventId ?? alvo.id);
+      }}
+    />
+  );
+  const adversarioCard = (
+    <AdversarioCard
+      counts={advCounts}
+      canMinus={advCanMinus}
+      disabled={!recording}
+      defesaDisabled={!gkEmQuadra}
+      onPlus={(k) => {
+        adversario(k);
+        if (phone && k !== "golo_sofrido") setSheet(null);
+      }}
+      onMinus={anular}
+    />
+  );
+  const bolaCard = (
+    <BolaCard
+      counts={bolaCounts}
+      canMinus={bolaCanMinus}
+      disabled={!recording}
+      onPlus={(t, z) => {
+        bola(t, z);
+        if (phone) setSheet(null);
+      }}
+      onMinus={(t, z) => anular(`${t}_${z}`)}
+    />
+  );
+
+  // iPhone: as três categorias mais usadas sempre à vista, com "−".
+  const phoneTiles = (
+    <>
+      <Tile
+        label="Trans. a favor"
+        c={conta("transicao_favor")}
+        tone="pos"
+        disabled={!recording}
+        canMinus={podeAnular("transicao_favor")}
+        onPlus={() => setSheet({ kind: "transicao", dir: "ofensiva" })}
+        onMinus={() => anular("transicao_favor")}
+      />
+      <Tile
+        label="Trans. contra"
+        c={conta("transicao_contra")}
+        tone="neg"
+        disabled={!recording}
+        canMinus={podeAnular("transicao_contra")}
+        onPlus={() => setSheet({ kind: "transicao", dir: "defensiva" })}
+        onMinus={() => anular("transicao_contra")}
+      />
+      <Tile
+        label="Golo sofrido"
+        c={advCounts.golo_sofrido}
+        tone="neg"
+        disabled={!recording}
+        canMinus={advCanMinus.golo_sofrido}
+        onPlus={openGoalSofrido}
+        onMinus={() => anular("golo_sofrido")}
+      />
+    </>
+  );
+
+  const cards = (
+    <div className={`cv-players${overflow ? " overflow" : ""}`} ref={rowsRef}>
+      {nextSlots.map((id, i) => {
+        const p = id ? byId.get(id) ?? null : null;
+        return (
+          <PlayerCard
+            key={id ?? `vaga-${i}`}
+            slot={i}
+            player={p}
+            minutes={id ? Math.floor(live.playerSeconds(id) / 60) : 0}
+            goals={id ? goalsFor(id) : 0}
+            compact={phone}
+            mode={cardMode()}
+            saiN={flow?.kind === "pick-out" && flow.queue.length > 1 ? 1 : null}
+            inTreatment={!!id && state.treatment?.playerId === id}
+            onAction={onAction}
+          />
+        );
+      })}
     </div>
   );
 
   return (
-    <div
-      className={`consola consola--${mode}`}
-      style={{ "--cbtn": `${btn}px` } as unknown as Record<string, string>}
-    >
-      {mode === "iphone-h" ? (
-        <div className="consola-top">
-          {headEl}
-          {lastEl}
-        </div>
-      ) : (
-        <>
-          {headEl}
-          <TeamBar
-            mode={mode}
-            period={state.period}
-            favor={conta("transicao_favor")}
-            contra={conta("transicao_contra")}
-            golosSofridos={oppGoals}
-            podeAnular={{ favor: podeAnular("transicao_favor"), contra: podeAnular("transicao_contra"), golosSofridos: podeAnular("golo_sofrido") }}
-            goleiroLinhaMs={goleiroLinhaMs}
-            awaitingKickoff={awaitingKickoff}
-            finished={state.finished}
-            paused={!!state.activePause}
-            isFinalPeriod={isFinalPeriod}
-            onTransicao={(dir) => setSheet({ kind: "transicao", dir })}
-            onOppGoal={() => handlerRef.current("", "golo_sofrido")}
-            onAnular={anular}
-            onGoleiroLinha={() => (goleiroLinhaMs !== null ? live.doGoleiroLinhaFim() : live.doGoleiroLinhaInicio())}
-            onKickoff={() => live.resumeOrStart()}
-            onPause={() => setSheet({ kind: "pause" })}
-            onResume={() => live.endPause()}
-            onEndPeriod={() => live.endPeriod()}
-            onMore={() => setSheet({ kind: "more" })}
-          />
-          {lastEl}
-        </>
-      )}
+    <div className={`consola cv cv--${mode}`} style={{ "--cbtn": `${btn}px` } as unknown as Record<string, string>}>
+      {top}
 
+      {flowText && (
+        <div className="cv-banner flow">
+          <span>{flowText}</span>
+          <button type="button" className="cv-ghost" onClick={cancelFlow}>
+            Cancelar
+          </button>
+        </div>
+      )}
+      {awaitingKickoff && (
+        <button type="button" className="cv-kick" onClick={() => live.resumeOrStart()}>
+          Iniciar Parte {state.period}
+        </button>
+      )}
       {state.treatment && (
-        <div className="consola-banner">
-          🩹 Atendimento: {byId.get(state.treatment.playerId)?.name}
-          <button type="button" className="cbtn" onClick={live.endTreatment}>Terminar</button>
+        <div className="cv-banner">
+          <span>🩹 Atendimento: {byId.get(state.treatment.playerId)?.name}</span>
+          <button type="button" className="cv-ghost" onClick={live.endTreatment}>
+            Terminar
+          </button>
         </div>
       )}
       {state.finished && (
-        <div className="consola-banner done">
-          Jogo terminado — {state.score.nos}–{state.score.advers}
-          <button type="button" className="cbtn kick" onClick={onViewSummary}>Ver Resumo</button>
+        <div className="cv-banner done">
+          <span>
+            Jogo terminado — {state.score.nos}–{state.score.advers}
+          </span>
+          <button type="button" className="cv-ghost" onClick={onViewSummary}>
+            Ver Resumo
+          </button>
         </div>
       )}
       {live.enqueueFailed && (
-        <div className="consola-banner error">
-          Não foi possível guardar um evento neste aparelho (armazenamento cheio ou indisponível). Liberte espaço antes de continuar.
+        <div className="cv-banner error">
+          Não foi possível guardar um lance neste aparelho (armazenamento cheio ou indisponível). Liberte espaço antes de continuar.
         </div>
       )}
 
-      <div className="consola-body">
-        <div className={`consola-rows${overflow ? " overflow" : ""}`} ref={rowsRef}>
-          {nextSlots.map((id, i) => {
-            const p = id ? byId.get(id) ?? null : null;
-            return (
-              <ConsolaRow
-                key={id ?? `vaga-${i}`}
-                slot={i}
-                player={p}
-                minutes={id ? Math.floor(live.playerSeconds(id) / 60) : 0}
-                goals={id ? goalsFor(id) : 0}
-                density={density}
-                mode={rowMode()}
-                inTreatment={!!id && state.treatment?.playerId === id}
-                onAction={onAction}
-              />
-            );
-          })}
-        </div>
+      {mode === "iphone-v" && <div className="cv-phonebar">{phoneTiles}</div>}
 
-        {benchVisible && (
-          <aside className="consola-bench">
-            {perdasBlock}
-            <div className="consola-bench-title">Banco ({bench.length})</div>
-            {benchList}
+      <div className="cv-main">
+        <section className="cv-left">
+          {cards}
+          {!phone && <BenchStrip items={benchItems} queue={queue} pickIn={flow?.kind === "pick-in"} disabled={state.finished} onTap={benchTap} />}
+        </section>
+        {!phone && (
+          <aside className="cv-right">
+            {transitions}
+            {adversarioCard}
+            {bolaCard}
           </aside>
         )}
-
         {mode === "iphone-h" && (
-          <aside className="consola-side">
-            {awaitingKickoff && !state.finished ? (
-              <button type="button" className="cbtn kick" onClick={() => live.resumeOrStart()}>Iniciar Parte {state.period}</button>
-            ) : (
-              !state.finished && (
-                <button type="button" className="cbtn opp" onClick={() => handlerRef.current("", "golo_sofrido")}>
-                  Golo sofrido <span className="cnt">{state.period}ª {oppGoals.period} · {oppGoals.total}</span>
-                </button>
-              )
-            )}
-            <button type="button" className="cbtn" onClick={() => setSheet({ kind: "bench" })}>Banco</button>
-            <button type="button" className="cbtn" onClick={() => setSheet({ kind: "summary" })}>Resumo</button>
-            <button type="button" className="cbtn" onClick={() => setSheet({ kind: "more" })}>Equipa…</button>
+          <aside className="cv-side">
+            {phoneTiles}
+            <button type="button" className="cv-ghost" disabled={state.finished} onClick={() => setSheet({ kind: "bench" })}>
+              Banco
+            </button>
+            <button type="button" className="cv-ghost" onClick={() => setSheet({ kind: "equipa" })}>
+              Equipa…
+            </button>
           </aside>
         )}
       </div>
 
       {mode === "iphone-v" && (
-        <nav className="consola-dock">
-          <button type="button" className="cbtn" disabled={state.finished} onClick={() => setSheet({ kind: "bench" })}>Substituir</button>
-          <button type="button" className="cbtn" onClick={() => setSheet({ kind: "summary" })}>Resumo</button>
-          <button
-            type="button"
-            className={`cbtn${state.activePause ? " warn" : ""}`}
-            disabled={awaitingKickoff || state.finished}
-            onClick={() => (state.activePause ? live.endPause() : setSheet({ kind: "pause" }))}
-          >
-            {state.activePause ? "▶ Retomar" : "⏸ Pausa"}
+        <nav className="cv-dock">
+          <button type="button" className="cv-ghost" disabled={state.finished} onClick={() => setSheet({ kind: "bench" })}>
+            Banco
           </button>
-          {/* Com GR-linha ativo, o lugar de "Mais…" na barra mostra o GR-linha e "Mais…" vem para aqui. */}
-          {goleiroLinhaMs !== null ? (
-            <button type="button" className="cbtn" onClick={() => setSheet({ kind: "more" })}>Mais…</button>
-          ) : (
-            <button type="button" className="cbtn" aria-label="Definições" onClick={() => setSheet({ kind: "settings" })}>⚙</button>
-          )}
+          <button type="button" className="cv-ghost" onClick={() => setSheet({ kind: "equipa" })}>
+            Equipa…
+          </button>
+          <button type="button" className="cv-ghost" onClick={() => setSheet({ kind: "summary" })}>
+            Resumo
+          </button>
+          {pauseBtn}
         </nav>
       )}
 
@@ -566,16 +647,6 @@ export function Consola({ live, roster, opponent, onViewSummary, ourLabel, sync,
                 <button type="button" className="abtn" disabled={preKickoff || bench.length === 0} onClick={() => startSubFromPlayer(p.id)}>
                   <span className="ic">🔁</span>Substituir (sai)
                 </button>
-                {isGoalkeeper(p.position) && (
-                  <>
-                    <button type="button" className="abtn" disabled={preKickoff || awaitingKickoff} onClick={close(() => live.deferred.doSaida(p.id, "ganha"))}>
-                      <span className="ic">✅</span>Saída 1x1 ganha
-                    </button>
-                    <button type="button" className="abtn" disabled={preKickoff || awaitingKickoff} onClick={close(() => live.deferred.doSaida(p.id, "perdida"))}>
-                      <span className="ic">❌</span>Saída 1x1 perdida
-                    </button>
-                  </>
-                )}
               </div>
             </Sheet>
           );
@@ -584,13 +655,13 @@ export function Consola({ live, roster, opponent, onViewSummary, ourLabel, sync,
       {sheet?.kind === "bench" && (
         <Sheet
           title={flow?.kind === "pick-in" ? "Quem entra?" : "Banco"}
-          sub={flow?.kind === "pick-in" ? `Sai #${byId.get(flow.outId)?.num} ${byId.get(flow.outId)?.name}` : "Toca em quem entra; depois em SAI na linha de quem sai"}
+          sub={flow?.kind === "pick-in" ? `Sai ${nm(flow.outId)}` : "Toca em quem entra; depois em SAI no cartão de quem sai"}
           onClose={() => {
             setSheet(null);
             if (flow?.kind === "pick-in") cancelFlow();
           }}
         >
-          {benchList}
+          <BenchStrip className="in-sheet" items={benchItems} queue={queue} pickIn={flow?.kind === "pick-in"} disabled={state.finished} onTap={benchTap} />
           {!state.finished && (
             <button type="button" className="btn ghost block" style={{ marginTop: 10 }} onClick={() => setSheet({ kind: "add-convocado" })}>
               + Chamar atleta ao banco
@@ -601,20 +672,22 @@ export function Consola({ live, roster, opponent, onViewSummary, ourLabel, sync,
 
       {flow?.kind === "vacancy" && (
         <Sheet title="Repor a vaga" sub="A elegibilidade da reposição não é validada — confirma que este atleta pode entrar." onClose={cancelFlow}>
-          <div className="consola-bench-list">
+          <div className="cv-bench in-sheet">
             {bench.map((p) => (
               <button
                 key={p.id}
                 type="button"
-                className={`cbtn bench${flow.inId === p.id ? " selected" : ""}`}
+                className={`cv-bp${flow.inId === p.id ? " sel" : ""}`}
                 onClick={() => runFlow({ type: "bench", inId: p.id, nowMs: nowMsForEvent() })}
               >
-                #{p.num} {p.name}
+                <b>
+                  #{p.num} {p.name}
+                </b>
               </button>
             ))}
           </div>
           <button type="button" className="btn primary block" style={{ marginTop: 12 }} onClick={() => runFlow({ type: "confirm" })}>
-            Confirmar entrada de #{byId.get(flow.inId)?.num} {byId.get(flow.inId)?.name}
+            Confirmar entrada de {nm(flow.inId)}
           </button>
         </Sheet>
       )}
@@ -640,39 +713,29 @@ export function Consola({ live, roster, opponent, onViewSummary, ourLabel, sync,
         </Sheet>
       )}
 
-      {sheet?.kind === "more" && (
+      {sheet?.kind === "equipa" && (
         <Sheet title="Equipa" onClose={() => setSheet(null)}>
-          {!benchVisible && !awaitingKickoff && !state.finished && (
+          {recording && (
             <>
-              {mode === "iphone-h" && (
-                <div className="actiongrid" style={{ marginTop: 0 }}>
-                  <button type="button" className="abtn" onClick={() => setSheet({ kind: "transicao", dir: "ofensiva" })}>
-                    Transição a favor <span className="cnt">{conta("transicao_favor").period} · {conta("transicao_favor").total}</span>
-                  </button>
-                  <button type="button" className="abtn" onClick={() => setSheet({ kind: "transicao", dir: "defensiva" })}>
-                    Transição contra <span className="cnt">{conta("transicao_contra").period} · {conta("transicao_contra").total}</span>
-                  </button>
-                </div>
-              )}
-              <p className="sub">Perdas e recuperações de bola (1 toque regista)</p>
-              {perdasBlock}
+              {mode === "iphone-h" && transitions}
+              {adversarioCard}
+              {bolaCard}
+            </>
+          )}
+          <div className="actiongrid">
+            {recording && (
               <button
                 type="button"
-                className={`btn block${goleiroLinhaMs !== null ? " primary" : ""}`}
-                style={{ marginTop: 10, minHeight: 48 }}
+                className="abtn"
                 onClick={() => {
-                  if (goleiroLinhaMs !== null) live.doGoleiroLinhaFim();
-                  else live.doGoleiroLinhaInicio();
+                  toggleGoleiroLinha();
                   setSheet(null);
                 }}
               >
                 {goleiroLinhaMs !== null ? `Terminar GR-linha (${fmtMinSec(goleiroLinhaMs)})` : "Iniciar GR-linha"}
               </button>
-              <p className="hint">"−" (anular o último de uma categoria) está no Resumo rápido.</p>
-            </>
-          )}
-          <div className="actiongrid">
-            {!awaitingKickoff && !state.finished && (
+            )}
+            {recording && (
               <button
                 type="button"
                 className="abtn"
@@ -684,12 +747,8 @@ export function Consola({ live, roster, opponent, onViewSummary, ourLabel, sync,
                 {isFinalPeriod ? "Terminar jogo" : `Fim da Parte ${state.period}`}
               </button>
             )}
-            {mode === "iphone-h" && !awaitingKickoff && !state.finished && (
-              <button
-                type="button"
-                className="abtn"
-                onClick={() => (state.activePause ? (live.endPause(), setSheet(null)) : setSheet({ kind: "pause" }))}
-              >
+            {mode === "iphone-h" && recording && (
+              <button type="button" className="abtn" onClick={() => (state.activePause ? (live.endPause(), setSheet(null)) : setSheet({ kind: "pause" }))}>
                 {state.activePause ? "▶ Retomar" : "⏸ Pausa"}
               </button>
             )}
@@ -698,6 +757,9 @@ export function Consola({ live, roster, opponent, onViewSummary, ourLabel, sync,
                 Chamar atleta ao banco
               </button>
             )}
+            <button type="button" className="abtn" onClick={() => setSheet({ kind: "summary" })}>
+              Resumo rápido
+            </button>
             <button type="button" className="abtn" onClick={onViewSummary}>
               📋 Resumo do jogo
             </button>
@@ -710,15 +772,21 @@ export function Consola({ live, roster, opponent, onViewSummary, ourLabel, sync,
 
       {sheet?.kind === "settings" && (
         <Sheet title="Definições da Consola" onClose={() => setSheet(null)}>
-          <p className="sub">Ações em cada linha</p>
-          <div className="actiongrid">
-            <button type="button" className={`abtn${density === "B" ? " selected" : ""}`} onClick={() => setDensity("B")}>
-              Essenciais (cartões no ⋯)
-            </button>
-            <button type="button" className={`abtn${density === "A" ? " selected" : ""}`} onClick={() => setDensity("A")}>
-              Todas (cartões na linha)
-            </button>
-          </div>
+          {!phone && (
+            <div className="actiongrid" style={{ marginTop: 0 }}>
+              <button type="button" className="abtn" onClick={() => setSheet({ kind: "summary" })}>
+                Resumo rápido
+              </button>
+              <button type="button" className="abtn" onClick={onViewSummary}>
+                📋 Resumo do jogo
+              </button>
+              {!state.finished && (
+                <button type="button" className="abtn" onClick={() => setSheet({ kind: "add-convocado" })}>
+                  Chamar atleta ao banco
+                </button>
+              )}
+            </div>
+          )}
           <button type="button" className="btn block" style={{ marginTop: 14 }} onClick={onLeave}>
             Sair da Consola (voltar ao Jogo)
           </button>
@@ -739,6 +807,7 @@ export function Consola({ live, roster, opponent, onViewSummary, ourLabel, sync,
       {sheet?.kind === "transicao" && (
         <TransicaoSheet
           dir={sheet.dir}
+          resultado={sheet.resultado}
           onClose={() => setSheet(null)}
           onPick={(resultado, numeros) => {
             live.doTransicao(sheet.dir, resultado, numeros);

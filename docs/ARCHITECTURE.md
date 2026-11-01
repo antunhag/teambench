@@ -235,7 +235,17 @@ tipo de evento novo, nenhuma alteração no motor nem na base de dados.
 - "Desfazer" usa o `undo()` de sempre; desativado a meio de um fluxo e quando o
   último evento é um limite de parte (o relógio nunca recua).
 
-Etapa 2c — **na Consola**: "Remate ▸" (nosso) e "Remate deles ▸" (linha do
+**Visual v2 (2026-11-01, aprovado pelo utilizador)** — `specs/009-captura-detalhada/contracts/consola-visual.md`
+e `docs/prototipos/consola-v2-maqueta.html`: tema escuro só na Consola (tokens redefinidos
+em `.consola`), cartões de jogador (GR: saídas 1x1 + faltas; linha: Golo · Remate ▸ ·
+faltas), registo rápido de equipa à direita (transições em 1 toque já com a superioridade
+3x1/2x1/3x2/2x0 + "…"; cartão "Adversário" com golo sofrido e remates deles — "Defendido"
+vai para o GR em quadra; "Bola" com perdas/recuperações), mosaicos com "−" sempre à vista,
+banco sempre à vista com tempo no banco e **troca de linha** (`flows.ts`: fila de até 4
+entradas; cada "SAI" fecha um par pela ordem). Componentes: `PlayerCard`, `BenchStrip`,
+`QuickPanel`, `TransicaoSheet`; `consola/bench.ts` calcula o tempo no banco.
+
+Etapa 2c (substituída no visual pela v2; lógica igual) — **na Consola**: "Remate ▸" (nosso) e "Remate deles ▸" (linha do
 GR: defendido = `defesa` do GR em campo; fora/bloqueado = `remate_adv` sem
 jogador) abrem o desfecho na própria linha; saída 1x1 no ⋯ do GR; transições
 a favor/contra em 2 toques (com/sem finalização + superioridade); perdas e

@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="pt">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Consola v2 — maqueta</title>
+<!-- Maqueta ESTÁTICA da Consola v2 (specs/009, contracts/consola-visual.md).
+     Dados fictícios, sem lógica, sem rede. Só para aprovar o visual antes de
+     mexer na app. Tablet deitado é o alvo principal; o iPhone adapta-se. -->
+<style>
+:root {
+  --bg: #0b1220; --panel: #111a2e; --tile: #16213a; --line: #24324f;
+  --ink: #e8eef8; --dim: #8b9bb7;
+  --cyan: #4cc9f0; --green: #34d399; --red: #f87171; --amber: #fbbf24; --violet: #a78bfa; --gr: #60a5fa;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); font: 500 14px/1.2 system-ui, -apple-system, "Segoe UI", sans-serif; }
+button { font: inherit; color: inherit; cursor: pointer; }
+.app { height: 100vh; display: flex; flex-direction: column; gap: 8px; padding: 8px; overflow: hidden; }
+
+/* Faixa de topo: placar · relógio · faltas · último lance · desfazer */
+.top { display: flex; align-items: center; gap: 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 6px 10px; }
+.score { display: flex; align-items: baseline; gap: 8px; font-weight: 800; }
+.score .t { font-size: 13px; color: var(--dim); font-weight: 600; }
+.score .n { font-size: 30px; font-variant-numeric: tabular-nums; }
+.clock { display: flex; flex-direction: column; align-items: center; }
+.clock .p { font-size: 11px; color: var(--dim); letter-spacing: .08em; text-transform: uppercase; }
+.clock .t { font-size: 38px; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: .02em; }
+.fouls { font-size: 12px; color: var(--dim); text-align: center; }
+.fouls b { display: block; font-size: 20px; color: var(--ink); }
+.fouls.warn b { color: var(--red); }
+.last { flex: 1; min-width: 0; font-size: 13px; color: var(--dim); }
+.last b { color: var(--ink); font-weight: 600; }
+.pill { font-size: 11px; padding: 3px 8px; border-radius: 99px; border: 1px solid var(--green); color: var(--green); white-space: nowrap; }
+.ghost { min-height: 48px; min-width: 48px; padding: 0 14px; border-radius: 12px; background: var(--tile); border: 1px solid var(--line); font-weight: 700; }
+
+.main { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 540px; gap: 8px; }
+
+/* ---- Jogadores ---- */
+.players { display: flex; flex-direction: column; gap: 6px; min-height: 0; }
+.prow { display: grid; grid-template-columns: 128px 1fr; gap: 8px; align-items: center; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 6px 6px 6px 10px; }
+.prow.gk { border-color: color-mix(in srgb, var(--gr) 55%, var(--line)); }
+.who { display: grid; grid-template-columns: 1fr 48px; align-items: center; }
+.who .num { font-size: 18px; font-weight: 800; }
+.prow.gk .num, .prow.gk .nm { color: var(--gr); }
+.who .nm { font-size: 15px; font-weight: 700; }
+.who .meta { font-size: 12px; color: var(--dim); }
+.who .dots { grid-row: 1 / span 3; grid-column: 2; height: 48px; border-radius: 12px; background: transparent; border: 1px solid var(--line); font-size: 20px; }
+.acts { display: grid; grid-template-columns: 1.15fr 1fr 1fr 1fr; gap: 6px; }
+.a { height: 60px; border-radius: 12px; border: 2px solid var(--line); background: var(--tile); font-weight: 800; font-size: 15px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; }
+.a small { font-size: 11px; font-weight: 600; color: var(--dim); }
+.a.goal { background: var(--green); border-color: var(--green); color: #052e1f; }
+.a.goal small { color: #0b4a33; }
+.a.conc { background: var(--red); border-color: var(--red); color: #3b0909; }
+.a.conc small { color: #5c1414; }
+.a.shot { border-color: var(--cyan); color: var(--cyan); }
+.a.shotgk { border-color: var(--violet); color: var(--violet); }
+.a.sg { border-color: var(--green); color: var(--green); }
+.a.sp { border-color: var(--red); color: var(--red); }
+.a.fd { border-color: color-mix(in srgb, var(--red) 70%, var(--line)); }
+.a.fr { border-color: color-mix(in srgb, var(--amber) 70%, var(--line)); }
+.bench { display: flex; gap: 6px; align-items: stretch; }
+.bench .lbl { writing-mode: vertical-rl; transform: rotate(180deg); font-size: 11px; color: var(--dim); letter-spacing: .1em; text-align: center; }
+.bp { flex: 1; min-height: 52px; border-radius: 12px; background: var(--tile); border: 1px dashed var(--line); text-align: left; padding: 4px 8px; }
+.bp b { display: block; padding-right: 20px; font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bp > span { display: block; white-space: normal; }
+.bp span { font-size: 11px; color: var(--dim); }
+
+/* ---- Registo rápido de equipa ---- */
+.team { display: flex; flex-direction: column; gap: 8px; min-height: 0; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 8px; }
+.card h4 { margin: 0 0 6px; font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--dim); font-weight: 700; }
+.tiles { display: grid; gap: 6px; }
+.tiles.c2 { grid-template-columns: 1fr 1fr; }
+.tiles.c3 { grid-template-columns: 1fr 1fr 1fr; }
+.tile { display: grid; grid-template-columns: 1fr 48px; border-radius: 12px; overflow: hidden; border: 2px solid var(--line); background: var(--tile); }
+.tile .plus { border: 0; background: transparent; text-align: left; padding: 4px 8px; min-height: 54px; display: flex; flex-direction: column; justify-content: center; }
+.tile .plus .k { font-size: 12px; font-weight: 700; }
+.tile .plus .v { font-size: 24px; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1; }
+.tile .plus .v em { font-style: normal; font-size: 12px; color: var(--dim); font-weight: 600; margin-left: 4px; }
+.tile .minus { border: 0; border-left: 1px solid var(--line); background: rgba(255,255,255,.03); font-size: 24px; font-weight: 800; color: var(--dim); }
+.tile.pos { border-color: color-mix(in srgb, var(--green) 65%, var(--line)); }
+.tile.pos .k { color: var(--green); }
+.tile.neg { border-color: color-mix(in srgb, var(--red) 65%, var(--line)); }
+.tile.neg .k { color: var(--red); }
+.tile.cy { border-color: color-mix(in srgb, var(--cyan) 65%, var(--line)); }
+.tile.cy .k { color: var(--cyan); }
+.tile.vi { border-color: color-mix(in srgb, var(--violet) 65%, var(--line)); }
+.tile.vi .k { color: var(--violet); }
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+/* Transições: 1 toque já com o tipo (superioridade) */
+.trow { display: grid; grid-template-columns: 104px repeat(5, 1fr) 48px; gap: 5px; align-items: stretch; }
+.trow + .trow { margin-top: 5px; }
+.trow .lab { display: flex; flex-direction: column; justify-content: center; font-size: 12px; font-weight: 700; }
+.trow .lab b { font-size: 20px; font-variant-numeric: tabular-nums; }
+.trow .lab b em { font-style: normal; font-size: 11px; color: var(--dim); margin-left: 3px; }
+.chip { min-height: 48px; border-radius: 10px; border: 2px solid var(--line); background: var(--tile); font-weight: 800; font-size: 16px; }
+.pos .chip { border-color: color-mix(in srgb, var(--green) 55%, var(--line)); }
+.neg .chip { border-color: color-mix(in srgb, var(--red) 55%, var(--line)); }
+.pos .lab { color: var(--green); } .neg .lab { color: var(--red); }
+.chip.more { font-size: 18px; color: var(--dim); }
+.mn { min-height: 48px; border-radius: 10px; border: 1px solid var(--line); background: rgba(255,255,255,.03); font-size: 22px; font-weight: 800; color: var(--dim); }
+/* Perdas/recuperações: 2 filas no mesmo cartão */
+.prrow { display: grid; grid-template-columns: 96px 1fr; gap: 5px; align-items: center; }
+.prrow + .prrow { margin-top: 5px; }
+.prrow .lab { font-size: 12px; font-weight: 700; }
+.tiles.c4 { grid-template-columns: repeat(4, 1fr); }
+.tile .plus { min-height: 48px !important; padding-top: 2px !important; padding-bottom: 2px !important; }
+.team { gap: 6px; }
+.team .card { padding: 6px 8px; }
+.team .card h4 { margin-bottom: 4px; }
+.trow + .trow, .prrow + .prrow { margin-top: 4px; }
+.tile .plus .v { font-size: 20px !important; }
+/* Banco: mosaicos grandes, sempre à vista; ordem de troca de linha numerada */
+.bp { position: relative; }
+.bp .rest { color: var(--amber); }
+.bp .q { position: absolute; top: 4px; right: 4px; width: 20px; height: 20px; border-radius: 50%; background: var(--cyan); color: #04202c; font-size: 12px; font-weight: 800; display: flex; align-items: center; justify-content: center; }
+.bp.sel { border: 2px solid var(--cyan); border-style: solid; }
+.ctl { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
+.ghost.gl { border-color: var(--amber); color: var(--amber); }
+
+/* ---- iPhone vertical (adaptação) ---- */
+@media (max-width: 600px) {
+  .app { gap: 6px; padding: 6px; }
+  .main { grid-template-columns: 1fr; }
+  .team, .bench, .top .ghost.cfg-tablet, .top .ctl-top { display: none; }
+  .top { display: grid; grid-template-columns: auto 1fr auto auto; gap: 2px 10px; padding: 6px 8px; }
+  .score .n { font-size: 24px; }
+  .clock .t { font-size: 30px; }
+  .last { grid-column: 1 / span 3; grid-row: 2; font-size: 12.5px; }
+  .top .undo { grid-column: 4; grid-row: 1 / span 2; }
+  .top .pill { display: none; }
+  /* Uma fila por jogador: nome à esquerda (tocar no nome = ⋯), 4 ações à direita */
+  .prow { grid-template-columns: 78px 1fr; gap: 6px; padding: 4px 4px 4px 8px; }
+  .who { display: flex; flex-direction: column; min-height: 56px; justify-content: center; border-radius: 10px; }
+  .who .dots { display: none; }
+  .who .num { font-size: 15px; }
+  .who .nm { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .who .meta { font-size: 11px; }
+  .acts { gap: 4px; }
+  .a { height: 56px; font-size: 13px; border-width: 2px; padding: 0 2px; hyphens: manual; }
+  .a small { display: none; }
+  .phonebar { display: grid !important; grid-template-columns: repeat(3, 1fr); }
+  .dock { display: grid !important; }
+}
+.phonebar, .dock { display: none; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.phonebar { grid-template-columns: repeat(3, 1fr); }
+.phonebar .tile .plus { min-height: 54px; padding: 4px 6px; }
+.phonebar .tile .plus .k { font-size: 11.5px; }
+.phonebar .tile .plus .v { font-size: 22px; }
+.dock .ghost { width: 100%; padding: 0 4px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="top">
+    <div class="score"><span class="t">AAL</span><span class="n">2–1</span><span class="t">Adv.</span></div>
+    <div class="clock"><span class="p">1.ª parte</span><span class="t">14:32</span></div>
+    <div class="fouls warn">Faltas<b>5 · 2</b></div>
+    <div class="last">14:20 · <b>Remate fora — #10 Martim S</b> · zona 9</div>
+    <span class="pill">Sincronizado</span>
+    <button class="ghost gl ctl-top">GR-linha</button>
+    <button class="ghost ctl-top">⏸ Pausa</button>
+    <button class="ghost ctl-top">Fim da parte</button>
+    <button class="ghost undo">↩ Desfazer</button>
+    <button class="ghost cfg-tablet" aria-label="Definições">⚙</button>
+  </div>
+
+  <!-- iPhone: as 4 categorias mais usadas no topo; o resto em "Equipa" -->
+  <div class="phonebar">
+    <div class="tile pos"><button class="plus"><span class="k">Trans. a favor</span><span class="v">3<em>· 5</em></span></button><button class="minus">−</button></div>
+    <div class="tile neg"><button class="plus"><span class="k">Trans. contra</span><span class="v">1<em>· 2</em></span></button><button class="minus">−</button></div>
+    <div class="tile neg"><button class="plus"><span class="k">Golo sofrido</span><span class="v">1<em>· 1</em></span></button><button class="minus">−</button></div>
+  </div>
+
+  <div class="main">
+    <section class="players">
+      <div class="prow gk">
+        <div class="who"><span class="num">#1</span><span class="nm">Rafael</span><span class="meta">GR · 14'</span><button class="dots">⋯</button></div>
+        <div class="acts">
+          <button class="a sg">Saída 1x1 ganha</button>
+          <button class="a sp">Saída 1x1 perdida</button>
+          <button class="a fd">Falta feita</button>
+          <button class="a fr">Falta rece&shy;bida</button>
+        </div>
+      </div>
+      <div class="prow">
+        <div class="who"><span class="num">#6</span><span class="nm">Felipe</span><span class="meta">AE · 14' · ⚽1</span><button class="dots">⋯</button></div>
+        <div class="acts">
+          <button class="a goal">Golo</button>
+          <button class="a shot">Remate ▸<small>def · fora · bloq</small></button>
+          <button class="a fd">Falta feita</button>
+          <button class="a fr">Falta rece&shy;bida</button>
+        </div>
+      </div>
+      <div class="prow">
+        <div class="who"><span class="num">#7</span><span class="nm">Dinis</span><span class="meta">FX · 9'</span><button class="dots">⋯</button></div>
+        <div class="acts"><button class="a goal">Golo</button><button class="a shot">Remate ▸<small>def · fora · bloq</small></button><button class="a fd">Falta feita</button><button class="a fr">Falta rece&shy;bida</button></div>
+      </div>
+      <div class="prow">
+        <div class="who"><span class="num">#10</span><span class="nm">Martim S</span><span class="meta">AD · 12'</span><button class="dots">⋯</button></div>
+        <div class="acts"><button class="a goal">Golo</button><button class="a shot">Remate ▸<small>def · fora · bloq</small></button><button class="a fd">Falta feita</button><button class="a fr">Falta rece&shy;bida</button></div>
+      </div>
+      <div class="prow">
+        <div class="who"><span class="num">#19</span><span class="nm">Cartucho</span><span class="meta">PV · 6'</span><button class="dots">⋯</button></div>
+        <div class="acts"><button class="a goal">Golo</button><button class="a shot">Remate ▸<small>def · fora · bloq</small></button><button class="a fd">Falta feita</button><button class="a fr">Falta rece&shy;bida</button></div>
+      </div>
+      <div class="bench">
+        <span class="lbl">BANCO</span>
+        <button class="bp sel"><span class="q">1</span><b>#14 Marcelo G</b><span>6' jogados · <span class="rest">banco 5'</span></span></button>
+        <button class="bp sel"><span class="q">2</span><b>#17 Rogão</b><span>4' jogados · <span class="rest">banco 7'</span></span></button>
+        <button class="bp"><b>#28 Henrique</b><span>3' · banco 2'</span></button>
+        <button class="bp"><b>#8 Ramalho</b><span>0' · banco 14'</span></button>
+        <button class="bp"><b>#26 Lourenço</b><span>GR · 0'</span></button>
+      </div>
+    </section>
+
+    <aside class="team">
+      <div class="card">
+        <h4>Transições — 1 toque regista com a superioridade</h4>
+        <div class="trow pos"><span class="lab">Nossa · com fin.<b>2<em>· 3</em></b></span><button class="chip">3x1</button><button class="chip">2x1</button><button class="chip">3x2</button><button class="chip">2x0</button><button class="chip more">…</button><button class="mn">−</button></div>
+        <div class="trow pos"><span class="lab">Nossa · sem fin.<b>1<em>· 2</em></b></span><button class="chip">3x1</button><button class="chip">2x1</button><button class="chip">3x2</button><button class="chip">2x0</button><button class="chip more">…</button><button class="mn">−</button></div>
+        <div class="trow neg"><span class="lab">Deles · com fin.<b>1<em>· 1</em></b></span><button class="chip">3x1</button><button class="chip">2x1</button><button class="chip">3x2</button><button class="chip">2x0</button><button class="chip more">…</button><button class="mn">−</button></div>
+        <div class="trow neg"><span class="lab">Deles · sem fin.<b>0<em>· 1</em></b></span><button class="chip">3x1</button><button class="chip">2x1</button><button class="chip">3x2</button><button class="chip">2x0</button><button class="chip more">…</button><button class="mn">−</button></div>
+      </div>
+      <div class="card">
+        <h4>Adversário</h4>
+        <div class="tiles c4">
+          <div class="tile neg"><button class="plus"><span class="k">Golo sofrido</span><span class="v">1<em>· 1</em></span></button><button class="minus">−</button></div>
+          <div class="tile vi"><button class="plus"><span class="k">Defendido</span><span class="v">4<em>· 7</em></span></button><button class="minus">−</button></div>
+          <div class="tile vi"><button class="plus"><span class="k">Fora</span><span class="v">2<em>· 3</em></span></button><button class="minus">−</button></div>
+          <div class="tile vi"><button class="plus"><span class="k">Bloqueado</span><span class="v">1<em>· 2</em></span></button><button class="minus">−</button></div>
+        </div>
+      </div>
+      <div class="card">
+        <h4>Bola</h4>
+        <div class="prrow"><span class="lab" style="color:var(--red)">Perdas</span><div class="tiles c3">
+          <div class="tile neg"><button class="plus"><span class="k">Defesa</span><span class="v">1<em>· 2</em></span></button><button class="minus">−</button></div>
+          <div class="tile neg"><button class="plus"><span class="k">Meio</span><span class="v">3<em>· 4</em></span></button><button class="minus">−</button></div>
+          <div class="tile neg"><button class="plus"><span class="k">Ataque</span><span class="v">2<em>· 5</em></span></button><button class="minus">−</button></div>
+        </div></div>
+        <div class="prrow"><span class="lab" style="color:var(--green)">Recuperações</span><div class="tiles c3">
+          <div class="tile pos"><button class="plus"><span class="k">Defesa</span><span class="v">4<em>· 6</em></span></button><button class="minus">−</button></div>
+          <div class="tile pos"><button class="plus"><span class="k">Meio</span><span class="v">2<em>· 3</em></span></button><button class="minus">−</button></div>
+          <div class="tile pos"><button class="plus"><span class="k">Ataque</span><span class="v">1<em>· 1</em></span></button><button class="minus">−</button></div>
+        </div></div>
+      </div>
+    </aside>
+  </div>
+
+  <div class="dock">
+    <button class="ghost">Banco</button>
+    <button class="ghost">Equipa…</button>
+    <button class="ghost">Resumo</button>
+    <button class="ghost">⏸ Pausa</button>
+  </div>
+</div>
+</body>
+</html>

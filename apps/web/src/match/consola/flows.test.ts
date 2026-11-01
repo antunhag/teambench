@@ -6,7 +6,7 @@ const live = { onCourtCount: 5, preKickoff: false };
 describe("stepFlow", () => {
   it("banco com quadra cheia → escolher quem sai → substituição com o tempo do 1º toque", () => {
     const a = stepFlow(null, { type: "bench", inId: "b1", nowMs: 1000 }, live);
-    expect(a.flow).toEqual({ kind: "pick-out", inId: "b1", openedAtMs: 1000 });
+    expect(a.flow).toEqual({ kind: "pick-out", queue: [{ inId: "b1", openedAtMs: 1000 }] });
     const b = stepFlow(a.flow, { type: "out", outId: "p3", nowMs: 5000 }, live);
     expect(b.effect).toEqual({ type: "sub", outId: "p3", inId: "b1", atMs: 1000 });
     expect(b.flow).toBeNull();
@@ -25,14 +25,38 @@ describe("stepFlow", () => {
     expect(c).toEqual({ flow: null, effect: null });
     const d = stepFlow(c.flow, { type: "bench", inId: "b4", nowMs: 900 }, live);
     expect(d.effect).toBeNull();
-    expect(d.flow).toEqual({ kind: "pick-out", inId: "b4", openedAtMs: 900 });
+    expect(d.flow).toEqual({ kind: "pick-out", queue: [{ inId: "b4", openedAtMs: 900 }] });
   });
 
-  it("tocar noutro atleta do banco substitui o fluxo, nunca o completa", () => {
-    const a = stepFlow(null, { type: "bench", inId: "b1", nowMs: 1 }, live);
-    const b = stepFlow(a.flow, { type: "bench", inId: "b2", nowMs: 2 }, live);
-    expect(b.effect).toBeNull();
-    expect(b.flow).toEqual({ kind: "pick-out", inId: "b2", openedAtMs: 2 });
+  it("troca de linha: vários do banco em fila; cada SAI fecha um par pela ordem", () => {
+    let st = stepFlow(null, { type: "bench", inId: "b1", nowMs: 1 }, live);
+    st = stepFlow(st.flow, { type: "bench", inId: "b2", nowMs: 2 }, live);
+    st = stepFlow(st.flow, { type: "bench", inId: "b3", nowMs: 3 }, live);
+    expect(st.effect).toBeNull();
+    const s1 = stepFlow(st.flow, { type: "out", outId: "p4", nowMs: 9 }, live);
+    expect(s1.effect).toEqual({ type: "sub", outId: "p4", inId: "b1", atMs: 1 });
+    const s2 = stepFlow(s1.flow, { type: "out", outId: "p2", nowMs: 9 }, live);
+    expect(s2.effect).toEqual({ type: "sub", outId: "p2", inId: "b2", atMs: 2 });
+    const s3 = stepFlow(s2.flow, { type: "out", outId: "p5", nowMs: 9 }, live);
+    expect(s3.effect).toEqual({ type: "sub", outId: "p5", inId: "b3", atMs: 3 });
+    expect(s3.flow).toBeNull();
+  });
+
+  it("tocar de novo num atleta da fila tira-o; máximo de 4", () => {
+    let st = stepFlow(null, { type: "bench", inId: "b1", nowMs: 1 }, live);
+    st = stepFlow(st.flow, { type: "bench", inId: "b2", nowMs: 2 }, live);
+    st = stepFlow(st.flow, { type: "bench", inId: "b1", nowMs: 3 }, live);
+    expect(st.flow).toEqual({ kind: "pick-out", queue: [{ inId: "b2", openedAtMs: 2 }] });
+    st = stepFlow(st.flow, { type: "bench", inId: "b2", nowMs: 4 }, live);
+    expect(st.flow).toBeNull();
+    for (const id of ["c1", "c2", "c3", "c4", "c5"]) st = stepFlow(st.flow, { type: "bench", inId: id, nowMs: 5 }, live);
+    expect(st.flow?.kind === "pick-out" && st.flow.queue.map((q) => q.inId)).toEqual(["c1", "c2", "c3", "c4"]);
+  });
+
+  it("cancelar limpa a fila inteira", () => {
+    let st = stepFlow(null, { type: "bench", inId: "b1", nowMs: 1 }, live);
+    st = stepFlow(st.flow, { type: "bench", inId: "b2", nowMs: 2 }, live);
+    expect(stepFlow(st.flow, { type: "cancel" }, live)).toEqual({ flow: null, effect: null });
   });
 
   it("vaga exige escolha + confirmação", () => {
