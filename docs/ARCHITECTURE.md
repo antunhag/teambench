@@ -245,6 +245,14 @@ banco sempre à vista com tempo no banco e **troca de linha** (`flows.ts`: fila 
 entradas; cada "SAI" fecha um par pela ordem). Componentes: `PlayerCard`, `BenchStrip`,
 `QuickPanel`, `TransicaoSheet`; `consola/bench.ts` calcula o tempo no banco.
 
+Etapa 2d — **depois do jogo**: o Resumo do jogo mostra "Transições desperdiçadas com
+vantagem" (`transicoesDesperdicadas`, `report.ts`: a favor, sem finalização, superioridade
+em `TRANSICAO_NUMEROS_VANTAGEM`, sem anuladas) e "Estatísticas da Consola"
+(`resumoDetalhado`: por parte e total, sobre `eventosEfetivos`); a Timeline
+(`buildTimelineData`) ignora os lances anulados; a Registo (`MatchEventEditor`) mostra,
+corrige (desfecho, resultado, direção, superioridade, zona/terço) e acrescenta os tipos
+novos — a zona usa a grelha de referência.
+
 Etapa 2c (substituída no visual pela v2; lógica igual) — **na Consola**: "Remate ▸" (nosso) e "Remate deles ▸" (linha do
 GR: defendido = `defesa` do GR em campo; fora/bloqueado = `remate_adv` sem
 jogador) abrem o desfecho na própria linha; saída 1x1 no ⋯ do GR; transições

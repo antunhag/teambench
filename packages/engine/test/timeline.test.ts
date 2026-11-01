@@ -420,3 +420,14 @@ describe("buildTimelineHtml", () => {
     expect(doc).not.toContain("Rui Guarda");
   });
 });
+
+describe("buildTimelineData — anulações", () => {
+  it("golo sofrido anulado não entra no marcador da timeline", () => {
+    const ko = createEvent("kickoff", null, 0, 1, 0, { lineup: [] });
+    const gs = createEvent("golo_sofrido", null, 60_000, 1, 0);
+    const an = createEvent("anulacao", null, 70_000, 1, 0, { alvoId: gs.clientEventId });
+    const fim = createEvent("fim_periodo", null, 600_000, 1, 0, { duracaoSec: 600 });
+    const halves = buildTimelineData([ko, gs, an, fim], [], []);
+    expect(halves[0].goals).toHaveLength(0);
+  });
+});

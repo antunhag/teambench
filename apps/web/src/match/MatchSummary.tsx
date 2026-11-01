@@ -221,6 +221,79 @@ export function MatchSummary({ live, roster, opponent, matchId, teamId, onClose,
       {copyMsg && <p className="hint">{copyMsg}</p>}
       {finishStatus === "error" && <p className="banner error">Não consegui marcar como terminado — tente de novo.</p>}
 
+      {/* Captura detalhada (Consola, specs/009): só aparece se o jogo a teve. Sem lances anulados. */}
+      {(() => {
+        const desperdicadas = engine.transicoesDesperdicadas(state.events);
+        const detalhado = engine.resumoDetalhado(state.events);
+        const temTransicoes = state.events.some((e) => e.type === "transicao");
+        if (!temTransicoes && detalhado.length === 0) return null;
+        return (
+          <>
+            {temTransicoes && (
+              <div style={{ marginTop: 16 }}>
+                <h3 className="section-title">Transições desperdiçadas com vantagem ({desperdicadas.length})</h3>
+                <p className="hint" style={{ marginTop: 0 }}>
+                  Transições a favor, em superioridade numérica (ex.: 3x1, 2x1), que terminaram sem finalização.
+                </p>
+                {desperdicadas.length === 0 ? (
+                  <p className="hint">Nenhuma — todas as transições com vantagem terminaram em finalização.</p>
+                ) : (
+                  <div className="tablewrap">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Parte</th>
+                          <th className="num">Tempo</th>
+                          <th>Superioridade</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {desperdicadas.map((e) => (
+                          <tr key={e.id}>
+                            <td>{engine.periodLabel(e.period, live.format)}</td>
+                            <td className="num">{engine.fmtMinSec(e.ms)}</td>
+                            <td>{e.transicaoNumeros}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
+            {detalhado.length > 0 && (
+              <div style={{ marginTop: 16 }}>
+                <h3 className="section-title">Estatísticas da Consola</h3>
+                <div className="tablewrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th />
+                        {halves.map((h, i) => (
+                          <th key={i} className="num" title={h.label}>{halfShortLabel(h.label)}</th>
+                        ))}
+                        <th className="num">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {detalhado.map((l) => (
+                        <tr key={l.label}>
+                          <td>{l.label}</td>
+                          {halves.map((_, i) => (
+                            <td key={i} className="num">{l.porParte[i + 1] ?? 0}</td>
+                          ))}
+                          <td className="num">{l.total}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </>
+        );
+      })()}
+
       {hasRotationPlan && (
         <div style={{ marginTop: 16 }}>
           <h3 className="section-title">Planeado vs. Real</h3>

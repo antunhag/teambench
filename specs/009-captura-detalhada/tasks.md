@@ -160,12 +160,12 @@ description: "Task list for Captura detalhada de estatísticas (Consola)"
 
 **Independent Test**: quickstart.md "Etapa 2" passos 4 e 7; SC-004.
 
-- [ ] T051 [P] [US4] Em `packages/engine/src/report.ts`, `transicoesDesperdicadas(events)`: `dir=ofensiva`, `resultado=perdida`, `transicaoNumeros` em `TRANSICAO_NUMEROS_VANTAGEM`, sobre `eventosEfetivos` (FR-019, FR-020; research Decisão 8)
-- [ ] T052 [P] [US4] Testes em `packages/engine/test/report.test.ts`: exclui com finalização, igualdade/desvantagem, transições contra e anuladas
-- [ ] T053 [P] [US3] (describeEvent dos tipos novos e da anulação já feito na 2c; falta: agregados) Em `packages/engine/src/report.ts`, `describeEvent` e agregados para os novos tipos e `anulacao`, a partir de `eventosEfetivos` (FR-021); testes em `packages/engine/test/report.test.ts`
-- [ ] T054 [P] [US3] Em `packages/engine/src/timeline.ts`, novos tipos na timeline exportável e anulados marcados/excluídos; testes em `packages/engine/test/timeline.test.ts` (FR-021)
-- [ ] T055 [US4] Em `apps/web/src/match/MatchSummary.tsx`, secção "Transições desperdiçadas com vantagem" e os novos agregados
-- [ ] T056 [US3] Em `apps/web/src/match/MatchEventEditor.tsx`, mostrar e permitir corrigir os novos tipos e as anulações, sem apagar eventos já enviados (correções com `correcao: true`, como hoje)
+- [x] T051 [P] [US4] Em `packages/engine/src/report.ts`, `transicoesDesperdicadas(events)`: `dir=ofensiva`, `resultado=perdida`, `transicaoNumeros` em `TRANSICAO_NUMEROS_VANTAGEM`, sobre `eventosEfetivos` (FR-019, FR-020; research Decisão 8)
+- [x] T052 [P] [US4] Testes em `packages/engine/test/report.test.ts`: exclui com finalização, igualdade/desvantagem, transições contra e anuladas
+- [x] T053 [P] [US3] (describeEvent dos tipos novos e da anulação já feito na 2c; falta: agregados) Em `packages/engine/src/report.ts`, `describeEvent` e agregados para os novos tipos e `anulacao`, a partir de `eventosEfetivos` (FR-021); testes em `packages/engine/test/report.test.ts`
+- [x] T054 [P] [US3] Em `packages/engine/src/timeline.ts`, novos tipos na timeline exportável e anulados marcados/excluídos; testes em `packages/engine/test/timeline.test.ts` (FR-021)
+- [x] T055 [US4] Em `apps/web/src/match/MatchSummary.tsx`, secção "Transições desperdiçadas com vantagem" e os novos agregados
+- [x] T056 [US3] Em `apps/web/src/match/MatchEventEditor.tsx`, mostrar e permitir corrigir os novos tipos e as anulações, sem apagar eventos já enviados (correções com `correcao: true`, como hoje)
 
 ---
 

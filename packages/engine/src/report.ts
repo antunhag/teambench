@@ -1,5 +1,7 @@
 // Descrição em texto do registo cronológico e exportação para colar no
 // Excel/Sheets do clube — porta de describeEvent/exportText do banco.html.
+import { eventosEfetivos } from "./annul";
+import { TRANSICAO_NUMEROS_VANTAGEM } from "./goalTypes";
 import { periodLabel } from "./matchFormat";
 import { tipoGoloLabel } from "./goalTypes";
 import { fmtMinSec } from "./time";
@@ -338,4 +340,77 @@ export function exportText(
   const descriptions = describeEvents(events, playerById, format);
   events.forEach((e) => lines.push(descriptions.get(e.id) ?? describeEvent(e, playerById, format)));
   return lines.join("\n");
+}
+
+/**
+ * Transições ofensivas desperdiçadas com vantagem numérica real (FR-019,
+ * FR-020; research Decisão 8): a favor (`dir` ofensiva), sem finalização
+ * (`resultado` perdida) e com uma superioridade de TRANSICAO_NUMEROS_VANTAGEM
+ * — nunca igualdade/desvantagem, nunca com finalização, nunca anuladas.
+ * Ordem cronológica.
+ */
+export function transicoesDesperdicadas(events: MatchEvent[]): MatchEvent[] {
+  return eventosEfetivos(events)
+    .filter(
+      (e) =>
+        e.type === "transicao" &&
+        e.dir === "ofensiva" &&
+        e.resultado === "perdida" &&
+        !!e.transicaoNumeros &&
+        TRANSICAO_NUMEROS_VANTAGEM.includes(e.transicaoNumeros)
+    )
+    .sort((a, b) => (a.period - b.period) || (eventMs(a) - eventMs(b)));
+}
+
+export interface LinhaResumo {
+  label: string;
+  /** Contagem por parte (índice = número da parte) e total. */
+  porParte: Record<number, number>;
+  total: number;
+}
+
+/**
+ * Totais da captura detalhada (Consola) por parte e no jogo, sempre sobre os
+ * eventos efetivos (sem anulados) — para o Resumo do jogo (FR-021). Só as
+ * linhas com pelo menos um lance; lista vazia = jogo sem captura detalhada.
+ */
+export function resumoDetalhado(events: MatchEvent[]): LinhaResumo[] {
+  const efetivos = eventosEfetivos(events);
+  const linhas: { label: string; conta: (e: MatchEvent) => boolean }[] = [
+    { label: "Remates — golo", conta: (e) => e.type === "golo" },
+    { label: "Remates — defendidos", conta: (e) => e.type === "remate" && e.desfecho === "defendido" },
+    { label: "Remates — fora", conta: (e) => e.type === "remate" && e.desfecho === "fora" },
+    { label: "Remates — bloqueados", conta: (e) => e.type === "remate" && e.desfecho === "bloqueado" },
+    { label: "Remates deles — golo sofrido", conta: (e) => e.type === "golo_sofrido" },
+    { label: "Remates deles — defendidos (GR)", conta: (e) => e.type === "defesa" },
+    { label: "Remates deles — fora", conta: (e) => e.type === "remate_adv" && e.desfecho === "fora" },
+    { label: "Remates deles — bloqueados", conta: (e) => e.type === "remate_adv" && e.desfecho === "bloqueado" },
+    { label: "Transições a favor — com finalização", conta: (e) => e.type === "transicao" && e.dir === "ofensiva" && e.resultado === "ganha" },
+    { label: "Transições a favor — sem finalização", conta: (e) => e.type === "transicao" && e.dir === "ofensiva" && e.resultado === "perdida" },
+    { label: "Transições contra — com finalização", conta: (e) => e.type === "transicao" && e.dir === "defensiva" && e.resultado === "ganha" },
+    { label: "Transições contra — sem finalização", conta: (e) => e.type === "transicao" && e.dir === "defensiva" && e.resultado === "perdida" },
+    { label: "Perdas — defesa", conta: (e) => e.type === "perda" && e.zona3 === "defesa" },
+    { label: "Perdas — meio-campo", conta: (e) => e.type === "perda" && e.zona3 === "meio" },
+    { label: "Perdas — ataque", conta: (e) => e.type === "perda" && e.zona3 === "ataque" },
+    { label: "Recuperações — defesa", conta: (e) => e.type === "recuperacao" && e.zona3 === "defesa" },
+    { label: "Recuperações — meio-campo", conta: (e) => e.type === "recuperacao" && e.zona3 === "meio" },
+    { label: "Recuperações — ataque", conta: (e) => e.type === "recuperacao" && e.zona3 === "ataque" },
+    { label: "Saídas 1x1 do GR — ganhas", conta: (e) => e.type === "saida" && e.resultado === "ganha" },
+    { label: "Saídas 1x1 do GR — perdidas", conta: (e) => e.type === "saida" && e.resultado === "perdida" },
+  ];
+  // Só faz sentido mostrar se houve captura detalhada (pelo menos um tipo novo).
+  const detalhados = new Set<MatchEvent["type"]>(["remate", "remate_adv", "defesa", "saida", "transicao", "perda", "recuperacao"]);
+  if (!efetivos.some((e) => detalhados.has(e.type))) return [];
+  return linhas
+    .map(({ label, conta }) => {
+      const porParte: Record<number, number> = {};
+      let total = 0;
+      for (const e of efetivos) {
+        if (!conta(e)) continue;
+        porParte[e.period] = (porParte[e.period] ?? 0) + 1;
+        total++;
+      }
+      return { label, porParte, total };
+    })
+    .filter((l) => l.total > 0);
 }

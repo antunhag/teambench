@@ -2,6 +2,7 @@ import * as engine from "@teambench/engine";
 import { useEffect, useState } from "preact/hooks";
 import { supabase } from "../supabaseClient";
 import { usePlayers, type PlayerRow } from "../team/usePlayers";
+import { ZoneGrid } from "./consola/GoalSheet";
 import { PlayerChip, Sheet } from "./PickerUI";
 import { useMatchLock } from "./useMatchLock";
 
@@ -38,10 +39,60 @@ interface Draft {
   /** Motivo da pausa — só existe (e só importa) em "pausa"/"fim_pausa". */
   reasonId: string | null;
   label: string;
+  // Captura detalhada (specs/009): remate/remate_adv, saida/transicao, transicao, perda/recuperacao.
+  desfecho: string | null;
+  resultado: string | null;
+  dir: string | null;
+  zona3: string | null;
+}
+
+/** Opções dos campos da captura detalhada, por tipo de evento (data-model.md). */
+type CampoDetalhe = "desfecho" | "resultado" | "dir" | "zona3";
+function opcoesCampo(type: string | undefined, campo: CampoDetalhe): { v: string; l: string }[] {
+  switch (campo) {
+    case "desfecho":
+      return type === "remate_adv"
+        ? [
+            { v: "fora", l: "Fora" },
+            { v: "bloqueado", l: "Bloqueado" },
+          ]
+        : [
+            { v: "defendido", l: "Defendido" },
+            { v: "fora", l: "Fora" },
+            { v: "bloqueado", l: "Bloqueado" },
+          ];
+    case "resultado":
+      return type === "transicao"
+        ? [
+            { v: "ganha", l: "Com finalização" },
+            { v: "perdida", l: "Sem finalização" },
+          ]
+        : [
+            { v: "ganha", l: "Ganha" },
+            { v: "perdida", l: "Perdida" },
+          ];
+    case "dir":
+      return [
+        { v: "ofensiva", l: "A favor" },
+        { v: "defensiva", l: "Contra" },
+      ];
+    case "zona3":
+      return [
+        { v: "defesa", l: "Defesa" },
+        { v: "meio", l: "Meio-campo" },
+        { v: "ataque", l: "Ataque" },
+      ];
+  }
+}
+function rotuloCampo(type: string | undefined, campo: CampoDetalhe, v: string | null): string {
+  return opcoesCampo(type, campo).find((o) => o.v === v)?.l ?? "—";
 }
 
 type DetailPicker =
-  | { rowId: string; kind: "player" | "scorer" | "assist" | "in" | "out" | "tipo" | "zona" | "transicao" | "lineup" | "motivo" }
+  | {
+      rowId: string;
+      kind: "player" | "scorer" | "assist" | "in" | "out" | "tipo" | "zona" | "transicao" | "lineup" | "motivo" | CampoDetalhe;
+    }
   | null;
 
 function sameIds(a: string[], b: string[]): boolean {
@@ -69,6 +120,16 @@ const ADDABLE_TYPES: { id: engine.EventType; label: string }[] = [
   { id: "lesao_fim", label: "Fim de atendimento" },
   { id: "kickoff", label: "Início da parte" },
   { id: "fim_periodo", label: "Fim da parte" },
+  // Captura detalhada (Consola, specs/009)
+  { id: "remate", label: "Remate (sem golo)" },
+  { id: "remate_adv", label: "Remate deles (fora/bloqueado)" },
+  { id: "defesa", label: "Defesa do GR" },
+  { id: "saida", label: "Saída 1x1 do GR" },
+  { id: "transicao", label: "Transição" },
+  { id: "perda", label: "Perda de bola" },
+  { id: "recuperacao", label: "Recuperação de bola" },
+  { id: "goleiro_linha_inicio", label: "Goleiro-linha — início" },
+  { id: "goleiro_linha_fim", label: "Goleiro-linha — fim" },
 ];
 
 function fmtMinSec(ms: number): string {
@@ -99,6 +160,10 @@ function draftFromRow(r: EventRow): Draft {
     lineup: p.lineup ?? null,
     reasonId: p.reasonId ?? null,
     label: p.label ?? "",
+    desfecho: p.desfecho ?? null,
+    resultado: p.resultado ?? null,
+    dir: p.dir ?? null,
+    zona3: p.zona3 ?? null,
   };
 }
 
@@ -106,6 +171,7 @@ function draftsEqual(a: Draft, b: Draft): boolean {
   return a.period === b.period && a.time === b.time && a.playerId === b.playerId && a.assistId === b.assistId &&
     a.outId === b.outId && a.tipo === b.tipo && a.zona === b.zona && a.transicaoNumeros === b.transicaoNumeros &&
     a.transicaoBalizaDeserta === b.transicaoBalizaDeserta && a.reasonId === b.reasonId && a.label === b.label &&
+    a.desfecho === b.desfecho && a.resultado === b.resultado && a.dir === b.dir && a.zona3 === b.zona3 &&
     (a.lineup == null && b.lineup == null ? true : a.lineup != null && b.lineup != null && sameIds(a.lineup, b.lineup));
 }
 
@@ -165,6 +231,10 @@ export function MatchEventEditor({ teamId, matchId, opponent, onClose, canDelete
   const [newLabel, setNewLabel] = useState("");
   const [newReasonId, setNewReasonId] = useState<string | null>(null);
   const [newLineup, setNewLineup] = useState<string[] | null>(null);
+  const [newDesfecho, setNewDesfecho] = useState<string | null>(null);
+  const [newResultado, setNewResultado] = useState<string | null>(null);
+  const [newDir, setNewDir] = useState<string | null>(null);
+  const [newZona3, setNewZona3] = useState<string | null>(null);
   const [addStatus, setAddStatus] = useState<"idle" | "saving" | "error">("idle");
   const [addError, setAddError] = useState("");
   const [transicaoCustom, setTransicaoCustom] = useState("");
@@ -181,6 +251,10 @@ export function MatchEventEditor({ teamId, matchId, opponent, onClose, canDelete
     setNewLabel("");
     setNewReasonId(null);
     setNewLineup(null);
+    setNewDesfecho(null);
+    setNewResultado(null);
+    setNewDir(null);
+    setNewZona3(null);
   }
 
   function newEventValid(): boolean {
@@ -199,6 +273,20 @@ export function MatchEventEditor({ teamId, matchId, opponent, onClose, canDelete
         return !!newPlayerId;
       case "pausa":
         return newLabel.trim().length > 0;
+      // Captura detalhada — mesmas regras do motor (data-model.md, Validações).
+      case "remate":
+        return !!newPlayerId && !!newDesfecho;
+      case "remate_adv":
+        return newDesfecho === "fora" || newDesfecho === "bloqueado";
+      case "defesa":
+        return !!newPlayerId;
+      case "saida":
+        return !!newPlayerId && !!newResultado;
+      case "transicao":
+        return !!newDir && !!newResultado && !!newTransicaoNumeros;
+      case "perda":
+      case "recuperacao":
+        return !!newZona3;
       default:
         return true;
     }
@@ -228,6 +316,16 @@ export function MatchEventEditor({ teamId, matchId, opponent, onClose, canDelete
       extra.reasonId = newReasonId ?? undefined;
     }
     if (newType === "kickoff" && newLineup) extra.lineup = newLineup;
+    if (newType === "remate" || newType === "remate_adv") extra.desfecho = newDesfecho as engine.Desfecho;
+    if (newType === "saida") extra.resultado = newResultado as "ganha" | "perdida";
+    if (newType === "transicao") {
+      extra.dir = newDir as "ofensiva" | "defensiva";
+      extra.resultado = newResultado as "ganha" | "perdida";
+      extra.transicaoNumeros = newTransicaoNumeros;
+    }
+    if (newType === "perda" || newType === "recuperacao") extra.zona3 = newZona3 as engine.Zona3;
+    if (["remate", "remate_adv", "defesa", "saida", "falta", "falta_sofrida", "cartao_amarelo", "cartao_vermelho"].includes(newType) && newZona)
+      extra.zona = newZona;
     const ev = engine.createEvent(newType, newPlayerId, ms, period, Date.now(), extra);
     setAddStatus("saving");
     const { error } = await supabase.from("match_events").insert({
@@ -253,9 +351,16 @@ export function MatchEventEditor({ teamId, matchId, opponent, onClose, canDelete
     await load();
   }
 
-  function applyPickerField(field: "playerId" | "assistId" | "outId" | "tipo" | "zona" | "transicaoNumeros", value: string | number | null) {
+  function applyPickerField(
+    field: "playerId" | "assistId" | "outId" | "tipo" | "zona" | "transicaoNumeros" | CampoDetalhe,
+    value: string | number | null
+  ) {
     if (!picker) return;
     if (picker.rowId === NEW_ROW_ID) {
+      if (field === "desfecho") setNewDesfecho(value as string | null);
+      if (field === "resultado") setNewResultado(value as string | null);
+      if (field === "dir") setNewDir(value as string | null);
+      if (field === "zona3") setNewZona3(value as string | null);
       if (field === "playerId") setNewPlayerId(value as string | null);
       if (field === "assistId") setNewAssistId(value as string | null);
       if (field === "outId") setNewOutId(value as string | null);
@@ -378,6 +483,7 @@ export function MatchEventEditor({ teamId, matchId, opponent, onClose, canDelete
     setSavingId(row.id);
     const min = Math.floor(ms / 60000);
     const sec = Math.floor((ms % 60000) / 1000);
+    const rowType = (row.payload as { type?: string }).type;
     const payload = {
       ...row.payload,
       ms,
@@ -389,11 +495,16 @@ export function MatchEventEditor({ teamId, matchId, opponent, onClose, canDelete
       outId: draft.outId,
       tipo: draft.tipo,
       zona: draft.zona,
-      transicaoNumeros: draft.tipo === "trs" ? draft.transicaoNumeros : null,
+      // Na transição (Consola) a superioridade é do próprio evento, não do tipo de golo "trs".
+      transicaoNumeros: draft.tipo === "trs" || rowType === "transicao" ? draft.transicaoNumeros : null,
       transicaoBalizaDeserta: draft.tipo === "trs" && draft.transicaoBalizaDeserta,
       lineup: draft.lineup,
       reasonId: draft.reasonId,
       label: draft.label,
+      ...(draft.desfecho ? { desfecho: draft.desfecho } : {}),
+      ...(draft.resultado ? { resultado: draft.resultado } : {}),
+      ...(draft.dir ? { dir: draft.dir } : {}),
+      ...(draft.zona3 ? { zona3: draft.zona3 } : {}),
       // Toda gravação por aqui é, por definição, uma correção feita depois do
       // registo original — exigido pela trigger match_events_update_guard
       // (migração 0026): um UPDATE que muda dado sem essa flag é rejeitado,
@@ -509,9 +620,56 @@ export function MatchEventEditor({ teamId, matchId, opponent, onClose, canDelete
       case "cartao_vermelho":
       case "falta":
       case "falta_sofrida":
+        return (
+          <>
+            {btn(`Jogador: ${playerLabel(draft.playerId)}`, "player")}
+            {btn(`Zona: ${draft.zona ?? "—"}`, "zona")}
+          </>
+        );
       case "lesao_inicio":
       case "lesao_fim":
         return btn(`Jogador: ${playerLabel(draft.playerId)}`, "player");
+      case "remate":
+        return (
+          <>
+            {btn(`Jogador: ${playerLabel(draft.playerId)}`, "player")}
+            {btn(`Desfecho: ${rotuloCampo(type, "desfecho", draft.desfecho)}`, "desfecho")}
+            {btn(`Zona: ${draft.zona ?? "—"}`, "zona")}
+          </>
+        );
+      case "remate_adv":
+        return (
+          <>
+            {btn(`Desfecho: ${rotuloCampo(type, "desfecho", draft.desfecho)}`, "desfecho")}
+            {btn(`Zona: ${draft.zona ?? "—"}`, "zona")}
+          </>
+        );
+      case "defesa":
+        return (
+          <>
+            {btn(`GR: ${playerLabel(draft.playerId)}`, "player")}
+            {btn(`Zona: ${draft.zona ?? "—"}`, "zona")}
+          </>
+        );
+      case "saida":
+        return (
+          <>
+            {btn(`GR: ${playerLabel(draft.playerId)}`, "player")}
+            {btn(`Resultado: ${rotuloCampo(type, "resultado", draft.resultado)}`, "resultado")}
+            {btn(`Zona: ${draft.zona ?? "—"}`, "zona")}
+          </>
+        );
+      case "transicao":
+        return (
+          <>
+            {btn(`Direção: ${rotuloCampo(type, "dir", draft.dir)}`, "dir")}
+            {btn(`Resultado: ${rotuloCampo(type, "resultado", draft.resultado)}`, "resultado")}
+            {btn(`Superioridade: ${draft.transicaoNumeros ?? "—"}`, "transicao")}
+          </>
+        );
+      case "perda":
+      case "recuperacao":
+        return btn(`Zona do campo: ${rotuloCampo(type, "zona3", draft.zona3)}`, "zona3");
       case "substituicao":
         return (
           <>
@@ -564,9 +722,56 @@ export function MatchEventEditor({ teamId, matchId, opponent, onClose, canDelete
       case "cartao_vermelho":
       case "falta":
       case "falta_sofrida":
+        return (
+          <>
+            {btn(`Jogador: ${playerLabel(newPlayerId)}`, "player")}
+            {btn(`Zona: ${newZona ?? "—"}`, "zona")}
+          </>
+        );
       case "lesao_inicio":
       case "lesao_fim":
         return btn(`Jogador: ${playerLabel(newPlayerId)}`, "player");
+      case "remate":
+        return (
+          <>
+            {btn(`Jogador: ${playerLabel(newPlayerId)}`, "player")}
+            {btn(`Desfecho: ${rotuloCampo(newType, "desfecho", newDesfecho)}`, "desfecho")}
+            {btn(`Zona: ${newZona ?? "—"}`, "zona")}
+          </>
+        );
+      case "remate_adv":
+        return (
+          <>
+            {btn(`Desfecho: ${rotuloCampo(newType, "desfecho", newDesfecho)}`, "desfecho")}
+            {btn(`Zona: ${newZona ?? "—"}`, "zona")}
+          </>
+        );
+      case "defesa":
+        return (
+          <>
+            {btn(`GR: ${playerLabel(newPlayerId)}`, "player")}
+            {btn(`Zona: ${newZona ?? "—"}`, "zona")}
+          </>
+        );
+      case "saida":
+        return (
+          <>
+            {btn(`GR: ${playerLabel(newPlayerId)}`, "player")}
+            {btn(`Resultado: ${rotuloCampo(newType, "resultado", newResultado)}`, "resultado")}
+            {btn(`Zona: ${newZona ?? "—"}`, "zona")}
+          </>
+        );
+      case "transicao":
+        return (
+          <>
+            {btn(`Direção: ${rotuloCampo(newType, "dir", newDir)}`, "dir")}
+            {btn(`Resultado: ${rotuloCampo(newType, "resultado", newResultado)}`, "resultado")}
+            {btn(`Superioridade: ${newTransicaoNumeros ?? "—"}`, "transicao")}
+          </>
+        );
+      case "perda":
+      case "recuperacao":
+        return btn(`Zona do campo: ${rotuloCampo(newType, "zona3", newZona3)}`, "zona3");
       case "substituicao":
         return (
           <>
@@ -614,6 +819,10 @@ export function MatchEventEditor({ teamId, matchId, opponent, onClose, canDelete
       lineup: d.lineup ?? undefined,
       reasonId: d.reasonId ?? undefined,
       label: d.label || undefined,
+      desfecho: (d.desfecho ?? undefined) as engine.Desfecho | undefined,
+      resultado: (d.resultado ?? undefined) as "ganha" | "perdida" | undefined,
+      dir: (d.dir ?? undefined) as "ofensiva" | "defensiva" | undefined,
+      zona3: (d.zona3 ?? undefined) as engine.Zona3 | undefined,
     };
   }
 
@@ -1000,19 +1209,33 @@ export function MatchEventEditor({ teamId, matchId, opponent, onClose, canDelete
       )}
 
       {picker && picker.kind === "zona" && (
-        <Sheet title="Zona do golo?" sub="Grelha 3×4 (1-3 mais perto da baliza, 10-12 mais perto do meio-campo)" onClose={() => setPicker(null)}>
-          <div className="zonegrid">
-            {engine.ZONAS_GOLO.map((z) => (
-              <button key={z} type="button" className="zbtn" onClick={() => applyPickerField("zona", z)}>
-                {z}
-              </button>
-            ))}
-          </div>
+        <Sheet title="Zona?" sub="Grelha de referência do clube: nossa baliza à esquerda" onClose={() => setPicker(null)}>
+          <ZoneGrid value={null} onPick={(z) => applyPickerField("zona", z)} />
           <button type="button" className="btn ghost block" onClick={() => applyPickerField("zona", null)} style={{ marginTop: 10 }}>
             Não sei / saltar
           </button>
         </Sheet>
       )}
+
+      {picker &&
+        (pickerRow || pickerIsNew) &&
+        (picker.kind === "desfecho" || picker.kind === "resultado" || picker.kind === "dir" || picker.kind === "zona3") &&
+        (() => {
+          const campo = picker.kind;
+          const type = pickerIsNew ? newType : (pickerRow?.payload as { type?: string } | undefined)?.type;
+          const titulos: Record<CampoDetalhe, string> = { desfecho: "Desfecho do remate", resultado: "Resultado", dir: "Direção da transição", zona3: "Zona do campo" };
+          return (
+            <Sheet title={titulos[campo]} onClose={() => setPicker(null)}>
+              <div className="actiongrid">
+                {opcoesCampo(type, campo).map((o) => (
+                  <button key={o.v} type="button" className="abtn" onClick={() => applyPickerField(campo, o.v)}>
+                    {o.l}
+                  </button>
+                ))}
+              </div>
+            </Sheet>
+          );
+        })()}
 
       {picker && (pickerRow || pickerIsNew) && picker.kind === "lineup" && (
         <Sheet

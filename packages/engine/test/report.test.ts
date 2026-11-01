@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createEvent } from "../src/events";
-import { buildEventsExport, describeEvent, describeEvents, duracoesDerivadas, exportText, onCourtTimeline } from "../src/report";
+import { buildEventsExport, describeEvent, describeEvents, duracoesDerivadas, exportText, onCourtTimeline, resumoDetalhado, transicoesDesperdicadas } from "../src/report";
 import type { MatchEvent, MatchRow, Player } from "../src/types";
 
 const salvador: Player = { id: "athlete-salvador", num: "30", name: "Salvador Silva Gonçalves", pos: "Ala Esquerda" };
@@ -219,5 +219,33 @@ describe("describeEvent — tipos da captura detalhada (spec 009)", () => {
     const t = createEvent("transicao", null, 1000, 1, 0, { dir: "defensiva", resultado: "ganha", transicaoNumeros: "2x2" });
     const a = createEvent("anulacao", null, 2000, 1, 0, { alvoId: t.clientEventId });
     expect(describeEvents([t, a], who).get(a.id)).toMatch(/Anulado: \[1ª Parte · 00:01\] Transição contra 2x2 — com finalização/);
+  });
+});
+
+describe("transicoesDesperdicadas (FR-019/020)", () => {
+  const t = (dir: "ofensiva" | "defensiva", resultado: "ganha" | "perdida", n: string, ms: number) =>
+    createEvent("transicao", null, ms, 1, 0, { dir, resultado, transicaoNumeros: n });
+  it("só a favor, sem finalização e com vantagem real; sem anuladas", () => {
+    const ok1 = t("ofensiva", "perdida", "3x1", 1000);
+    const ok2 = t("ofensiva", "perdida", "2x0", 5000);
+    const comFin = t("ofensiva", "ganha", "3x1", 2000);
+    const igual = t("ofensiva", "perdida", "2x2", 3000);
+    const contra = t("defensiva", "perdida", "3x1", 4000);
+    const anulada = t("ofensiva", "perdida", "2x1", 6000);
+    const anul = createEvent("anulacao", null, 7000, 1, 0, { alvoId: anulada.clientEventId });
+    const r = transicoesDesperdicadas([ok2, comFin, igual, contra, anulada, anul, ok1]);
+    expect(r.map((e) => e.transicaoNumeros)).toEqual(["3x1", "2x0"]);
+  });
+});
+
+describe("resumoDetalhado", () => {
+  it("conta por parte e total, sem anulados; vazio sem captura detalhada", () => {
+    expect(resumoDetalhado([createEvent("golo", "p1", 0, 1, 0)])).toEqual([]);
+    const p1 = createEvent("perda", null, 0, 1, 0, { zona3: "meio" });
+    const p2 = { ...createEvent("perda", null, 0, 2, 0, { zona3: "meio" }) };
+    const p3 = createEvent("perda", null, 0, 2, 0, { zona3: "meio" });
+    const anul = createEvent("anulacao", null, 0, 2, 0, { alvoId: p3.clientEventId });
+    const r = resumoDetalhado([p1, p2, p3, anul]);
+    expect(r).toEqual([{ label: "Perdas — meio-campo", porParte: { 1: 1, 2: 1 }, total: 2 }]);
   });
 });

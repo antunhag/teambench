@@ -2,6 +2,7 @@
 // do banco.html. Reconstrói, a partir só do registo cronológico (nunca de uma
 // grelha manual de minutos), quem esteve em quadra minuto a minuto em cada
 // parte, com golos/cartões/faltas marcados no segundo exato.
+import { eventosEfetivos } from "./annul";
 import { tipoGoloLabel } from "./goalTypes";
 import { isTimeoutPause } from "./liveMatch";
 import { periodLabel } from "./matchFormat";
@@ -62,7 +63,10 @@ export interface TimelineHalf {
   pauses: TimelinePause[];
 }
 
-export function buildTimelineData(events: MatchEvent[], playersList: Player[], titularIds: string[]): TimelineHalf[] {
+export function buildTimelineData(allEvents: MatchEvent[], playersList: Player[], titularIds: string[]): TimelineHalf[] {
+  // Sem os lances anulados pelo "−" da Consola (ex.: um golo sofrido anulado
+  // não aparece no marcador nem na barra) — ver annul.ts.
+  const events = eventosEfetivos(allEvents);
   const byId = new Map(playersList.map((p) => [p.id, p]));
   const periods = new Map<number, MatchEvent[]>();
   events.forEach((e) => {
