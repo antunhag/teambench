@@ -1804,3 +1804,36 @@ textarea.exportbox {
 .cv--tablet-h .cv-tiles.c4 {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
+
+/* Banco: todos visíveis, sem scroll — grelha que parte em mais filas (pedido do utilizador, 2026-11-01) */
+.cv-bench {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(124px, 1fr));
+  overflow: visible;
+}
+.cv-bench .cv-bp {
+  min-height: 48px;
+  padding: 3px 8px;
+}
+.cv-bench.in-sheet {
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+}
+/* Tablet em pé: Adversário e Bola lado a lado por baixo das transições, para os 5 cartões e o banco caberem */
+.cv--tablet-v .cv-right {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+.cv--tablet-v .cv-right > .cv-panel:first-child {
+  grid-column: 1 / -1;
+}
+.cv--tablet-v .cv-tiles.c4 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.cv--tablet-v .cv-prrow {
+  grid-template-columns: 1fr;
+  gap: 2px;
+}
+.cv--tablet-v .cv-bench {
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+}
