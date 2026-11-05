@@ -132,6 +132,20 @@ describe("exportText", () => {
     const text = exportText([], [], { nos: 2, advers: 1 }, byId, undefined, "AAL", "Ordem SC");
     expect(text).toContain("Resultado: AAL 2 - 1 Ordem SC");
   });
+
+  it("cada linha de atleta tem tantas colunas como o cabeçalho, alinhadas (Atleta na 4.ª)", () => {
+    const rows: MatchRow[] = [
+      { playerId: salvador.id, num: "30", nome: salvador.name, convocado: "Sim", titular: "Sim", min: 20, golos: 1, assist: 0, ca: 0, cv: 0 },
+    ];
+    const lines = exportText(rows, [], { nos: 1, advers: 0 }, byId, undefined, "AAL", "Caxinas").split("\n");
+    const header = lines[1].split("\t");
+    const row = lines[2].split("\t");
+    expect(row).toHaveLength(header.length);
+    expect(row[header.indexOf("Adversário")]).toBe("Caxinas");
+    expect(row[header.indexOf("Atleta")]).toBe(salvador.name);
+    expect(row[header.indexOf("Minutos Jogados")]).toBe("20");
+    expect(row[header.indexOf("Golos")]).toBe("1");
+  });
 });
 
 describe("buildEventsExport", () => {

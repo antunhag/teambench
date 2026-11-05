@@ -4,7 +4,16 @@
 // nunca mutam nada por fora. Isso é o que torna esta camada testável sem
 // precisar simular a interface, e é também o que a torna segura para rodar
 // tanto localmente offline quanto (no futuro) num worker de sincronização.
-import { createClockAccounting, markOnSince, nowElapsedMs as clockNowElapsedMs, playerSeconds, settleAll, settlePlayer } from "./clock";
+import {
+  createClockAccounting,
+  discountPause,
+  markOnSince,
+  nowElapsedMs as clockNowElapsedMs,
+  playerSeconds,
+  settleAll,
+  settlePlayer,
+  settlePlayerDuringPause,
+} from "./clock";
 import type { ClockState } from "./clock";
 import { eventosEfetivos, podeAnular } from "./annul";
 import { createEvent, recomputeScoreFor } from "./events";
@@ -217,13 +226,11 @@ export function endPause(state: LiveMatchState, nowMs: number): LiveMatchState {
   if (!state.activePause) return state;
   const atMs = matchElapsedMs(state, nowMs);
   const durMs = Math.max(0, atMs - state.activePause.startedAtMs);
-  let onCourtSince = state.clockAcc.onCourtSince;
-  if (isTimeoutPause(state.activePause.reasonId)) {
-    onCourtSince = { ...onCourtSince };
-    state.onCourt.forEach((id) => {
-      if (onCourtSince[id] != null) onCourtSince[id] += durMs;
-    });
-  }
+  // Pedido de tempo: ver discountPause (clock.ts) — quem entrou durante a
+  // pausa só começa a contar no recomeço.
+  const clockAcc = isTimeoutPause(state.activePause.reasonId)
+    ? discountPause(state.clockAcc, state.onCourt, state.activePause.startedAtMs, atMs)
+    : state.clockAcc;
   const ev = createEvent("fim_pausa", null, atMs, state.period, nowMs, {
     label: state.activePause.label,
     reasonId: state.activePause.reasonId,
@@ -231,10 +238,17 @@ export function endPause(state: LiveMatchState, nowMs: number): LiveMatchState {
   });
   return {
     ...state,
-    clockAcc: { ...state.clockAcc, onCourtSince },
+    clockAcc,
     activePause: null,
     events: [...state.events, ev],
   };
+}
+
+/** Quem sai de quadra: durante um pedido de tempo, o tempo dele acaba no início da pausa (ver settlePlayerDuringPause). */
+function settleOut(state: LiveMatchState, acc: ClockAccounting, playerId: string, atMs: number): ClockAccounting {
+  return state.activePause && isTimeoutPause(state.activePause.reasonId)
+    ? settlePlayerDuringPause(acc, playerId, atMs, state.activePause.startedAtMs)
+    : settlePlayer(acc, playerId, atMs);
 }
 
 export function doGoal(
@@ -288,7 +302,7 @@ export function doCard(state: LiveMatchState, playerId: string, kind: "amarelo" 
   let onCourt = state.onCourt;
   let clockAcc = state.clockAcc;
   if (kind === "vermelho" && onCourt.includes(playerId)) {
-    clockAcc = settlePlayer(clockAcc, playerId, atMs);
+    clockAcc = settleOut(state, clockAcc, playerId, atMs);
     onCourt = onCourt.filter((id) => id !== playerId);
   }
   return { ...state, events: [...state.events, ev], onCourt, clockAcc };
@@ -335,7 +349,7 @@ export function doSub(state: LiveMatchState, outId: string, inId: string, nowMs:
   const atMs = matchElapsedMs(state, nowMs);
   let clockAcc = state.clockAcc;
   if (state.clock.running) {
-    clockAcc = settlePlayer(clockAcc, outId, atMs);
+    clockAcc = settleOut(state, clockAcc, outId, atMs);
     // Defesa extra (a tela ao vivo já só oferece quem está no banco como
     // "quem entra", nunca alguém já em quadra) — mesmo princípio de
     // replay.ts: nunca reiniciar o relógio de alguém que já estava em

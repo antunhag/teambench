@@ -166,6 +166,17 @@ barra da Timeline). A faixa visual que já distinguia os dois tipos de pausa
 na timeline exportada (`pause-band` vs `pause-band.other`, cor diferente) não
 mudou — só a contabilidade de minutos é que estava uniforme demais.
 
+**Trocas durante um pedido de tempo (achado real, jogo do Caxinas):** o desconto
+empurrava o "em quadra desde" de quem estava em quadra no FIM da pausa — quem
+entrava durante a pausa perdia a pausa inteira (sem a ter jogado) e quem saía não
+perdia nada; o texto exportado (minutos de `buildRows`) divergia da Timeline em
+~1 min por atleta. Regra agora, igual no ao vivo (`endPause`/`doSub`/`doCard`) e no
+replay: o tempo do pedido de tempo não conta para ninguém — quem sai durante a pausa
+fica com o tempo até ao início dela (`settlePlayerDuringPause`), quem entra começa a
+contar no recomeço (`discountPause`, `clock.ts`). O texto exportado tem agora uma
+célula por coluna do cabeçalho (antes começava pelo número e ficava 3 colunas
+desalinhado na folha do clube).
+
 ### Seleção de convocados/titulares — também event-sourced, mas separada do registo de jogo
 
 A lista de convocados (quem está disponível pra jogar) e titulares (cinco

@@ -14,7 +14,7 @@
 // botão "Iniciar Parte 2" que deixava tudo em ms=0), o replay já contabiliza
 // o tempo em quadra certo a partir dos tempos corrigidos — não precisa de
 // nenhuma lógica extra para isso.
-import { markOnSince, settleAll, settlePlayer } from "./clock";
+import { discountPause, markOnSince, settleAll, settlePlayer, settlePlayerDuringPause } from "./clock";
 import { isLastPeriod } from "./matchFormat";
 import { createLiveMatchState, foulsInPeriod, isTimeoutPause, titularIdsFromEvents } from "./liveMatch";
 import type { LiveMatchState } from "./liveMatch";
@@ -46,6 +46,12 @@ export function replayEvents(convocadoIds: string[], events: MatchEvent[], forma
   // retomado com uma base de tempo real errada.
   let lastMsInPeriod = 0;
 
+  // Quem sai durante um pedido de tempo: o tempo dele acaba no início da pausa (ver settlePlayerDuringPause).
+  const settleOut = (acc: typeof clockAcc, playerId: string, atMs: number) =>
+    activePause && isTimeoutPause(activePause.reasonId)
+      ? settlePlayerDuringPause(acc, playerId, atMs, activePause.startedAtMs)
+      : settlePlayer(acc, playerId, atMs);
+
   for (const ev of sorted) {
     const atMs = ev.ms;
     lastMsInPeriod = ev.type === "fim_periodo" ? 0 : atMs;
@@ -62,13 +68,13 @@ export function replayEvents(convocadoIds: string[], events: MatchEvent[], forma
       }
       case "cartao_vermelho": {
         if (ev.playerId && onCourt.includes(ev.playerId)) {
-          clockAcc = settlePlayer(clockAcc, ev.playerId, atMs);
+          clockAcc = settleOut(clockAcc, ev.playerId, atMs);
           onCourt = onCourt.filter((id) => id !== ev.playerId);
         }
         break;
       }
       case "substituicao": {
-        if (ev.outId) clockAcc = settlePlayer(clockAcc, ev.outId, atMs);
+        if (ev.outId) clockAcc = settleOut(clockAcc, ev.outId, atMs);
         // Só marca "em quadra desde" se ele AINDA NÃO estava — achado real
         // (dados incongruentes num jogo corrigido à mão): `markOnSince`
         // sobrescreve `onCourtSince` incondicionalmente; uma 2ª "entrada" dele
@@ -95,14 +101,8 @@ export function replayEvents(convocadoIds: string[], events: MatchEvent[], forma
         // Só pedido de tempo de verdade desconta (ver isTimeoutPause) — outro
         // motivo (atendimento, árbitro...) não tira minutos de quem ficou em quadra.
         if (activePause) {
-          if (isTimeoutPause(activePause.reasonId)) {
-            const durMs = Math.max(0, atMs - activePause.startedAtMs);
-            onCourt.forEach((id) => {
-              if (clockAcc.onCourtSince[id] != null) {
-                clockAcc = { ...clockAcc, onCourtSince: { ...clockAcc.onCourtSince, [id]: clockAcc.onCourtSince[id] + durMs } };
-              }
-            });
-          }
+          // Ver discountPause (clock.ts): quem entrou durante a pausa só conta a partir do recomeço.
+          if (isTimeoutPause(activePause.reasonId)) clockAcc = discountPause(clockAcc, onCourt, activePause.startedAtMs, atMs);
           activePause = null;
         }
         break;
@@ -117,14 +117,8 @@ export function replayEvents(convocadoIds: string[], events: MatchEvent[], forma
       }
       case "fim_periodo": {
         if (activePause) {
-          if (isTimeoutPause(activePause.reasonId)) {
-            const durMs = Math.max(0, atMs - activePause.startedAtMs);
-            onCourt.forEach((id) => {
-              if (clockAcc.onCourtSince[id] != null) {
-                clockAcc = { ...clockAcc, onCourtSince: { ...clockAcc.onCourtSince, [id]: clockAcc.onCourtSince[id] + durMs } };
-              }
-            });
-          }
+          // Ver discountPause (clock.ts): quem entrou durante a pausa só conta a partir do recomeço.
+          if (isTimeoutPause(activePause.reasonId)) clockAcc = discountPause(clockAcc, onCourt, activePause.startedAtMs, atMs);
           activePause = null;
         }
         clockAcc = settleAll(clockAcc, onCourt, atMs);

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createClockAccounting, markOnSince, playerSeconds, settleAll, settlePlayer } from "../src/clock";
+import { createClockAccounting, discountPause, markOnSince, playerSeconds, settleAll, settlePlayer, settlePlayerDuringPause } from "../src/clock";
 
 describe("clock accounting", () => {
   it("acumula segundos enquanto o jogador está marcado em campo", () => {
@@ -67,4 +67,20 @@ describe("clock accounting", () => {
       expect(playerSeconds(acc, joaoId, 900_000)).toBe(300);
     }
   );
+});
+
+describe("pedido de tempo e trocas durante a pausa (jogo do Caxinas)", () => {
+  it("discountPause: quem já estava perde a pausa inteira; quem entrou durante ela conta a partir do recomeço", () => {
+    let acc = markOnSince(markOnSince(createClockAccounting(), "antes", 0), "durante", 100_000);
+    acc = discountPause(acc, ["antes", "durante"], 60_000, 130_000);
+    expect(playerSeconds(acc, "antes", 300_000)).toBe(230); // 300 − 70 de pausa
+    expect(playerSeconds(acc, "durante", 300_000)).toBe(170); // só desde o recomeço (130)
+  });
+
+  it("settlePlayerDuringPause: o tempo de quem sai acaba no início da pausa", () => {
+    const acc = settlePlayerDuringPause(markOnSince(createClockAccounting(), "sai", 0), "sai", 100_000, 60_000);
+    expect(playerSeconds(acc, "sai", 999_999)).toBe(60);
+    const entrouESaiu = settlePlayerDuringPause(markOnSince(createClockAccounting(), "x", 90_000), "x", 100_000, 60_000);
+    expect(playerSeconds(entrouESaiu, "x", 999_999)).toBe(0);
+  });
 });

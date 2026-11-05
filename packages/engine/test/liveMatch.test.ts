@@ -34,6 +34,7 @@ import {
   toggleConvocado,
   toggleTitular,
 } from "../src/liveMatch";
+import { replayEvents } from "../src/replay";
 import type { MatchEvent, MatchFormat } from "../src/types";
 
 // Mesmos dois atletas do incidente real (rows.test.ts), usados aqui para
@@ -529,4 +530,32 @@ describe("liveMatch — captura detalhada (spec 009)", () => {
     expect(s.events.slice(-2).map((e) => e.type)).toEqual(["goleiro_linha_fim", "fim_periodo"]);
     expect(s.events.at(-2)!.durSec).toBe(10);
   });
+});
+
+describe("liveMatch — trocas durante o pedido de tempo (jogo do Caxinas)", () => {
+  const F: MatchFormat = { periodCount: 2, periodMinutes: 25, overtimePeriodCount: 0, overtimeMinutes: 0 };
+  // Relógio a partir de t=1000 (resumeOrStart); ms de jogo = nowMs − 1000.
+  function jogo(trocaEmMs: number) {
+    let s = createLiveMatchState(["a", "b", "c", "d", "e", "f", "g"]);
+    for (const id of ["a", "b", "c", "d", "e"]) s = toggleTitular(s, id, 1);
+    s = resumeOrStart(goLive(s), 1000);
+    s = pause(s, 1000 + 60_000, "Pedido de Tempo — Adversário", "tempo_advers");
+    s = doSub(s, "a", "f", 1000 + trocaEmMs); // sai a, entra f — durante a pausa
+    s = endPause(s, 1000 + 130_000);
+    s = endPeriod(s, F, 1000 + 300_000);
+    return s;
+  }
+  for (const [nome, t] of [["a meio da pausa", 100_000], ["no próprio fim da pausa", 130_000]] as const) {
+    it(`troca ${nome}: quem sai fica com o tempo até ao início da pausa; quem entra só desde o recomeço; replay igual`, () => {
+      const s = jogo(t);
+      const sec = (st: typeof s, id: string) => Math.round(playerCurrentSeconds(st, id, 0));
+      expect(sec(s, "a")).toBe(60);
+      expect(sec(s, "f")).toBe(170);
+      expect(sec(s, "b")).toBe(230);
+      const r = replayEvents(s.convocadoIds, s.events, F);
+      expect(Math.round(r.clockAcc.secondsPlayed["a"])).toBe(60);
+      expect(Math.round(r.clockAcc.secondsPlayed["f"])).toBe(170);
+      expect(Math.round(r.clockAcc.secondsPlayed["b"])).toBe(230);
+    });
+  }
 });

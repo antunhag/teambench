@@ -57,3 +57,33 @@ export function settleAll(acc: ClockAccounting, onCourt: string[], atMs: number)
 export function markOnSince(acc: ClockAccounting, playerId: string, atMs: number): ClockAccounting {
   return { ...acc, onCourtSince: { ...acc.onCourtSince, [playerId]: atMs } };
 }
+
+/**
+ * Pedido de tempo [pauseStartMs, endMs]: o tempo da pausa não conta para
+ * ninguém — o jogo tem os mesmos minutos efetivos com ou sem pedidos de
+ * tempo. Para quem está em quadra no FIM da pausa, desconta só a parte dela
+ * em que já estava em quadra: quem lá estava desde antes perde a pausa
+ * inteira; quem entrou durante a pausa começa a contar no recomeço (`endMs`).
+ * Achado real (jogo do Caxinas): uma troca feita durante o pedido de tempo
+ * tirava a pausa inteira a quem entrou e não a tirava a quem saiu.
+ */
+export function discountPause(acc: ClockAccounting, onCourt: string[], pauseStartMs: number, endMs: number): ClockAccounting {
+  const onCourtSince = { ...acc.onCourtSince };
+  for (const id of onCourt) {
+    const since = onCourtSince[id];
+    if (since == null) continue;
+    onCourtSince[id] = since <= pauseStartMs ? since + Math.max(0, endMs - pauseStartMs) : Math.max(since, endMs);
+  }
+  return { ...acc, onCourtSince };
+}
+
+/**
+ * Assenta o tempo de quem SAI durante um pedido de tempo que começou em
+ * `pauseStartMs`: o tempo dele acaba no início da pausa (ou é zero, se
+ * entrou já durante ela) — a parte da pausa nunca lhe conta.
+ */
+export function settlePlayerDuringPause(acc: ClockAccounting, playerId: string, atMs: number, pauseStartMs: number): ClockAccounting {
+  const since = acc.onCourtSince[playerId];
+  if (since == null) return acc;
+  return settlePlayer(acc, playerId, Math.min(atMs, Math.max(pauseStartMs, since)));
+}

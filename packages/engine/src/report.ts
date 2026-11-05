@@ -330,8 +330,11 @@ export function exportText(
   const lines: string[] = [];
   lines.push('REGISTO DE JOGO — cole estas linhas na folha "Jogo - Registo" (uma por atleta)');
   lines.push("Jornada\tData\tAdversário\tAtleta\tConvocado?\tTitular?\tMinutos Jogados\tGolos\tAssistências\tCartão Amarelo\tCartão Vermelho\tNotas");
+  // Uma célula por coluna do cabeçalho (12): antes as linhas começavam pelo
+  // número da camisola e tinham só 10 células, e ao colar na folha ficava tudo
+  // 3 colunas desalinhado. Jornada e Data ficam por preencher na folha.
   rows.forEach((r) => {
-    lines.push([r.num, r.nome, r.convocado, r.titular, r.min, r.golos, r.assist, r.ca, r.cv, ""].join("\t"));
+    lines.push(["", "", opponentLabel ?? "", r.nome, r.convocado, r.titular, r.min, r.golos, r.assist, r.ca, r.cv, ""].join("\t"));
   });
   lines.push("");
   lines.push(`Resultado: ${ourLabel || "Nós"} ${score.nos} - ${score.advers} ${opponentLabel || "Adversário"}`);
