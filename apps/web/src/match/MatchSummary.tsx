@@ -221,6 +221,93 @@ export function MatchSummary({ live, roster, opponent, matchId, teamId, onClose,
       {copyMsg && <p className="hint">{copyMsg}</p>}
       {finishStatus === "error" && <p className="banner error">Não consegui marcar como terminado — tente de novo.</p>}
 
+      {/* Pausas e tempo efetivo: porque quem jogou a parte toda fica abaixo da duração regulamentar
+          (só os pedidos de tempo descontam; acima de 1:00 = mais do que o árbitro acrescenta). */}
+      {(() => {
+        const { pausas, partes } = engine.resumoPausas(state.events, live.format);
+        if (partes.length === 0) return null;
+        const fmt = (sec: number) => engine.fmtMinSec(sec * 1000);
+        const delta = (d: number) => (d === 0 ? "—" : `${d > 0 ? "+" : "−"}${fmt(Math.abs(d))}`);
+        const totEf = partes.reduce((a, p) => a + p.efetivoSec, 0);
+        const totNom = partes.every((p) => p.nominalSec != null) ? partes.reduce((a, p) => a + (p.nominalSec ?? 0), 0) : null;
+        return (
+          <div style={{ marginTop: 16 }}>
+            <h3 className="section-title">Pausas e tempo efetivo</h3>
+            {pausas.length > 0 && (
+              <div className="tablewrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Parte</th>
+                      <th>Pausa</th>
+                      <th className="num">Início → fim</th>
+                      <th className="num">Duração</th>
+                      <th />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pausas.map((p, i) => (
+                      <tr key={i} style={p.acimaSec > 0 ? { background: "color-mix(in srgb, var(--yellow) 18%, transparent)" } : undefined}>
+                        <td>{engine.periodLabel(p.period, live.format)}</td>
+                        <td>{p.label}</td>
+                        <td className="num">
+                          {engine.fmtMinSec(p.startMs)} → {engine.fmtMinSec(p.endMs)}
+                        </td>
+                        <td className="num">{fmt(p.durSec)}</td>
+                        <td>
+                          {!p.timeout ? "não desconta" : p.acimaSec > 0 ? `⚠️ +${fmt(p.acimaSec)} acima de 1:00` : ""}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            <div className="tablewrap" style={{ marginTop: 8 }}>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Parte</th>
+                    <th className="num">Duração registada</th>
+                    <th className="num">− Pedidos de tempo</th>
+                    <th className="num">= Tempo efetivo</th>
+                    <th className="num">Para o regulamentar</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {partes.map((p) => (
+                    <tr key={p.period}>
+                      <td>{engine.periodLabel(p.period, live.format)}</td>
+                      <td className="num">{fmt(p.duracaoSec)}</td>
+                      <td className="num">{fmt(p.descontoSec)}</td>
+                      <td className="num">
+                        <strong>{fmt(p.efetivoSec)}</strong>
+                      </td>
+                      <td className="num">{p.nominalSec != null ? delta(p.efetivoSec - p.nominalSec) : "—"}</td>
+                    </tr>
+                  ))}
+                  <tr>
+                    <td>
+                      <strong>Jogo</strong>
+                    </td>
+                    <td />
+                    <td />
+                    <td className="num">
+                      <strong>{fmt(totEf)}</strong>
+                    </td>
+                    <td className="num">{totNom != null ? delta(totEf - totNom) : "—"}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <p className="hint">
+              Só os pedidos de tempo descontam minutos, pela duração real (do toque em "Pausa" ao toque em "Retomar"). Quem
+              jogou a parte toda fica com o tempo efetivo dela.
+            </p>
+          </div>
+        );
+      })()}
+
       {/* Captura detalhada (Consola, specs/009): só aparece se o jogo a teve. Sem lances anulados. */}
       {(() => {
         const desperdicadas = engine.transicoesDesperdicadas(state.events);

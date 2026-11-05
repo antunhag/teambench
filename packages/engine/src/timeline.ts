@@ -270,6 +270,31 @@ function goalTipoLabelComDetalhe(g: TimelineGoal): string | null {
 }
 
 /** Página HTML autónoma (sem JS de runtime) com a timeline visual de todas as partes de um jogo. */
+/**
+ * Linha por baixo do título de cada parte: as pausas (duração; pedidos de
+ * tempo acima de 1:00 em destaque) e o tempo efetivo da parte = duração
+ * registada − pedidos de tempo (o que conta para os minutos dos atletas).
+ */
+function pausesSummaryHtml(half: TimelineHalf): string {
+  if (!half.pauses.length) return "";
+  const desconto = half.pauses.filter((p) => isTimeoutPause(p.reasonId)).reduce((a, p) => a + Math.max(0, p.end - p.start), 0);
+  const itens = half.pauses
+    .map((p) => {
+      const dur = Math.max(0, p.end - p.start);
+      const isTimeout = isTimeoutPause(p.reasonId);
+      const acima = isTimeout ? Math.max(0, Math.round(dur) - 60) : 0;
+      return (
+        `<span class="pz${isTimeout ? "" : " other"}${acima > 0 ? " long" : ""}">${esc(p.label || "Pausa")} ${fmtMinSec(p.start * 1000)}–${fmtMinSec(p.end * 1000)} · ` +
+        `<b>${fmtMinSec(dur * 1000)}</b>${acima > 0 ? ` <em>+${fmtMinSec(acima * 1000)}</em>` : ""}${isTimeout ? "" : " (não desconta)"}</span>`
+      );
+    })
+    .join("");
+  return (
+    `<div class="half-pauses">${itens}` +
+    `<span class="eff">Tempo efetivo: <b>${fmtMinSec(Math.max(0, half.durSec - desconto) * 1000)}</b></span></div>`
+  );
+}
+
 export function buildTimelineHtml(
   matchInfo: TimelineMatchInfo,
   halves: TimelineHalf[],
@@ -439,10 +464,15 @@ export function buildTimelineHtml(
         .map((p) => {
           const isTimeout = isTimeoutPause(p.reasonId);
           const title = p.label ? `${esc(p.label)} — ` : "Pausa — ";
-          return `<div class="pause-band${isTimeout ? "" : " other"}" style="left:${pct2(p.start, half.durSec)};width:${pct2(
+          // Pedido de tempo acima de 1:00 (o que o árbitro acrescenta) em destaque:
+          // é o que deixa quem jogou a parte toda abaixo da duração regulamentar.
+          const acima = isTimeout ? Math.max(0, Math.round(p.end - p.start) - 60) : 0;
+          return `<div class="pause-band${isTimeout ? "" : " other"}${acima > 0 ? " long" : ""}" style="left:${pct2(p.start, half.durSec)};width:${pct2(
             Math.max(0, p.end - p.start),
             half.durSec
-          )};" title="${title}${fmtMinSec(p.start * 1000)} a ${fmtMinSec(p.end * 1000)}"></div>`;
+          )};" title="${title}${fmtMinSec(p.start * 1000)} a ${fmtMinSec(p.end * 1000)} (${fmtMinSec(Math.max(0, p.end - p.start) * 1000)}${
+            acima > 0 ? `, +${fmtMinSec(acima * 1000)} acima de 1:00` : ""
+          })"></div>`;
         })
         .join("");
 
@@ -496,6 +526,7 @@ export function buildTimelineHtml(
       return (
         `<div class="half-block"><div class="half-title"><h2>${esc(half.label)}</h2>` +
         `<div class="dur">0′ – ${Math.round(half.durSec / 60)}′</div></div>` +
+        pausesSummaryHtml(half) +
         marcha +
         ruler +
         goalsLaneRow +
@@ -567,12 +598,20 @@ export function buildTimelineHtml(
     ".half-block{margin-top:18px;}.half-block:first-of-type{margin-top:4px;}.rows{display:flex;flex-direction:column;gap:6px;}" +
     ".pause-band{position:absolute;top:-6px;bottom:-6px;background:repeating-linear-gradient(45deg,var(--pause) 0,var(--pause) 4px,transparent 4px,transparent 9px);opacity:.4;border-left:1px dashed var(--pause);border-right:1px dashed var(--pause);}" +
     ".pause-band.other{background:repeating-linear-gradient(45deg,var(--pause-other) 0,var(--pause-other) 4px,transparent 4px,transparent 9px);border-left-color:var(--pause-other);border-right-color:var(--pause-other);}" +
+    ".pause-band.long{background:repeating-linear-gradient(45deg,var(--warning) 0,var(--warning) 4px,transparent 4px,transparent 9px);opacity:.6;border-left-color:var(--warning);border-right-color:var(--warning);}" +
+    ".half-pauses{display:flex;flex-wrap:wrap;gap:6px 10px;margin:4px 0 8px;font-size:11.5px;color:var(--text-secondary);}" +
+    ".half-pauses .pz{padding:2px 6px;border-radius:6px;border:1px dashed var(--pause);}" +
+    ".half-pauses .pz.other{border-color:var(--pause-other);}" +
+    ".half-pauses .pz.long{border:1px solid var(--warning);background:color-mix(in srgb,var(--warning) 14%,transparent);}" +
+    ".half-pauses .pz em{font-style:normal;font-weight:700;color:var(--warning);}" +
+    ".half-pauses .eff{margin-left:auto;font-variant-numeric:tabular-nums;}" +
     ".lane-row{margin-bottom:2px;}" +
     ".lane-row .nm{color:var(--muted);font-size:11px;font-style:italic;}" +
     ".lane-track{background:transparent;}" +
     ".legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:16px;padding-top:14px;border-top:1px solid var(--grid);font-size:11.5px;color:var(--text-secondary);}" +
     ".legend .it{display:flex;align-items:center;gap:6px;}.legend .sw{width:18px;height:8px;border-radius:4px;background:var(--series-1);}" +
     ".legend .sw.pause{background:repeating-linear-gradient(45deg,var(--pause) 0,var(--pause) 3px,transparent 3px,transparent 6px);border:1px dashed var(--pause);}" +
+    ".legend .sw.pause.long{background:repeating-linear-gradient(45deg,var(--warning) 0,var(--warning) 3px,transparent 3px,transparent 6px);border-color:var(--warning);}" +
     ".legend .sw.pause.other{background:repeating-linear-gradient(45deg,var(--pause-other) 0,var(--pause-other) 3px,transparent 3px,transparent 6px);border-color:var(--pause-other);}" +
     ".legend .ball-sample{width:14px;height:14px;border-radius:50%;background:var(--critical);color:#fff;display:flex;align-items:center;justify-content:center;font-size:8.5px;flex:0 0 auto;}" +
     ".legend .mk-sample{width:14px;height:14px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:800;flex:0 0 auto;border:1.5px solid var(--surface-1);}" +
@@ -601,7 +640,7 @@ export function buildTimelineHtml(
     `<div class="card">${halvesHtml}` +
     '<div class="legend"><div class="it"><span class="sw"></span>Em quadra</div><div class="it">⚽ Golo marcado</div><div class="it">🟨/🟥 Cartão</div>' +
     '<div class="it"><span class="mk-sample foul cometida">F</span>Falta cometida</div><div class="it"><span class="mk-sample foul sofrida">F</span>Falta sofrida</div>' +
-    '<div class="it"><span class="sw pause"></span>Pedido de tempo</div><div class="it"><span class="sw pause other"></span>Pausa (outro motivo)</div><div class="it"><span class="ball-sample">⚽</span>Golo sofrido</div></div>' +
+    '<div class="it"><span class="sw pause"></span>Pedido de tempo</div><div class="it"><span class="sw pause long"></span>Pedido de tempo acima de 1:00</div><div class="it"><span class="sw pause other"></span>Pausa (outro motivo)</div><div class="it"><span class="ball-sample">⚽</span>Golo sofrido</div></div>' +
     "</div>" +
     '<div class="card"><div class="half-title" style="margin-bottom:8px;"><h2>Minutos em quadra (total do jogo)</h2></div>' +
     `<div class="tablewrap"><table class="gtable"><thead><tr><th>Atleta</th>${totalsHeadHtml}<th class="num">Total</th><th class="num">Golos</th></tr></thead>` +

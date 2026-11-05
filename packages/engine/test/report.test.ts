@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createEvent } from "../src/events";
-import { buildEventsExport, describeEvent, describeEvents, duracoesDerivadas, exportText, onCourtTimeline, resumoDetalhado, transicoesDesperdicadas } from "../src/report";
+import { buildEventsExport, describeEvent, describeEvents, duracoesDerivadas, exportText, onCourtTimeline, resumoDetalhado, resumoPausas, transicoesDesperdicadas } from "../src/report";
 import type { MatchEvent, MatchRow, Player } from "../src/types";
 
 const salvador: Player = { id: "athlete-salvador", num: "30", name: "Salvador Silva Gonçalves", pos: "Ala Esquerda" };
@@ -261,5 +261,39 @@ describe("resumoDetalhado", () => {
     const anul = createEvent("anulacao", null, 0, 2, 0, { alvoId: p3.clientEventId });
     const r = resumoDetalhado([p1, p2, p3, anul]);
     expect(r).toEqual([{ label: "Perdas — meio-campo", porParte: { 1: 1, 2: 1 }, total: 2 }]);
+  });
+});
+
+describe("resumoPausas (jogo do Caxinas)", () => {
+  const F = { periodCount: 2, periodMinutes: 30, overtimePeriodCount: 0, overtimeMinutes: 0 };
+  it("lista as pausas, destaca pedidos de tempo acima de 1:00 e calcula o tempo efetivo por parte", () => {
+    const ev = [
+      createEvent("pausa", null, 1_660_000, 1, 0, { label: "Pedido de Tempo — AAL", reasonId: "tempo_nos" }),
+      createEvent("fim_pausa", null, 1_740_000, 1, 1),
+      createEvent("fim_periodo", null, 1_868_000, 1, 2),
+      createEvent("pausa", null, 630_000, 2, 3, { label: "Pedido de Tempo — AAL", reasonId: "tempo_nos" }),
+      createEvent("fim_pausa", null, 732_000, 2, 4),
+      createEvent("pausa", null, 800_000, 2, 5, { label: "Outro motivo", reasonId: "outro" }),
+      createEvent("fim_pausa", null, 830_000, 2, 6),
+      createEvent("pausa", null, 979_000, 2, 7, { label: "Pedido de Tempo — Adversário", reasonId: "tempo_advers" }),
+      createEvent("fim_pausa", null, 1_050_000, 2, 8),
+      createEvent("fim_periodo", null, 1_934_000, 2, 9),
+    ];
+    const r = resumoPausas(ev, F);
+    expect(r.pausas.map((p) => [p.durSec, p.acimaSec, p.timeout])).toEqual([
+      [80, 20, true],
+      [102, 42, true],
+      [30, 0, false],
+      [71, 11, true],
+    ]);
+    expect(r.partes).toEqual([
+      { period: 1, duracaoSec: 1868, descontoSec: 80, efetivoSec: 1788, nominalSec: 1800 },
+      { period: 2, duracaoSec: 1934, descontoSec: 173, efetivoSec: 1761, nominalSec: 1800 },
+    ]);
+  });
+  it("pausa aberta no fim da parte fecha aí", () => {
+    const r = resumoPausas([createEvent("pausa", null, 100_000, 1, 0, { reasonId: "tempo_nos" }), createEvent("fim_periodo", null, 130_000, 1, 1)]);
+    expect(r.pausas[0].durSec).toBe(30);
+    expect(r.partes[0].efetivoSec).toBe(100);
   });
 });

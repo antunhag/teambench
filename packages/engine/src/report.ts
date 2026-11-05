@@ -2,6 +2,7 @@
 // Excel/Sheets do clube — porta de describeEvent/exportText do banco.html.
 import { eventosEfetivos } from "./annul";
 import { TRANSICAO_NUMEROS_VANTAGEM } from "./goalTypes";
+import { isTimeoutPause } from "./liveMatch";
 import { periodLabel } from "./matchFormat";
 import { tipoGoloLabel } from "./goalTypes";
 import { fmtMinSec } from "./time";
@@ -416,4 +417,73 @@ export function resumoDetalhado(events: MatchEvent[]): LinhaResumo[] {
       return { label, porParte, total };
     })
     .filter((l) => l.total > 0);
+}
+
+/** Duração de referência de um pedido de tempo (o que o árbitro acrescenta). Acima disto, a pausa é destacada. */
+export const PEDIDO_TEMPO_REF_SEC = 60;
+
+export interface PausaResumo {
+  period: number;
+  label: string;
+  /** Pedido de tempo (desconta minutos) vs. outro motivo (não desconta). */
+  timeout: boolean;
+  startMs: number;
+  endMs: number;
+  durSec: number;
+  /** Segundos acima de 1:00 num pedido de tempo (0 se não passou, ou se não é pedido de tempo). */
+  acimaSec: number;
+}
+
+export interface ParteResumo {
+  period: number;
+  /** Duração registada da parte (ms do fim de parte). */
+  duracaoSec: number;
+  /** Soma dos pedidos de tempo da parte (o que é descontado aos minutos). */
+  descontoSec: number;
+  efetivoSec: number;
+  /** Duração regulamentar da parte pelo formato do jogo, ou null sem formato. */
+  nominalSec: number | null;
+}
+
+/**
+ * Pausas e tempo efetivo por parte, a partir das horas dos eventos (como
+ * `duracoesDerivadas` — reflete correções da Registo). Só os pedidos de
+ * tempo descontam minutos (isTimeoutPause); uma pausa ainda aberta no fim da
+ * parte fecha aí. Só leitura — para o Resumo e a Timeline mostrarem porque
+ * quem jogou a parte toda pode ficar abaixo da duração regulamentar.
+ */
+export function resumoPausas(events: MatchEvent[], format?: MatchFormat): { pausas: PausaResumo[]; partes: ParteResumo[] } {
+  const sorted = [...events].sort((a, b) => (a.period - b.period) || (eventMs(a) - eventMs(b)) || (a.ts - b.ts));
+  const pausas: PausaResumo[] = [];
+  const partes: ParteResumo[] = [];
+  let aberta: MatchEvent | null = null;
+  const fechar = (fimMs: number) => {
+    if (!aberta) return;
+    const timeout = isTimeoutPause(aberta.reasonId);
+    const durSec = Math.max(0, Math.round((fimMs - eventMs(aberta)) / 1000));
+    pausas.push({
+      period: aberta.period,
+      label: aberta.label || (timeout ? "Pedido de tempo" : "Pausa"),
+      timeout,
+      startMs: eventMs(aberta),
+      endMs: fimMs,
+      durSec,
+      acimaSec: timeout ? Math.max(0, durSec - PEDIDO_TEMPO_REF_SEC) : 0,
+    });
+    aberta = null;
+  };
+  for (const e of sorted) {
+    if (e.type === "pausa") {
+      fechar(eventMs(e));
+      aberta = e;
+    } else if (e.type === "fim_pausa") fechar(eventMs(e));
+    else if (e.type === "fim_periodo") {
+      fechar(eventMs(e));
+      const duracaoSec = Math.round(eventMs(e) / 1000);
+      const descontoSec = pausas.filter((p) => p.period === e.period && p.timeout).reduce((a, p) => a + p.durSec, 0);
+      const nominalSec = format ? (e.period <= format.periodCount ? format.periodMinutes : format.overtimeMinutes) * 60 : null;
+      partes.push({ period: e.period, duracaoSec, descontoSec, efetivoSec: Math.max(0, duracaoSec - descontoSec), nominalSec });
+    }
+  }
+  return { pausas, partes };
 }

@@ -177,6 +177,13 @@ contar no recomeço (`discountPause`, `clock.ts`). O texto exportado tem agora u
 célula por coluna do cabeçalho (antes começava pelo número e ficava 3 colunas
 desalinhado na folha do clube).
 
+**Pausas e tempo efetivo (Resumo e Timeline):** `resumoPausas` (`report.ts`) lista cada
+pausa com a duração real e, por parte, duração registada − pedidos de tempo = tempo
+efetivo (o que fica a quem jogou a parte toda). Pedidos de tempo acima de 1:00 (o que o
+árbitro acrescenta) aparecem em destaque no Resumo e na Timeline exportada (faixa e linha
+por baixo do título de cada parte). Só leitura — a regra de minutos não muda: desconta a
+duração real do pedido de tempo.
+
 ### Seleção de convocados/titulares — também event-sourced, mas separada do registo de jogo
 
 A lista de convocados (quem está disponível pra jogar) e titulares (cinco

@@ -431,3 +431,17 @@ describe("buildTimelineData — anulações", () => {
     expect(halves[0].goals).toHaveLength(0);
   });
 });
+
+describe("buildTimelineHtml — pausas", () => {
+  it("destaca pedidos de tempo acima de 1:00 e mostra o tempo efetivo da parte", () => {
+    const ko = createEvent("kickoff", null, 0, 1, 0, { lineup: [guarda.id] });
+    const pz = createEvent("pausa", null, 1_660_000, 1, 1, { label: "Pedido de Tempo — AAL", reasonId: "tempo_nos" });
+    const fp = createEvent("fim_pausa", null, 1_740_000, 1, 2);
+    const fim = createEvent("fim_periodo", null, 1_868_000, 1, 3, { duracaoSec: 1868 });
+    const halves = buildTimelineData([ko, pz, fp, fim], [guarda], [guarda.id]);
+    const html = buildTimelineHtml({ adversario: "Caxinas", ourLabel: "AAL" }, halves, 0, 0, () => undefined);
+    expect(html).toContain("pause-band long");
+    expect(html).toContain("+00:20");
+    expect(html).toContain("Tempo efetivo: <b>29:48</b>");
+  });
+});
