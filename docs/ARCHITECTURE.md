@@ -186,6 +186,32 @@ efetivo (o que fica a quem jogou a parte toda). Pedidos de tempo acima de 1:00 (
 por baixo do título de cada parte). Só leitura — a regra de minutos não muda: desconta a
 duração real do pedido de tempo.
 
+### Fila de sincronização e lances recusados (specs/010-fila-recusados/)
+
+Cada lance entra no estado local e numa fila por conta (`apps/web/src/sync/outbox.ts`,
+`teambench.outbox.<ownerId>`), enviada a cada 8 s por `outboxFlusher.flush()` num único
+upsert (idempotente por `client_event_id`). Desde 2026-11-07:
+
+- Se o lote for recusado, `classificarRecusa` (`sync/rejection.ts`) decide:
+  - **geral** (rede, sessão/JWT, `PGRST*`, 5xx, erro sem código SQL): nada muda e o lote
+    volta a ser tentado depois;
+  - **do lance** (guarda 0026 → "alterado", `42501` → "sem_permissao", `23503` →
+    "nao_existe", outro SQLSTATE → "outro"): o envio passa a ser lance a lance.
+- No envio lance a lance, os aceites saem da fila e os recusados passam para
+  `teambench.outbox.<ownerId>.recusados` (`moveToRejected`), deixando de bloquear os
+  outros. Uma recusa geral a meio pára o ciclo e deixa o resto na fila. Escreve-se primeiro
+  nos recusados e só depois se remove da fila: uma falha a meio duplica, nunca perde. O
+  item guardado é exatamente o da fila (nunca recalculado).
+- Os recusados voltam a ser tentados (`retryRejected`) no arranque do controlador, a cada
+  5 min e no botão "Tentar outra vez"; só saem com uma resposta positiva do servidor. Nunca
+  são apagados pela app.
+- `useLiveMatch.checkRemote` conta-os como pendentes: ler o servidor nunca os esconde.
+  Uma lista ilegível mantém todos os lances locais.
+- Aviso (`sync/RejectedNotice.tsx`) no ecrã principal e no "Jogo ao vivo"; na Consola, uma
+  pastilha "⚠ N recusados" que abre o aviso. É mostrada também no iPhone, onde a pastilha
+  de sincronização normal está escondida.
+- A quarentena (fila ilegível) mantém o comportamento anterior e é separada dos recusados.
+
 ### Seleção de convocados/titulares — também event-sourced, mas separada do registo de jogo
 
 A lista de convocados (quem está disponível pra jogar) e titulares (cinco
@@ -511,7 +537,7 @@ apps/web/src/
   match/    # fluxo ao vivo, Resumo, Timeline, corretor pós-jogo, planeador de rotação
     Consola.tsx, consola/   # segunda tela de registo ao vivo (specs/009); layout/flows/bench/deferredEnqueue puros com testes
   errorMessage.ts  # textoDeErro/traduzirErro: mensagens técnicas → português simples (Princípio V)
-  sync/     # fila de sincronização offline → Supabase
+  sync/     # fila de sincronização offline → Supabase; recusados (rejection.ts, RejectedNotice.tsx)
 
 supabase/migrations/   # histórico completo do esquema — ver docs/SECURITY.md pro resumo do modelo de RLS
 ```

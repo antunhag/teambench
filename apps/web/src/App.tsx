@@ -14,6 +14,7 @@ import { TeamMembers } from "./team/TeamMembers";
 import { useClubLabel } from "./team/useClubLabel";
 import { useCurrentClub } from "./team/useCurrentClub";
 import { useUserTeams } from "./team/useUserTeams";
+import { RejectedNotice } from "./sync/RejectedNotice";
 import { useOutboxSync } from "./sync/useOutboxSync";
 import { useAppUpdate } from "./useAppUpdate";
 import { Nav } from "./Nav";
@@ -245,8 +246,9 @@ function TeamApp({
           )}
 
           {sync.pending > 0 && (
-            <p className="hint">{sync.syncing ? "A sincronizar..." : `${sync.pending} evento(s) por sincronizar`}</p>
+            <p className="hint">{sync.syncing ? "A sincronizar..." : `${sync.pending} lance(s) por sincronizar`}</p>
           )}
+          <RejectedNotice sync={sync} />
           {sync.corrupted && (
             <div className="banner error" style={{ marginBottom: 12 }}>
               A fila de sincronização deste aparelho ficou corrompida e não pode ser lida. Eventos novos estão a ser

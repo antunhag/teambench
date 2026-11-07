@@ -981,6 +981,24 @@ textarea.exportbox {
   border-color: var(--cv-amber);
   color: var(--cv-amber);
 }
+/* Lances recusados pelo servidor (specs/010): botão que abre o aviso completo. */
+.cv-pill.rejected {
+  border-color: var(--red);
+  color: var(--red);
+  background: transparent;
+  min-height: 32px;
+  cursor: pointer;
+  font-weight: 600;
+}
+/* Área de toque maior do que a pastilha visível (≥ 44 px de altura). */
+.cv-pill.rejected {
+  position: relative;
+}
+.cv-pill.rejected::after {
+  content: "";
+  position: absolute;
+  inset: -8px -4px;
+}
 .cv-ghost {
   min-height: 48px;
   min-width: 48px;
@@ -1527,6 +1545,24 @@ textarea.exportbox {
 }
 .cv--iphone-h .cv-pill {
   display: none;
+}
+/* Lances recusados (specs/010): no iPhone a pastilha de sincronização fica
+   escondida por falta de espaço, mas o aviso de recusados tem de se ver. Na
+   vertical vai para o fim da linha do último lance; na horizontal cabe na faixa. */
+.cv--iphone-v .cv-pill.rejected,
+.cv--iphone-h .cv-pill.rejected {
+  display: inline-block;
+}
+.cv--iphone-v .cv-pill.rejected {
+  grid-column: 3;
+  grid-row: 2;
+  justify-self: end;
+  align-self: center;
+  min-height: 28px;
+  padding: 2px 8px;
+}
+.cv--iphone-v .cv-top:has(.cv-pill.rejected) .cv-last {
+  grid-column: 1 / span 2;
 }
 .cv--iphone-v .cv-card,
 .cv--iphone-h .cv-card {

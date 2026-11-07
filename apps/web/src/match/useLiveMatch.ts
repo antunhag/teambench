@@ -1,6 +1,6 @@
 import * as engine from "@teambench/engine";
 import { useEffect, useRef, useState } from "preact/hooks";
-import { enqueue, peekAll, peekQuarantine, removeByClientEventIds } from "../sync/outbox";
+import { enqueue, peekAll, peekQuarantine, peekRejected, removeByClientEventIds } from "../sync/outbox";
 import { supabase } from "../supabaseClient";
 import { PRAZO_ZONA_MS, resolvePending, startPending, type Pending, type Trigger } from "./consola/deferredEnqueue";
 import { useRotationPlan } from "./useRotationPlan";
@@ -165,9 +165,22 @@ export function useLiveMatch(matchId: string, teamId: string, ownerId: string, f
           // quarentena com itens: não se sabe o que falta, mantém todos.
           const filaDepois = peekAll(ownerId);
           const quarentena = peekQuarantine(ownerId);
+          // Lances recusados pelo servidor (specs/010) continuam a ser deste
+          // aparelho: entram como pendentes, nunca desaparecem ao ler o servidor.
+          const recusados = peekRejected(ownerId);
           let pendentes: Set<string> | null = null;
-          if (filaAntes.status === "ok" && filaDepois.status === "ok" && quarentena.status === "ok" && quarentena.items.length === 0) {
-            pendentes = new Set([...filaAntes.items, ...filaDepois.items].map((i) => i.client_event_id));
+          if (
+            filaAntes.status === "ok" &&
+            filaDepois.status === "ok" &&
+            quarentena.status === "ok" &&
+            quarentena.items.length === 0 &&
+            recusados.status === "ok"
+          ) {
+            pendentes = new Set([
+              ...filaAntes.items.map((i) => i.client_event_id),
+              ...filaDepois.items.map((i) => i.client_event_id),
+              ...recusados.items.map((r) => r.item.client_event_id),
+            ]);
             try {
               const aEsperaDeZona = localStorage.getItem(PENDING_PREFIX + matchId);
               if (aEsperaDeZona) pendentes.add(aEsperaDeZona);

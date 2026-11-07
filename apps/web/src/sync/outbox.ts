@@ -212,3 +212,104 @@ export function removeByClientEventIds(ownerId: string, clientEventIds: string[]
   const ids = new Set(clientEventIds);
   writeKey(key, main.items.filter((i) => !ids.has(i.client_event_id)));
 }
+
+// ---------------------------------------------------------------------------
+// LANCES RECUSADOS (specs/010-fila-recusados). Lances que o servidor recusou
+// por um motivo do próprio lance (ver rejection.ts) saem da fila principal
+// para esta lista, por proprietário, para deixarem de bloquear os restantes.
+// Nunca são apagados nem recalculados aqui: `item` é exatamente o objeto que
+// estava na fila (invariante acima). Voltam a ser tentados com menos
+// frequência (outboxFlusher.retryRejected) e só saem com uma resposta
+// positiva do servidor. Separada da quarentena, que é "fila ilegível,
+// recuperação manual" e nunca é enviada sozinha.
+// ---------------------------------------------------------------------------
+
+export type MotivoRecusa = "alterado" | "sem_permissao" | "nao_existe" | "outro";
+
+export interface RecusadoItem {
+  item: OutboxItem;
+  motivo: MotivoRecusa;
+  detalhe: string;
+  tentadoEm: number;
+}
+
+export type RejectedState = { status: "ok"; items: RecusadoItem[] } | { status: "corrupted" };
+
+function rejectedKey(ownerId: string): string {
+  assertValidOwnerId(ownerId);
+  return `teambench.outbox.${ownerId}.recusados`;
+}
+
+function isRecusado(value: unknown): value is RecusadoItem {
+  if (typeof value !== "object" || value === null) return false;
+  const v = value as Record<string, unknown>;
+  return isOutboxItem(v.item) && typeof v.motivo === "string" && typeof v.detalhe === "string" && typeof v.tentadoEm === "number";
+}
+
+export function peekRejected(ownerId: string): RejectedState {
+  let raw: string | null;
+  try {
+    raw = localStorage.getItem(rejectedKey(ownerId));
+  } catch {
+    return { status: "corrupted" };
+  }
+  if (raw === null) return { status: "ok", items: [] };
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return { status: "corrupted" };
+  }
+  if (!Array.isArray(parsed) || !parsed.every(isRecusado)) return { status: "corrupted" };
+  return { status: "ok", items: parsed };
+}
+
+function writeRejected(ownerId: string, items: RecusadoItem[]): boolean {
+  try {
+    localStorage.setItem(rejectedKey(ownerId), JSON.stringify(items));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function rejectedCount(ownerId: string): number {
+  const s = peekRejected(ownerId);
+  return s.status === "ok" ? s.items.length : 0;
+}
+
+/**
+ * Passa um item da fila principal para os recusados. Escreve PRIMEIRO na
+ * lista de recusados e só depois remove da fila: uma falha a meio deixa o
+ * lance nos dois sítios (o reenvio é idempotente por client_event_id), nunca
+ * em nenhum. Lista de recusados ilegível ou escrita falhada: não mexe na fila
+ * e devolve false (o lance continua a ser tentado como pendente).
+ */
+export function moveToRejected(ownerId: string, entry: RecusadoItem): boolean {
+  const current = peekRejected(ownerId);
+  if (current.status !== "ok") return false;
+  const id = entry.item.client_event_id;
+  const next = [...current.items.filter((r) => r.item.client_event_id !== id), entry];
+  if (!writeRejected(ownerId, next)) return false;
+  removeByClientEventIds(ownerId, [id]);
+  return true;
+}
+
+/** Atualiza motivo/detalhe/tentadoEm de um recusado (o `item` nunca muda). */
+export function updateRejected(ownerId: string, clientEventId: string, motivo: MotivoRecusa, detalhe: string, tentadoEm: number): void {
+  const current = peekRejected(ownerId);
+  if (current.status !== "ok") return;
+  writeRejected(
+    ownerId,
+    current.items.map((r) => (r.item.client_event_id === clientEventId ? { ...r, motivo, detalhe, tentadoEm } : r))
+  );
+}
+
+/** Só depois de o servidor aceitar o lance (ou de ele já estar de volta à fila principal). */
+export function removeRejected(ownerId: string, clientEventIds: string[]): void {
+  if (clientEventIds.length === 0) return;
+  const current = peekRejected(ownerId);
+  if (current.status !== "ok") return; // nunca sobrescreve uma lista ilegível
+  const ids = new Set(clientEventIds);
+  writeRejected(ownerId, current.items.filter((r) => !ids.has(r.item.client_event_id)));
+}

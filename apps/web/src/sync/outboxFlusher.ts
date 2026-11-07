@@ -21,7 +21,16 @@
 // escrita de dados de uma equipa para quem não tem papel nela. Cancelar este
 // pedido no cliente, se algum dia for implementado, nunca desfaz uma escrita
 // que já tenha chegado ao servidor com sucesso.
-import { peekAll, removeByClientEventIds, type OutboxItem } from "./outbox";
+import {
+  moveToRejected,
+  peekAll,
+  peekRejected,
+  removeByClientEventIds,
+  removeRejected,
+  updateRejected,
+  type OutboxItem,
+} from "./outbox";
+import { classificarRecusa, detalheDoErro } from "./rejection";
 
 // Superfície mínima do cliente Supabase de que este módulo depende —
 // permite injetar um cliente simulado nos testes sem montar o SDK inteiro.
@@ -36,12 +45,26 @@ export type FlushResult =
   | { status: "empty" }
   | { status: "offline" }
   | { status: "synced"; count: number }
+  // Lote recusado e depois enviado lance a lance (specs/010): `synced` aceites,
+  // `rejected` postos de lado como recusados; `interrupted` = uma recusa geral
+  // parou o ciclo e o resto ficou na fila, por enviar.
+  | { status: "partial"; synced: number; rejected: number; interrupted: boolean }
+  // Lote recusado por um motivo geral (rede, sessão, servidor): nada mudou.
   | { status: "rejected" }
   | { status: "corrupted" }
   | { status: "error" };
 
+export type RetryResult =
+  | { status: "empty" }
+  | { status: "offline" }
+  | { status: "corrupted" }
+  | { status: "retried"; accepted: number; stillRejected: number; interrupted: boolean }
+  | { status: "error" };
+
 export interface OutboxFlusher {
   flush(): Promise<FlushResult>;
+  /** Volta a tentar os recusados, lance a lance (specs/010, research Decisão 4). */
+  retryRejected(): Promise<RetryResult>;
 }
 
 export function createOutboxFlusher(ownerId: string, client: OutboxSupabaseClient): OutboxFlusher {
@@ -62,7 +85,11 @@ export function createOutboxFlusher(ownerId: string, client: OutboxSupabaseClien
       if (ping.error) return { status: "offline" };
 
       const { error } = await client.from("match_events").upsert(items, { onConflict: "client_event_id" });
-      if (error) return { status: "rejected" };
+      if (error) {
+        // Recusa geral: não é culpa de nenhum lance — nada é posto de lado.
+        if (classificarRecusa(error) === "geral") return { status: "rejected" };
+        return await oneByOne(items);
+      }
 
       // Remove só os itens que este flush() concreto enviou — closure sobre
       // `ownerId` garante que isto nunca toca na fila de outro proprietário,
@@ -84,5 +111,62 @@ export function createOutboxFlusher(ownerId: string, client: OutboxSupabaseClien
     }
   }
 
-  return { flush };
+  // Lote recusado por um motivo do lance: isola os culpados enviando um a um,
+  // pela ordem da fila. Cada aceite sai logo da fila; cada recusado do lance
+  // vai para a lista de recusados; uma recusa geral pára e deixa o resto.
+  async function oneByOne(items: OutboxItem[]): Promise<FlushResult> {
+    let synced = 0;
+    let rejected = 0;
+    for (const it of items) {
+      const { error } = await client.from("match_events").upsert([it], { onConflict: "client_event_id" });
+      if (!error) {
+        removeByClientEventIds(ownerId, [it.client_event_id]);
+        synced++;
+        continue;
+      }
+      const c = classificarRecusa(error);
+      if (c === "geral") return { status: "partial", synced, rejected, interrupted: true };
+      if (moveToRejected(ownerId, { item: it, motivo: c, detalhe: detalheDoErro(error), tentadoEm: Date.now() })) rejected++;
+    }
+    return { status: "partial", synced, rejected, interrupted: false };
+  }
+
+  async function retryRejected(): Promise<RetryResult> {
+    try {
+      const state = peekRejected(ownerId);
+      if (state.status === "corrupted") return { status: "corrupted" };
+      // Os que voltaram a estar na fila principal (falha a meio de uma
+      // passagem para recusados) seguem pela fila — saem daqui sem envio.
+      const main = peekAll(ownerId);
+      if (main.status === "ok" && main.items.length > 0) {
+        const naFila = new Set(main.items.map((i) => i.client_event_id));
+        const duplicados = state.items.filter((r) => naFila.has(r.item.client_event_id)).map((r) => r.item.client_event_id);
+        removeRejected(ownerId, duplicados);
+      }
+      const after = peekRejected(ownerId);
+      if (after.status !== "ok") return { status: "corrupted" };
+      if (after.items.length === 0) return { status: "empty" };
+
+      const ping = await client.from("teams").select("id").limit(1);
+      if (ping.error) return { status: "offline" };
+
+      let accepted = 0;
+      for (const r of after.items) {
+        const { error } = await client.from("match_events").upsert([r.item], { onConflict: "client_event_id" });
+        if (!error) {
+          removeRejected(ownerId, [r.item.client_event_id]);
+          accepted++;
+          continue;
+        }
+        const c = classificarRecusa(error);
+        if (c === "geral") return { status: "retried", accepted, stillRejected: after.items.length - accepted, interrupted: true };
+        updateRejected(ownerId, r.item.client_event_id, c, detalheDoErro(error), Date.now());
+      }
+      return { status: "retried", accepted, stillRejected: after.items.length - accepted, interrupted: false };
+    } catch {
+      return { status: "error" };
+    }
+  }
+
+  return { flush, retryRejected };
 }

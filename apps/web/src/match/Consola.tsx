@@ -24,6 +24,7 @@ import {
   type Zona3,
 } from "@teambench/engine";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
+import { RejectedNotice } from "../sync/RejectedNotice";
 import type { useOutboxSync } from "../sync/useOutboxSync";
 import { isGoalkeeper } from "../team/positions";
 import type { PlayerRow } from "../team/usePlayers";
@@ -58,6 +59,7 @@ type SheetKind =
   | { kind: "equipa" }
   | { kind: "bench" }
   | { kind: "summary" }
+  | { kind: "sync" }
   | { kind: "add-convocado" }
   | { kind: "settings" }
   | { kind: "transicao"; dir: "ofensiva" | "defensiva"; resultado?: "ganha" | "perdida" }
@@ -390,7 +392,13 @@ export function Consola({ live, roster, opponent, onViewSummary, ourLabel, sync,
         </b>
       </div>
       {lastLine}
-      <span className={`cv-pill${sync.pending > 0 ? " pending" : ""}`}>{syncText}</span>
+      {sync.rejectedCount > 0 || sync.rejectedCorrupted ? (
+        <button type="button" className="cv-pill rejected" onClick={() => setSheet({ kind: "sync" })}>
+          ⚠ {sync.rejectedCorrupted ? "recusados ilegíveis" : `${sync.rejectedCount} recusado${sync.rejectedCount === 1 ? "" : "s"}`}
+        </button>
+      ) : (
+        <span className={`cv-pill${sync.pending > 0 ? " pending" : ""}`}>{syncText}</span>
+      )}
       {!phone && (
         <>
           {glBtn}
@@ -790,6 +798,13 @@ export function Consola({ live, roster, opponent, onViewSummary, ourLabel, sync,
           <button type="button" className="btn block" style={{ marginTop: 14 }} onClick={onLeave}>
             Sair da Consola (voltar ao Jogo)
           </button>
+        </Sheet>
+      )}
+
+      {sheet?.kind === "sync" && (
+        <Sheet title="Sincronização" onClose={() => setSheet(null)}>
+          <p className="hint" style={{ marginBottom: 10 }}>{syncText}</p>
+          <RejectedNotice sync={sync} />
         </Sheet>
       )}
 

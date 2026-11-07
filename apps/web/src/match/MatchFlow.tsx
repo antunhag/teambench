@@ -1,5 +1,6 @@
 import type { MatchFormat } from "@teambench/engine";
 import { useState } from "preact/hooks";
+import { RejectedNotice } from "../sync/RejectedNotice";
 import type { useOutboxSync } from "../sync/useOutboxSync";
 import { useClubLabel } from "../team/useClubLabel";
 import { useMatchFormats } from "../team/useMatchFormats";
@@ -65,9 +66,10 @@ export function MatchFlow({ teamId, matchId, opponent, formatId, status: matchSt
           ← Voltar ao painel
         </button>
         {sync.pending > 0 && (
-          <span className="hint">{sync.syncing ? "A sincronizar..." : `${sync.pending} evento(s) por sincronizar`}</span>
+          <span className="hint">{sync.syncing ? "A sincronizar..." : `${sync.pending} lance(s) por sincronizar`}</span>
         )}
       </div>
+      <RejectedNotice sync={sync} />
       {lock.status === "readonly" ? (
         <ReadOnlyMatch matchId={matchId} opponent={opponent} roster={activeRoster} format={format} ourLabel={ourLabel} />
       ) : (
