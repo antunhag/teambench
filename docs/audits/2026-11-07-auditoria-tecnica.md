@@ -15,7 +15,7 @@ continua a ser de `docs/ARCHITECTURE.md` e `docs/SECURITY.md`.
 
 | ID | Gravidade | Estado | Achado |
 |---|---|---|---|
-| S-C1 | Crítico | **Correção escrita (0028), por aplicar** | Qualquer conta autenticada podia inserir-se em `club_members` de qualquer clube, e daí tornar-se `team_admin` de todas as equipas desse clube |
+| S-C1 | Crítico | **Corrigido (0028 aplicada pelo dono em 2026-11-07)** | Qualquer conta autenticada podia inserir-se em `club_members` de qualquer clube, e daí tornar-se `team_admin` de todas as equipas desse clube |
 | S-H1 | Alto (condicional) | Por verificar no painel | Convites aceites com email não confirmado, se o Auth permitir registo sem confirmação |
 | S-M1 | Médio | **Corrigido** | Uma anulação inserida à mão na API tirava um golo (ou qualquer evento) do placar |
 | S-M2 | Médio | Proposta | A coluna `type` e `payload.type` podem divergir, o que esconde a linha do editor de registo |
@@ -42,7 +42,7 @@ continua a ser de `docs/ARCHITECTURE.md` e `docs/SECURITY.md`.
   - A app não muda, e a ordem entre aplicar a migração e publicar a app é indiferente.
   - Teste com RLS real (papel `authenticated`): `packages/db-tests/test/clubMembersSelfInsert.test.ts`.
   - Passou por uma segunda revisão do `security-auditor` (ver a secção seguinte).
-  - **Só fica fechada quando for aplicada em produção.**
+  - Aplicada em produção pelo dono do projeto em 2026-11-07.
 - **S-M1:** `eventosEfetivos` (em `annul.ts`) só aplica uma anulação a um tipo anulável ou a outra
   anulação. Teste em `annul.test.ts`.
 - **A-1:** `resumeOrStart` e `replayEvents` só iniciam a contagem de quem ainda não está a contar.

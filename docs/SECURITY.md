@@ -86,7 +86,7 @@ já permitia. Corrigido: auto-insert hoje só é permitido quando o utilizador �
 admin do clube dono dessa equipa (criar equipa → virar automaticamente seu
 `team_admin`); entrar por convite passa a ser **só** via `accept_invite()`.
 
-### Auto-inserção em clube (encontrado em 2026-11-07; corrigido na migração 0028, POR APLICAR)
+### Auto-inserção em clube (encontrado em 2026-11-07; corrigido na migração 0028, aplicada em produção em 2026-11-07)
 
 A mesma classe de falha existia um nível acima: `club_members_insert_self` (`0003`) só
 exigia `user_id = auth.uid()`. Qualquer conta autenticada que soubesse o `club_id` (visível
@@ -105,8 +105,8 @@ e equipas de um clube alheio. A app não muda. Revista pelo `security-auditor` (
 ressalvas, todas incorporadas). Teste: `packages/db-tests/test/clubMembersSelfInsert.test.ts`
 (RLS avaliada com papel `authenticated`).
 
-**Até a 0028 ser aplicada em produção, a falha continua aberta.** Depois de aplicar, o
-dono do projeto deve rever no painel do Supabase se `club_members` (e `team_members`/
+A 0028 foi aplicada em produção pelo dono do projeto em 2026-11-07. Impede intrusões
+novas, mas não remove as que já existissem: o dono do projeto deve rever no painel do Supabase se `club_members` (e `team_members`/
 `team_access_log`) têm linhas inesperadas.
 
 **Lição que vira regra** (Princípio II da constituição): nenhuma policy de RLS
