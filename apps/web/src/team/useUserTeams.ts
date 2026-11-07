@@ -1,5 +1,6 @@
 import type { Session } from "@supabase/supabase-js";
-import { useCallback, useEffect, useState } from "preact/hooks";
+import { useCallback, useEffect, useRef, useState } from "preact/hooks";
+import { traduzirErro } from "../errorMessage";
 import { supabase } from "../supabaseClient";
 
 export type TeamRole = "team_admin" | "data_entry" | "viewer";
@@ -50,6 +51,11 @@ export function useUserTeams(session: Session | null) {
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
   const [lostAccessWarning, setLostAccessWarning] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  // Já houve uma leitura com sucesso nesta sessão? Uma releitura falhada (rede
+  // do pavilhão a falhar um segundo) mantém os dados que já existem — nunca
+  // troca o ecrã inteiro (incluindo um jogo ao vivo aberto) por uma faixa de
+  // erro. Tenta outra vez no próximo intervalo.
+  const loadedRef = useRef(false);
 
   const refresh = useCallback(async () => {
     if (!session) {
@@ -66,10 +72,12 @@ export function useUserTeams(session: Session | null) {
       .order("created_at", { ascending: true });
 
     if (error) {
+      if (loadedRef.current) return;
       setStatus("error");
-      setErrorMessage(error.message);
+      setErrorMessage(traduzirErro(error.message));
       return;
     }
+    loadedRef.current = true;
 
     type Row = { role: TeamRole; teams: { id: string; name: string } | { id: string; name: string }[] | null };
     const loaded: UserTeam[] = ((data ?? []) as Row[])

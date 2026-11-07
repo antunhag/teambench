@@ -1,5 +1,6 @@
 import type { Session } from "@supabase/supabase-js";
-import { useCallback, useEffect, useState } from "preact/hooks";
+import { useCallback, useEffect, useRef, useState } from "preact/hooks";
+import { traduzirErro } from "../errorMessage";
 import { supabase } from "../supabaseClient";
 
 export interface CurrentClub {
@@ -16,13 +17,18 @@ export function useCurrentClub(session: Session | null) {
   const [club, setClub] = useState<CurrentClub | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
 
+  // Já houve uma leitura com sucesso? A releitura (ex.: renovação da sessão,
+  // que muda o objeto `session`) não volta a mostrar "A carregar…" nem troca
+  // a app por um erro — isso desmontava um jogo ao vivo aberto.
+  const loadedRef = useRef(false);
+
   const refresh = useCallback(async () => {
     if (!session) {
       setStatus("no-club");
       setClub(null);
       return;
     }
-    setStatus("loading");
+    if (!loadedRef.current) setStatus("loading");
     const { data, error } = await supabase
       .from("club_members")
       .select("clubs(id, name, short_name)")
@@ -31,10 +37,12 @@ export function useCurrentClub(session: Session | null) {
       .maybeSingle();
 
     if (error) {
+      if (loadedRef.current) return;
       setStatus("error");
-      setErrorMessage(error.message);
+      setErrorMessage(traduzirErro(error.message));
       return;
     }
+    loadedRef.current = true;
     if (!data || !data.clubs) {
       setStatus("no-club");
       setClub(null);
