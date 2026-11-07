@@ -20,16 +20,18 @@ mesmo com um único clube em uso.
 - **Monorepo npm workspaces**: `packages/*` + `apps/*`.
 - **`packages/engine`** — lógica pura de domínio (TypeScript, zero DOM, zero rede).
   Relógio de jogo, replay de eventos, resumo/exportações, timeline, plano de rotação.
-  Testado com Vitest (`packages/engine/test/`) — é a camada com cobertura de testes
-  automatizados real do projeto; `apps/web` não tem testes automatizados hoje.
+  Testado com Vitest (`packages/engine/test/`) — é a camada com mais cobertura. `apps/web`
+  tem testes Vitest da lógica pura (fila de sincronização, Consola, mensagens de erro), e
+  desde 2026-11-07 o `npm test` da raiz corre os três pacotes.
 - **`packages/db-tests`** (2026-10-13) — primeiro teste automatizado de SQL/trigger do
   projeto, contra PGlite (Postgres embutido via WASM, zero Docker, zero rede, nunca o
   Supabase real — ver Princípio IV da constituição, emendado pra permitir isto). Carrega
   o ARQUIVO real da migração sob teste (`fs.readFileSync`, nunca uma cópia retranscrita)
   contra um esquema mínimo (só as tabelas que a trigger referencia por FK) — se a
   migração for editada depois, o teste passa a testar o arquivo editado automaticamente.
-  Primeiro caso: `guard_match_events_update` (migração `0026`, ver nota em
-  `docs/SECURITY.md`).
+  Casos: `guard_match_events_update` (`0026`), consistência de equipa em `match_events`
+  (`0027`) e RLS da auto-inserção em `club_members` (`0028`, com papel `authenticated` e
+  `auth.uid()` simulado, para a RLS ser de facto avaliada).
 - **`apps/web`** — Preact + Vite + TypeScript, é a única interface (SPA, PWA com
   service worker via `vite-plugin-pwa`). Sem framework de componentes pesado de
   propósito — o domínio já fica isolado em `packages/engine`.
@@ -291,7 +293,15 @@ inválida devolve o estado sem evento.
   altera o original; `data_entry` não pode apagar — migração `0011`).
   `eventosEfetivos` (`packages/engine/src/annul.ts`) tira as anulações e os
   eventos anulados (anular uma anulação reativa o original); placar
-  (`recomputeScoreFor`) e contagens por categoria usam essa projeção.
+  (`recomputeScoreFor`) e contagens por categoria usam essa projeção. Uma
+  anulação só tem efeito se o alvo for de um tipo anulável (`TIPOS_ANULAVEIS`) ou
+  outra anulação (2026-11-07): uma linha inserida à mão na API a apontar para um
+  golo é ignorada, em vez de o tirar do placar.
+- **2º apito na mesma parte** (jogo reaberto a meio por replay e retomado com
+  "Iniciar Parte N"): `resumeOrStart` e o replay só iniciam a contagem de quem ainda
+  não está a contar — antes recomeçavam todos e perdia-se o tempo entre o 1º apito e
+  a retoma (2026-11-07). A Timeline segue as mesmas regras do replay para entradas
+  repetidas e vermelho durante um pedido de tempo.
 - **Zona depois do lance sem UPDATE** (`consola/deferredEnqueue.ts` +
   `useLiveMatch.applyDeferred`): o lance entra logo no estado local, mas só vai
   para a fila quando a zona é escolhida, o painel fecha, há outra ação, passam
@@ -478,7 +488,10 @@ partes) de uma vez, sempre por ação explícita do treinador (nunca sozinha).
 ```
 packages/engine/src/
   clock.ts        # relógio de jogo (tempo decorrido, pausas)
-  events.ts        # criação/idempotência de eventos
+  events.ts        # criação/idempotência de eventos; placar; juntarComServidor
+  liveMatch.ts       # estado e ações do jogo ao vivo (partilhado por "Jogo ao vivo" e Consola)
+  annul.ts           # anulações ("−") e eventos efetivos; categorias de equipa
+  rotationImport.ts  # importar plano de rotação em texto
   replay.ts         # reconstrói estado a partir do registo cronológico
   rotationPlan.ts    # plano de rotação + aptidão A/B/C
   recentMinutes.ts         # agrega minutos através de vários jogos (reaproveita replayEvents)
@@ -496,7 +509,8 @@ apps/web/src/
   auth/     # Login.tsx (link mágico + senha)
   team/     # Plantel, convites, clube/equipa, AcceptInvite, useUserTeams (todas as equipas do utilizador)
   match/    # fluxo ao vivo, Resumo, Timeline, corretor pós-jogo, planeador de rotação
-    Consola.tsx, consola/   # segunda tela de registo ao vivo (specs/009); layout.ts/flows.ts puros com testes
+    Consola.tsx, consola/   # segunda tela de registo ao vivo (specs/009); layout/flows/bench/deferredEnqueue puros com testes
+  errorMessage.ts  # textoDeErro/traduzirErro: mensagens técnicas → português simples (Princípio V)
   sync/     # fila de sincronização offline → Supabase
 
 supabase/migrations/   # histórico completo do esquema — ver docs/SECURITY.md pro resumo do modelo de RLS

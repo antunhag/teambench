@@ -1,22 +1,16 @@
 <!--
 Sync Impact Report
-Version change: 1.1.0 → 1.2.0
-Rationale: MINOR — Princípio IV reformulado (mesma intenção de fundo, regra mais precisa:
-  a propriedade não-negociável é "nunca rede, nunca o Supabase real", não literalmente
-  "nunca testar SQL" — passa a permitir explicitamente um pacote dedicado de teste de
-  migração/trigger contra Postgres local embutido, ex. PGlite, sem Docker/servidor/rede)
-  + gate (1) da secção de Portões passa a cobrir esse pacote novo quando existir. Nenhum
-  princípio foi removido; a garantia original (testes nunca tocam dado real) não foi
-  afrouxada — ficou mais explícita sobre qual é o critério real.
-Modified principles:
-  - IV. "Testes nunca tocam dados reais de produção" — mesmo título e intenção, regra
-    reescrita (ver corpo do princípio).
+Version change: 1.2.0 → 1.3.0
+Rationale: MINOR — portão (1) alargado aos testes de apps/web (o `npm test` da raiz passa
+  a correr engine + db-tests + apps/web); portão (2) passa a nomear o comando de typecheck
+  sem `npx` (que pode descarregar pacotes) e os três pacotes; lista de subagentes do Fluxo
+  de Trabalho atualizada com `ui-designer` (7 em .claude/agents/). Nenhum princípio
+  mudou; nenhuma garantia foi afrouxada.
+Modified principles: none
+Modified sections: Fluxo de Trabalho (lista de subagentes); Portões de Qualidade (1) e (2)
 Added sections: none
 Removed sections: none
-Deferred TODOs:
-  - Criar o pacote `packages/db-tests` (PGlite) com o teste da trigger
-    `guard_match_events_update` (migração 0026) — próxima ação, fora do escopo desta
-    emenda (só a constituição é alterada aqui).
+Deferred TODOs: none (o TODO da 1.2.0 — criar packages/db-tests — já está feito)
 -->
 
 # Teambench Constitution
@@ -97,7 +91,7 @@ permanente a desenhar em torno de, não um problema a resolver contratando gente
 Mudanças de risco maior (RLS, migrações, decisões de arquitetura) compensam esse
 não-processo usando os subagentes especializados já configurados em `.claude/agents/`
 (`code-reviewer`, `security-auditor`, `architect-reviewer`, `qa-expert`,
-`test-automator`, `ui-ux-tester`) como o "segundo par de olhos" que um processo de
+`test-automator`, `ui-designer`, `ui-ux-tester`) como o "segundo par de olhos" que um processo de
 equipa normalmente daria — invocados explicitamente antes de mudanças sensíveis,
 nunca presumidos como automáticos.
 
@@ -105,10 +99,12 @@ nunca presumidos como automáticos.
 
 Todo `git push` para `main` vai DIRETO para produção (GitHub Pages, sem staging,
 sem gate de CI além do próprio build) — é imediatamente visível pro clube real.
-Por isso, antes de qualquer push: (1) `npm test --workspace packages/engine` tem
-de passar, e também o pacote dedicado de teste de SQL/migrações (ex.:
-`packages/db-tests`, ver Princípio IV), quando existir; (2) `npx tsc --noEmit` na
-app afetada tem de estar limpo; (3) `npm run build --workspace apps/web` tem de
+Por isso, antes de qualquer push: (1) `npm test` na raiz tem de passar — corre o
+motor (`packages/engine`), o pacote de teste de SQL/migrações (`packages/db-tests`,
+ver Princípio IV) e os testes de lógica de `apps/web`; (2) o typecheck
+(`./node_modules/.bin/tsc -p <pacote> --noEmit`, nunca via `npx`, que pode
+descarregar pacotes) tem de estar limpo em cada pacote afetado (`packages/engine`,
+`packages/db-tests`, `apps/web`); (3) `npm run build --workspace apps/web` tem de
 compilar sem erro; (4) qualquer mudança visível na UI é conferida no navegador
 contra o fluxo real antes de ser dada como pronta — nunca só "o código parece
 certo"; (5) se a mudança alterou arquitetura ou o modelo de segurança/RLS,
@@ -128,4 +124,4 @@ documentada conforme o Princípio VI, antes de ser aplicada em produção — na
 ausência de revisão de equipa, essa verificação é feita explicitamente invocando o
 subagente relevante, não assumida.
 
-**Version**: 1.2.0 | **Ratified**: 2026-10-07 | **Last Amended**: 2026-10-13
+**Version**: 1.3.0 | **Ratified**: 2026-10-07 | **Last Amended**: 2026-11-07

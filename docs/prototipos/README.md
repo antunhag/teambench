@@ -1,8 +1,18 @@
 # Protótipos
 
+> **Histórico.** A Consola real já existe na app (aba "Consola" de cada jogo; specs
+> `specs/009-captura-detalhada/`) e é a referência. Estes ficheiros ficam como registo das
+> decisões de desenho; não são usados em jogo.
+
+## `consola-v2-maqueta.html` — maqueta estática do visual v2 (aprovada em 2026-11-01)
+
+Maqueta da disposição atual da Consola (tema escuro, tablet deitado como alvo principal,
+registo rápido à direita, banco sempre à vista). O contrato correspondente é
+`specs/009-captura-detalhada/contracts/consola-visual.md`.
+
 ## `consola-prototipo.html` — consola de registo ao vivo (linha por jogador)
 
-Protótipo de interação para a futura segunda tela de jogo ao vivo (ver
+Protótipo de interação (outubro de 2026) que deu origem à segunda tela de jogo ao vivo (ver
 `specs/009-captura-detalhada/`). **Não faz parte da app** e não é usado em jogo.
 
 - Um único HTML autocontido: dados fictícios, estado só em memória, sem rede, sem Supabase.
@@ -12,7 +22,7 @@ Protótipo de interação para a futura segunda tela de jogo ao vivo (ver
 - ⚙ → "Avaliação do piloto" (tarefas A/B, contador de ativações, histórico, reiniciar) e
   "Sobre este protótipo" (limitações e notas técnicas).
 
-Decisões do piloto já refletidas no protótipo (a levar para a spec 009):
+Decisões do piloto refletidas no protótipo (levadas para a spec 009; algumas mudaram na v2 — ver `consola-visual.md`):
 
 - Ação tocada na linha do jogador; sem seleção global; sem bloqueio após substituição.
 - Densidade B por defeito; botões "o maior que cabe" (64 → 48 px) sem esconder jogadores.

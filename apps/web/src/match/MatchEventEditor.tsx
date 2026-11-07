@@ -1,4 +1,5 @@
 import * as engine from "@teambench/engine";
+import { traduzirErro } from "../errorMessage";
 import { useEffect, useState } from "preact/hooks";
 import { supabase } from "../supabaseClient";
 import { usePlayers, type PlayerRow } from "../team/usePlayers";
@@ -342,7 +343,7 @@ export function MatchEventEditor({ teamId, matchId, opponent, onClose, canDelete
     });
     if (error) {
       setAddStatus("error");
-      setAddError(error.message);
+      setAddError(traduzirErro(error.message));
       return;
     }
     setAddStatus("idle");
@@ -445,7 +446,7 @@ export function MatchEventEditor({ teamId, matchId, opponent, onClose, canDelete
       .order("ms", { ascending: true });
     if (error) {
       setStatus("error");
-      setErrorMessage(error.message);
+      setErrorMessage(traduzirErro(error.message));
       return;
     }
     const loaded = (data ?? []) as EventRow[];
@@ -521,7 +522,7 @@ export function MatchEventEditor({ teamId, matchId, opponent, onClose, canDelete
       .select("id");
     setSavingId(null);
     if (error) {
-      setErrorMessage(error.message);
+      setErrorMessage(traduzirErro(error.message));
       return;
     }
     if (!data || data.length === 0) {
@@ -559,7 +560,7 @@ export function MatchEventEditor({ teamId, matchId, opponent, onClose, canDelete
     const { data, error } = await supabase.from("match_events").delete().eq("id", row.id).select("id");
     setDeletingId(null);
     if (error) {
-      setRowErrors((e) => ({ ...e, [row.id]: error.message }));
+      setRowErrors((e) => ({ ...e, [row.id]: traduzirErro(error.message) }));
       return;
     }
     if (!data || data.length === 0) {

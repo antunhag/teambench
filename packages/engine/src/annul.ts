@@ -24,9 +24,15 @@ export function eventKey(e: MatchEvent): string {
 
 /** Ativo = não anulado por nenhuma anulação ativa (anular uma anulação reativa o original). */
 function activeChecker(events: MatchEvent[]): (e: MatchEvent) => boolean {
+  // Uma anulação só tem efeito sobre um tipo anulável (categoria de equipa) ou
+  // sobre outra anulação. Sem isto, uma linha inserida à mão na API com
+  // `alvoId` de um golo tirava-o do placar sem passar pela correção da Registo.
+  const byKey = new Map(events.map((e) => [eventKey(e), e] as const));
   const annulers = new Map<string, MatchEvent[]>();
   for (const e of events) {
     if (e.type !== "anulacao" || !e.alvoId) continue;
+    const alvo = byKey.get(e.alvoId);
+    if (!alvo || !(TIPOS_ANULAVEIS.includes(alvo.type) || alvo.type === "anulacao")) continue;
     const list = annulers.get(e.alvoId) ?? [];
     list.push(e);
     annulers.set(e.alvoId, list);

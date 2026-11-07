@@ -1,4 +1,5 @@
 import type { Session } from "@supabase/supabase-js";
+import { traduzirErro } from "../errorMessage";
 import { useEffect, useState } from "preact/hooks";
 import { supabase } from "../supabaseClient";
 
@@ -32,7 +33,7 @@ export function AcceptInvite({ session, token, onAccepted, onDismiss }: Props) {
       if (cancelled) return;
       if (error) {
         setStatus("error");
-        setErrorMessage(error.message);
+        setErrorMessage(traduzirErro(error.message));
         return;
       }
       if (!data) {
@@ -60,7 +61,7 @@ export function AcceptInvite({ session, token, onAccepted, onDismiss }: Props) {
             ? "Este convite expirou — peça um novo à sua equipa."
             : error.message.includes("invite_already_accepted")
               ? "Este convite já foi usado."
-              : error.message
+              : traduzirErro(error.message)
       );
       return;
     }

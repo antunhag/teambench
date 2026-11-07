@@ -1,5 +1,5 @@
 import { useState } from "preact/hooks";
-import { toErrorMessage } from "../errorMessage";
+import { textoDeErro, toErrorMessage, traduzirErro } from "../errorMessage";
 import { inviteLink, useTeamMembers, type TeamRole } from "./useTeamMembers";
 import { useResourceLock } from "./useResourceLock";
 
@@ -52,7 +52,7 @@ export function TeamMembers({ teamId }: Props) {
       setSaveStatus("idle");
     } catch (err) {
       setSaveStatus("error");
-      setSaveError(toErrorMessage(err));
+      setSaveError(textoDeErro(err));
     }
   }
 
@@ -65,7 +65,7 @@ export function TeamMembers({ teamId }: Props) {
       setMemberError(
         message.includes("last_admin")
           ? `Não é possível remover ${memberEmail} — é o único Admin da Equipa. Promove outra pessoa a Admin primeiro.`
-          : message
+          : traduzirErro(message)
       );
     }
   }
@@ -79,7 +79,7 @@ export function TeamMembers({ teamId }: Props) {
       setMemberError(
         message.includes("last_admin")
           ? `Não é possível mudar o papel de ${memberEmail} — é o único Admin da Equipa. Promove outra pessoa a Admin primeiro.`
-          : message
+          : traduzirErro(message)
       );
     }
   }

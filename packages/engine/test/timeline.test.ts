@@ -445,3 +445,27 @@ describe("buildTimelineHtml — pausas", () => {
     expect(html).toContain("Tempo efetivo: <b>29:48</b>");
   });
 });
+
+describe("buildTimelineData — mesmas regras do replay", () => {
+  it("vermelho durante um pedido de tempo tira o jogador da quadra (o fim da pausa não lhe reabre a contagem)", () => {
+    const events: MatchEvent[] = [
+      createEvent("pausa", null, 300_000, 1, 0, { reasonId: "tempo_nos" }),
+      createEvent("cartao_vermelho", salvador.id, 320_000, 1, 0),
+      createEvent("fim_pausa", null, 360_000, 1, 0),
+      createEvent("fim_periodo", null, 600_000, 1, 0, { duracaoSec: 600 }),
+    ];
+    const halves = buildTimelineData(events, roster, [salvador.id, guarda.id]);
+    const bar = halves[0].players.find((p) => p.id === salvador.id)!;
+    expect(bar.intervals).toEqual([[0, 300]]);
+  });
+
+  it("entrada repetida de quem já está em quadra não recomeça a contagem", () => {
+    const events: MatchEvent[] = [
+      createEvent("substituicao", salvador.id, 300_000, 1, 0, { outId: null }),
+      createEvent("fim_periodo", null, 600_000, 1, 0, { duracaoSec: 600 }),
+    ];
+    const halves = buildTimelineData(events, roster, [salvador.id]);
+    const bar = halves[0].players.find((p) => p.id === salvador.id)!;
+    expect(bar.totalSec).toBe(600);
+  });
+});

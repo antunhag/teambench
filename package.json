@@ -6,7 +6,7 @@
     "apps/*"
   ],
   "scripts": {
-    "test": "npm test --workspace packages/engine && npm test --workspace packages/db-tests",
+    "test": "npm test --workspace packages/engine && npm test --workspace packages/db-tests && npm test --workspace apps/web",
     "dev": "npm run dev --workspace apps/web"
   }
 }

@@ -15,6 +15,8 @@ description: "Task list for Captura detalhada de estatísticas (Consola)"
 
 **Organization**: fases por etapa do plano; dentro de cada etapa, tarefas etiquetadas pela história que servem.
 
+> **Nota (2026-11-07)**: as tarefas da Etapa 1 e 2c foram feitas com os ficheiros planeados e depois refeitas no visual v2 ([contracts/consola-visual.md](./contracts/consola-visual.md), commits `201a49a`, `8e07d8b`). Onde se lê `ConsolaRow.tsx` leia-se `consola/PlayerCard.tsx`; onde se lê `TeamBar.tsx` leia-se `consola/QuickPanel.tsx` (+ `TransicaoSheet.tsx`, `BenchStrip.tsx`, topo de `Consola.tsx`).
+
 ## Regras para todas as tarefas
 
 - Trabalho **só** na branch `claude/fervent-fermi-q3zk57`; nunca commit/push direto em `main` (`main` = produção GitHub Pages).
@@ -82,7 +84,7 @@ description: "Task list for Captura detalhada de estatísticas (Consola)"
 - [x] T023 [US1] Confirmar por `git diff --stat` que a Etapa 1 só toca em `apps/web/` (+ docs), não em `packages/engine/`, `supabase/` nem `apps/web/src/match/LiveMatch.tsx`
 - [x] T024 [P] [US1] Atualizar `docs/ARCHITECTURE.md` com a Consola (aba, `MatchFlow` variante, mesma trava, módulos puros `layout`/`flows`) — Princípio VI
 - [ ] T025 [US1] Pedir ao utilizador a verificação manual de quickstart.md "Etapa 1" (iPhone vertical e tablet nas duas orientações, jogo de teste), incluindo SC-005; corrigir o que for reportado
-- [ ] T026 [US1] Com autorizações separadas: commit local; push para `claude/fervent-fermi-q3zk57`; o merge para `main` (deploy) é decisão do utilizador
+- [x] T026 [US1] Com autorizações separadas: commit local; push para `claude/fervent-fermi-q3zk57`; o merge para `main` (deploy) é decisão do utilizador (feito; em produção)
 
 **Checkpoint**: MVP utilizável num jogo real a partir da branch, sem mudanças de motor nem de BD.
 
@@ -173,19 +175,19 @@ description: "Task list for Captura detalhada de estatísticas (Consola)"
 
 **Purpose**: fecho da Etapa 2; aplica-se também a cada sub-etapa que o utilizador queira publicar isoladamente.
 
-- [ ] T057 Com autorização: `npm test`, `npm test --workspace apps/web`, typecheck dos três pacotes (`./node_modules/.bin/tsc -p <pacote> --noEmit`), `npm run build --workspace apps/web`; relatar executado / não executado / só inspecionado
-- [ ] T058 Confirmar por `git diff --stat` que não há ficheiros em `supabase/migrations/` nem alterações a `apps/web/src/match/LiveMatch.tsx`
-- [ ] T059 [P] Atualizar `docs/ARCHITECTURE.md` com os novos tipos de evento, `eventosEfetivos`/anulação e o envio adiado da zona (Princípio VI)
-- [ ] T060 Pedir ao utilizador a verificação manual de quickstart.md "Etapa 2" passos 1–8 (incluindo offline) no iPhone e no tablet, num jogo de teste; corrigir o que for reportado
+- [x] T057 Com autorização: `npm test`, `npm test --workspace apps/web`, typecheck dos três pacotes (`./node_modules/.bin/tsc -p <pacote> --noEmit`), `npm run build --workspace apps/web`; relatar executado / não executado / só inspecionado
+- [x] T058 Confirmar por `git diff --stat` que não há ficheiros em `supabase/migrations/` nem alterações a `apps/web/src/match/LiveMatch.tsx` (2026-11-07: os commits da 009 não lhes tocam; a 0027 e a alteração a `LiveMatch.tsx` no mesmo intervalo vêm de `3880323` e `3c22a84`, fora da 009)
+- [x] T059 [P] Atualizar `docs/ARCHITECTURE.md` com os novos tipos de evento, `eventosEfetivos`/anulação e o envio adiado da zona (Princípio VI)
+- [ ] T060 Pedir ao utilizador a verificação manual de quickstart.md "Etapa 2" passos 1–10 (incluindo offline) no iPhone e no tablet, num jogo de teste; corrigir o que for reportado
 - [ ] T061 Com autorizações separadas: commit local; push para `claude/fervent-fermi-q3zk57`; merge para `main` só por decisão do utilizador
 
 ---
 
 ## Phase 10: Polish & Cross-Cutting
 
-- [ ] T062 [P] Rever textos visíveis da Consola em português do clube, sem jargão técnico, incluindo mensagens de erro (Princípio V)
-- [ ] T063 [P] Atualizar `docs/prototipos/README.md` a indicar que a Consola real substitui o protótipo como referência (o protótipo fica como histórico)
-- [ ] T064 Correr `/speckit-analyze` para consistência spec ↔ plan ↔ tasks e resolver divergências antes do merge para `main`
+- [x] T062 [P] Rever textos visíveis da Consola em português do clube, sem jargão técnico, incluindo mensagens de erro (Princípio V)
+- [x] T063 [P] Atualizar `docs/prototipos/README.md` a indicar que a Consola real substitui o protótipo como referência (o protótipo fica como histórico)
+- [x] T064 Correr `/speckit-analyze` para consistência spec ↔ plan ↔ tasks e resolver divergências antes do merge para `main` (2026-11-07: spec, plan, tasks e contratos alinhados com a v2 e com a regra dos minutos em pausas; T025/T060 continuam com o utilizador)
 
 ---
 

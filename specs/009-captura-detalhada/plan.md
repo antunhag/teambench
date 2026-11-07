@@ -15,6 +15,11 @@ A abordagem técnica separa a entrega em **duas etapas**:
 - **Etapa 1 — Consola com os eventos que já existem** (US1 + parte da US2/US5): golo, golo sofrido, cartões, faltas, atendimento, substituições, entrada em vaga, pausa, fim/início de parte; zona opcional só para o golo (já existe no evento). **Não toca no motor (`packages/engine`), na base de dados nem no "Jogo ao vivo"** — só UI nova em `apps/web`, a reaproveitar `MatchFlow`/`useMatchLock`/`useLiveMatch` tal como existem.
 - **Etapa 2 — Novos tipos de evento** (resto de US2, US3, US4, US5): remate (desfecho), remates do adversário, defesa/saída do GR, transição a favor/contra, perda/recuperação por zona, goleiro-linha, **anulação**; zona opcional em todas as ações; "−" por categoria; contadores e Resumo completos; transições desperdiçadas no Resumo do jogo; exibição dos novos tipos no Resumo, Timeline e editor de registo. **Zero migrações** (ver research.md Decisão 1).
 
+> **Nota (2026-11-07)**: o visual foi substituído pela v2 ([contracts/consola-visual.md](./contracts/consola-visual.md), aprovada em 2026-11-01). Os componentes planeados `ConsolaRow.tsx` e `TeamBar.tsx` não existem; a correspondência real é:
+> `ConsolaRow` → `consola/PlayerCard.tsx`; `TeamBar` → `consola/QuickPanel.tsx` (cartões Transições, Adversário, Bola) e topo de `Consola.tsx`; folha de transições → `consola/TransicaoSheet.tsx`; banco → `consola/BenchStrip.tsx` + `consola/bench.ts` (tempo no banco). A lógica das etapas mantém-se.
+>
+> **Alterações relacionadas feitas na mesma branch, fora do âmbito da 009** (documentadas em `docs/ARCHITECTURE.md`): minutos durante pedidos de tempo (`discountPause`/`settlePlayerDuringPause` em `clock.ts`); vistas de pausas (`resumoPausas`) e durações derivadas (`duracoesDerivadas`) em `report.ts`; leitura do servidor em jogo terminado (`juntarComServidor`); importação de plano de rotação em texto (`rotationImport.ts`); exportação de texto com 12 colunas.
+
 ## Technical Context
 
 **Language/Version**: TypeScript (strict), monorepo npm existente
@@ -65,7 +70,8 @@ specs/009-captura-detalhada/
 ├── data-model.md        # eventos/campos (regenerado)
 ├── quickstart.md        # validação manual por etapa (regenerado)
 ├── contracts/
-│   └── consola-ui.md    # contrato de UI/interação da Consola
+│   ├── consola-ui.md    # contrato de interação da Consola
+│   └── consola-visual.md # visual e disposição v2 (2026-11-01; prevalece no visual)
 ├── checklists/
 └── tasks.md             # /speckit-tasks (a regenerar)
 ```
@@ -78,8 +84,8 @@ apps/web/src/match/
 ├── MatchFlow.tsx            # Etapa 1: variante que monta Consola em vez de LiveMatch (mesma trava/useLiveMatch)
 ├── Consola.tsx              # NOVO (Etapa 1): tela da Consola (cabeçalho, barra de equipa, último evento, linhas, banco, doca)
 ├── consola/                 # NOVO
-│   ├── ConsolaRow.tsx       # linha por jogador (densidade B/A; GR com remates deles na Etapa 2)
-│   ├── TeamBar.tsx          # barra de equipa (contadores; "−" na Etapa 2)
+│   ├── ConsolaRow.tsx       # (v2: PlayerCard.tsx) linha por jogador (densidade B/A; GR com remates deles na Etapa 2)
+│   ├── TeamBar.tsx          # (v2: QuickPanel.tsx + TransicaoSheet.tsx + BenchStrip.tsx) barra de equipa (contadores; "−" na Etapa 2)
 │   ├── ZonePanel.tsx        # Etapa 2: zona rápida não modal (grelha de referência)
 │   ├── GoalSheet.tsx        # folha do golo/golo sofrido (campos existentes) + ZoneGrid (grelha de referência)
 │   ├── SummarySheet.tsx     # Resumo rápido

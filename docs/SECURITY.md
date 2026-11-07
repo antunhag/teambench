@@ -86,6 +86,29 @@ já permitia. Corrigido: auto-insert hoje só é permitido quando o utilizador �
 admin do clube dono dessa equipa (criar equipa → virar automaticamente seu
 `team_admin`); entrar por convite passa a ser **só** via `accept_invite()`.
 
+### Auto-inserção em clube (encontrado em 2026-11-07; corrigido na migração 0028, POR APLICAR)
+
+A mesma classe de falha existia um nível acima: `club_members_insert_self` (`0003`) só
+exigia `user_id = auth.uid()`. Qualquer conta autenticada que soubesse o `club_id` (visível
+a qualquer membro de uma equipa em `teams.club_id`, ou a um ex-membro) podia inserir-se
+como Admin do Clube e, pelo ramo "admin do clube" da policy de `team_members` (`0007`),
+tornar-se `team_admin` de todas as equipas do clube. `club_members` não tem policy de
+DELETE, por isso um intruso não se remove pela app.
+
+Correção: `0028` troca a policy por `club_members_insert_first_admin` — só se pode
+inserir a si próprio num clube **ainda sem membros nem equipas** (o onboarding: quem acabou
+de criar o clube, cujo id é um UUID aleatório gerado no navegador). "Sem equipas" impede
+reclamar um clube que ficou sem Admin mas tem equipas (backfill da 0003, ou conta do único
+Admin apagada). A verificação usa `club_is_new()` (security definer, `search_path =
+public, pg_temp`, sem EXECUTE para `anon`), porque dentro da policy a RLS esconderia membros
+e equipas de um clube alheio. A app não muda. Revista pelo `security-auditor` (aprovada com
+ressalvas, todas incorporadas). Teste: `packages/db-tests/test/clubMembersSelfInsert.test.ts`
+(RLS avaliada com papel `authenticated`).
+
+**Até a 0028 ser aplicada em produção, a falha continua aberta.** Depois de aplicar, o
+dono do projeto deve rever no painel do Supabase se `club_members` (e `team_members`/
+`team_access_log`) têm linhas inesperadas.
+
 **Lição que vira regra** (Princípio II da constituição): nenhuma policy de RLS
 nova ou alterada é considerada pronta só porque "a migração correu sem erro" —
 precisa de leitura deliberada (via subagente `security-auditor` ou equivalente)

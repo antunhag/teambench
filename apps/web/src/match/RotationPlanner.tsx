@@ -1,6 +1,6 @@
 import * as engine from "@teambench/engine";
 import { useEffect, useState } from "preact/hooks";
-import { toErrorMessage } from "../errorMessage";
+import { textoDeErro } from "../errorMessage";
 import { useMatchFormats } from "../team/useMatchFormats";
 import { isGoalkeeper, posAbbr } from "../team/positions";
 import { usePlayerAptitudes } from "../team/usePlayerAptitudes";
@@ -310,7 +310,7 @@ export function RotationPlanner({ teamId, matchId, opponent, formatId, status, o
       await refreshPlayers();
     } catch (err) {
       setSaveState("error");
-      setSaveError(toErrorMessage(err));
+      setSaveError(textoDeErro(err));
     }
   }
 
@@ -337,7 +337,7 @@ export function RotationPlanner({ teamId, matchId, opponent, formatId, status, o
       // não reflete o ajuste que ele acabou de fazer.
       setRotationOptions(null);
     } catch (err) {
-      setWeightSaveError({ playerId, slot, weight, message: toErrorMessage(err) });
+      setWeightSaveError({ playerId, slot, weight, message: textoDeErro(err) });
     }
   }
 

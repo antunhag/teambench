@@ -1,4 +1,5 @@
 import type { Session } from "@supabase/supabase-js";
+import { traduzirErro } from "../errorMessage";
 import { useState } from "preact/hooks";
 import { supabase } from "../supabaseClient";
 import { slugify } from "./slug";
@@ -26,7 +27,7 @@ export function CreateClub({ session, onCreated }: Props) {
     const { error: clubError } = await supabase.from("clubs").insert({ id: clubId, name, slug: slugify(name) });
     if (clubError) {
       setStatus("error");
-      setErrorMessage(clubError.message);
+      setErrorMessage(traduzirErro(clubError.message));
       return;
     }
 
@@ -35,7 +36,7 @@ export function CreateClub({ session, onCreated }: Props) {
       .insert({ club_id: clubId, user_id: session.user.id });
     if (memberError) {
       setStatus("error");
-      setErrorMessage(memberError.message);
+      setErrorMessage(traduzirErro(memberError.message));
       return;
     }
 

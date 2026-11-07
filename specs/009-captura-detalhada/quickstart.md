@@ -33,13 +33,15 @@ Num jogo de teste, com a aba **Consola** (iPhone vertical e tablet nas duas orie
 8. Abrir o Resumo do jogo e a Timeline: idênticos ao que o "Jogo ao vivo" produziria (SC-002).
 9. Layout: 5 jogadores visíveis sem scroll (densidade B), botões ≥ 48 px, sem scroll horizontal, sem texto cortado (SC-005).
 
-## Etapa 2 — Novos tipos de evento
+## Etapa 2 — Novos tipos de evento (visual v2: [contracts/consola-visual.md](./contracts/consola-visual.md))
 
 1. Remate do jogador (Remate ▸ → Defendido/Fora/Bloqueado): 2 toques; zona rápida aparece; ignorar e tocar noutra ação regista ambas sem toque extra.
-2. Remates deles na linha do GR: Defendido (atribuído ao GR), Fora, Bloqueado (sem jogador).
+2. Remates deles no cartão "Adversário" (iPhone: "Equipa…"): Defendido (atribuído ao GR), Fora, Bloqueado (sem jogador).
 3. Zona em falta e cartão; fechar a app com o painel de zona aberto e reabrir → o evento está lá e sincroniza uma única vez.
-4. Transição a favor 3x1 sem finalização e contra 2x2 com finalização (2 toques cada); aparecem nos contadores, no Resumo e na lista de transições desperdiçadas (só a primeira).
+4. Transição a favor 3x1 sem finalização (1 toque no tablet) e contra 2x2 com finalização ("…", 2 toques); aparecem nos contadores, no Resumo e na lista de transições desperdiçadas (só a primeira).
 5. Perdas/recuperações por zona (1 toque); "−" numa categoria anula só o último dessa categoria e mostra o aviso; "Desfazer" repõe.
 6. GR-linha: estado e duração visíveis; terminar regista a duração.
 7. Editor de registo e Timeline mostram os novos tipos e as anulações; placar correto após "−" num golo sofrido.
-8. Offline: registar vários lances sem rede; ao voltar a rede, todos sincronizam (sem itens presos na fila).
+8. Substituições: uma troca (banco → "SAI") e uma troca de linha (3 do banco, depois "SAI" pela mesma ordem); cancelar limpa a fila.
+9. Pedido de tempo com uma troca durante a pausa: quem entra não ganha minutos da pausa; Resumo e Timeline mostram a pausa com a duração real.
+10. Offline: registar vários lances sem rede; ao voltar a rede, todos sincronizam (sem itens presos na fila).

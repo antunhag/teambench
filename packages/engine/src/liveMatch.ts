@@ -179,8 +179,10 @@ export function goLive(state: LiveMatchState): LiveMatchState {
 export function resumeOrStart(state: LiveMatchState, nowMs: number): LiveMatchState {
   const atMs = matchElapsedMs(state, nowMs);
   let clockAcc = state.clockAcc;
+  // Só quem ainda não está a contar: ao retomar uma parte reaberta por replay,
+  // os que já estavam em quadra continuam desde o 1º apito (sem perder tempo).
   state.onCourt.forEach((id) => {
-    clockAcc = markOnSince(clockAcc, id, atMs);
+    if (clockAcc.onCourtSince[id] == null) clockAcc = markOnSince(clockAcc, id, atMs);
   });
   // O lineup no kickoff é o que permite reconstruir os titulares da parte 1
   // só a partir dos eventos sincronizados (ver titularIdsFromEvents) — sem

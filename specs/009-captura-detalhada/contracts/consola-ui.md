@@ -3,6 +3,9 @@
 > **Visual e disposição substituídos em 2026-11-01** por [consola-visual.md](./consola-visual.md)
 > (v2 aprovada). Continuam válidas aqui as regras de interação que a v2 não altera: zona rápida
 > não modal e opcional, envio adiado, vaga com confirmação, cancelar ≠ concluir, desfazer.
+> Já não valem daqui: a estrutura (barra de equipa em cima), a linha do GR com remates deles,
+> transições em 2 toques no tablet, "Mais…" no iPhone (agora "Equipa…") e o formato
+> "1ª n · total m" dos contadores.
 
 Contrato de interação da Consola, aferido com o protótipo `docs/prototipos/consola-prototipo.html`.
 "Toques" contam a partir do ecrã principal sem nada aberto.

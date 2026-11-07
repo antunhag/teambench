@@ -32,9 +32,9 @@ cada execução precisa de autorização explícita do utilizador para esse coma
 | Comando | Âmbito | Observações (inspeção estática) |
 |---|---|---|
 | `npm ci` | instala dependências pelo lockfile | usa rede (registo npm); corre install scripts (ex.: esbuild) |
-| `npm test` | engine + db-tests | |
+| `npm test` | engine + db-tests + apps/web | |
 | `npm test --workspace packages/engine` | só o engine | sem imports de rede encontrados |
-| `npm test --workspace packages/db-tests` | só SQL/PGlite | o teste atual usa `new PGlite()` em memória, sem rede no código, e cobre apenas a migration 0026; não garante que testes futuros sejam offline — verificar cada novo teste |
+| `npm test --workspace packages/db-tests` | só SQL/PGlite | os testes atuais usam `new PGlite()` em memória, sem rede no código, e cobrem as migrations 0026, 0027 e 0028; não garante que testes futuros sejam offline — verificar cada novo teste |
 | `./node_modules/.bin/tsc -p <pacote> --noEmit` | typecheck (`packages/engine`, `packages/db-tests`, `apps/web`) | não há script; não usar `npx` (pode descarregar); `packages/engine` não inclui `test/` |
 | `npm run build --workspace apps/web` | `tsc -b` + `vite build` → `apps/web/dist` | embute `VITE_*` de `apps/web/.env*` se existirem |
 | `pytest tools/rotation-solver/tests` | solver Python | requer venv com `requirements.txt` (instalação usa rede); os testes não importam `buscar_dados.py` |

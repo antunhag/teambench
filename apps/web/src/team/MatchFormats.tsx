@@ -1,5 +1,5 @@
 import { useState } from "preact/hooks";
-import { toErrorMessage } from "../errorMessage";
+import { textoDeErro } from "../errorMessage";
 import { useMatchFormats } from "./useMatchFormats";
 import { useResourceLock } from "./useResourceLock";
 
@@ -78,7 +78,7 @@ export function MatchFormats({ teamId, canManage }: Props) {
       setSaveStatus("idle");
     } catch (err) {
       setSaveStatus("error");
-      setSaveError(toErrorMessage(err));
+      setSaveError(textoDeErro(err));
     }
   }
 

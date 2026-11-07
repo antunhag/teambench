@@ -58,8 +58,11 @@ export function replayEvents(convocadoIds: string[], events: MatchEvent[], forma
     switch (ev.type) {
       case "kickoff": {
         onCourt = ev.lineup ?? onCourt;
+        // Um 2º apito na mesma parte (jogo reaberto a meio e retomado com
+        // "Iniciar Parte N") não pode recomeçar quem já está a contar — isso
+        // apagava o tempo entre o 1º apito e a retoma.
         onCourt.forEach((id) => {
-          clockAcc = markOnSince(clockAcc, id, atMs);
+          if (clockAcc.onCourtSince[id] == null) clockAcc = markOnSince(clockAcc, id, atMs);
         });
         if (!started) titularIds = onCourt.slice();
         started = true;

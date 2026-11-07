@@ -168,3 +168,25 @@ describe("replayEvents", () => {
     }
   );
 });
+
+describe("2º apito na mesma parte (jogo reaberto a meio e retomado)", () => {
+  it("quem já estava em quadra não perde o tempo entre o 1º apito e a retoma — ao vivo e no replay", () => {
+    let live = createLiveMatchState(convocados);
+    live = { ...live, onCourt: [p1, p2] };
+    live = resumeOrStart(live, 0);
+    live = doFoul(live, p1, 600_000); // 10:00 de jogo; depois o aparelho fecha
+
+    // Outro aparelho reabre por replay: relógio parado em 10:00, p1/p2 a contar desde 0.
+    let reaberto = replayEvents(convocados, live.events, SUB15);
+    reaberto = resumeOrStart(reaberto, 5_000_000); // "Iniciar Parte 1" (2º kickoff em 10:00)
+    reaberto = endPeriod(reaberto, SUB15, 5_000_000 + 300_000); // +5:00 → fim aos 15:00
+
+    expect(playerCurrentSeconds(reaberto, p1, 0)).toBeCloseTo(900, 3);
+    expect(playerCurrentSeconds(reaberto, p2, 0)).toBeCloseTo(900, 3);
+    expect(reaberto.events.filter((e) => e.type === "kickoff")).toHaveLength(2);
+
+    const replayed = replayEvents(convocados, reaberto.events, SUB15);
+    expect(playerCurrentSeconds(replayed, p1, 0)).toBeCloseTo(900, 3);
+    expect(playerCurrentSeconds(replayed, p2, 0)).toBeCloseTo(900, 3);
+  });
+});

@@ -14,7 +14,7 @@ import {
   resumeOrStart,
   toggleTitular,
 } from "../src/liveMatch";
-import type { MatchFormat } from "../src/types";
+import type { MatchEvent, MatchFormat } from "../src/types";
 
 const F: MatchFormat = { periodCount: 2, periodMinutes: 25, overtimePeriodCount: 0, overtimeMinutes: 0 };
 
@@ -87,3 +87,17 @@ describe("anulação por categoria", () => {
     expect(contarCategoria(s.events, "remate_adv_fora", 2)).toEqual({ period: 0, total: 1 });
   });
 });
+
+describe("anulação de tipo não anulável (linha inserida à mão na API)", () => {
+  it("não tira um golo nosso do placar nem dos eventos efetivos", () => {
+    const golo = { id: "g1", clientEventId: "g1", type: "golo", playerId: "a", ms: 1000, min: 0, sec: 1, period: 1, ts: 1 } as unknown as MatchEvent;
+    const anul = { id: "x1", clientEventId: "x1", type: "anulacao", alvoId: "g1", playerId: null, ms: 2000, min: 0, sec: 2, period: 1, ts: 2 } as unknown as MatchEvent;
+    expect(eventosEfetivos([golo, anul]).map((e) => e.id)).toEqual(["g1"]);
+    expect(recomputeScoreFor([golo, anul]).nos).toBe(1);
+  });
+  it("anulação para um alvo inexistente é ignorada", () => {
+    const anul = { id: "x1", clientEventId: "x1", type: "anulacao", alvoId: "nada", playerId: null, ms: 2000, min: 0, sec: 2, period: 1, ts: 2 } as unknown as MatchEvent;
+    expect(eventosEfetivos([anul])).toEqual([]);
+  });
+});
+

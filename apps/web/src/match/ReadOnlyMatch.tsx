@@ -1,4 +1,5 @@
 import * as engine from "@teambench/engine";
+import { traduzirErro } from "../errorMessage";
 import { useEffect, useState } from "preact/hooks";
 import { supabase } from "../supabaseClient";
 import { isGoalkeeper, posAbbr } from "../team/positions";
@@ -47,7 +48,7 @@ export function ReadOnlyMatch({ matchId, opponent, roster, format, ourLabel }: P
       if (cancelled) return;
       if (error) {
         setStatus("error");
-        setErrorMessage(error.message);
+        setErrorMessage(traduzirErro(error.message));
         return;
       }
       // Exclui eventos de escalação (convocado/titular, specs/007-convocados-sync/)

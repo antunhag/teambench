@@ -1,4 +1,5 @@
 import { useState } from "preact/hooks";
+import { traduzirErro } from "../errorMessage";
 import { supabase } from "../supabaseClient";
 
 interface Props {
@@ -23,7 +24,7 @@ export function ClubSettings({ clubId, clubName, clubShortName, onUpdated }: Pro
     const { error } = await supabase.from("clubs").update({ name, short_name: shortName || null }).eq("id", clubId);
     if (error) {
       setStatus("error");
-      setErrorMessage(error.message);
+      setErrorMessage(traduzirErro(error.message));
       return;
     }
     setStatus("idle");

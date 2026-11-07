@@ -1,4 +1,5 @@
 import type { Session } from "@supabase/supabase-js";
+import { traduzirErro } from "../errorMessage";
 import { useState } from "preact/hooks";
 import { supabase } from "../supabaseClient";
 import { slugify } from "./slug";
@@ -30,7 +31,7 @@ export function CreateTeam({ session, clubId, clubName, onCreated }: Props) {
 
     if (teamError) {
       setStatus("error");
-      setErrorMessage(teamError.message);
+      setErrorMessage(traduzirErro(teamError.message));
       return;
     }
 
@@ -40,7 +41,7 @@ export function CreateTeam({ session, clubId, clubName, onCreated }: Props) {
 
     if (memberError) {
       setStatus("error");
-      setErrorMessage(memberError.message);
+      setErrorMessage(traduzirErro(memberError.message));
       return;
     }
 

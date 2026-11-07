@@ -1,4 +1,5 @@
 import { useState } from "preact/hooks";
+import { traduzirErro } from "../errorMessage";
 import { supabase } from "../supabaseClient";
 
 type Mode = "magic-link" | "password";
@@ -38,7 +39,7 @@ export function Login() {
     });
     if (error) {
       setStatus("error");
-      setErrorMessage(error.message);
+      setErrorMessage(traduzirErro(error.message));
       return;
     }
     setStatus("sent");
@@ -51,7 +52,7 @@ export function Login() {
     const { error } = await supabase.auth.verifyOtp({ email, token: code, type: "email" });
     if (error) {
       setCodeStatus("error");
-      setCodeError(error.message);
+      setCodeError(traduzirErro(error.message));
       return;
     }
     // onAuthStateChange no App cuida do redirecionamento pós-login.
@@ -64,7 +65,7 @@ export function Login() {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) {
       setStatus("error");
-      setErrorMessage(error.message);
+      setErrorMessage(traduzirErro(error.message));
       return;
     }
     // onAuthStateChange no App cuida do redirecionamento pós-login.

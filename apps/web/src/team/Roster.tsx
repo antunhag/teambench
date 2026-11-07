@@ -1,6 +1,6 @@
 import * as engine from "@teambench/engine";
 import { useState } from "preact/hooks";
-import { toErrorMessage } from "../errorMessage";
+import { textoDeErro } from "../errorMessage";
 import { isLegacyAla, LEGACY_ALA, POSITIONS, posAbbr, type Position } from "./positions";
 import { usePlayerAptitudes } from "./usePlayerAptitudes";
 import { usePlayers, type AvailabilityStatus, type PlayerRow } from "./usePlayers";
@@ -192,7 +192,7 @@ export function Roster({ teamId, canManage }: Props) {
       setAddStatus("idle");
     } catch (err) {
       setAddStatus("error");
-      setAddError(toErrorMessage(err));
+      setAddError(textoDeErro(err));
     }
   }
 
@@ -209,7 +209,7 @@ export function Roster({ teamId, canManage }: Props) {
       setImportText("");
       setImportStatus("idle");
     } catch (err) {
-      setImportSummary(`Erro: ${toErrorMessage(err)}`);
+      setImportSummary(`Erro: ${textoDeErro(err)}`);
       setImportStatus("error");
     }
   }
@@ -271,7 +271,7 @@ export function Roster({ teamId, canManage }: Props) {
                         await aptitudes.saveAptitudes(p.id, newBySlot);
                         setAptitudeError("");
                       } catch (err) {
-                        setAptitudeError(toErrorMessage(err));
+                        setAptitudeError(textoDeErro(err));
                       }
                       setEditingId(null);
                     }}

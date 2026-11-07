@@ -88,7 +88,8 @@ export function buildTimelineData(allEvents: MatchEvent[], playersList: Player[]
   const halves: TimelineHalf[] = [];
 
   periodNums.forEach((per) => {
-    const evs = (periods.get(per) || []).slice().sort((a, b) => (a.ms || 0) - (b.ms || 0));
+    // Mesma ordem do replay (ms, depois ts) para lances no mesmo milissegundo.
+    const evs = (periods.get(per) || []).slice().sort((a, b) => (a.ms || 0) - (b.ms || 0) || (a.ts || 0) - (b.ts || 0));
     const maxMs = evs.reduce((m, e) => Math.max(m, e.ms || 0), 0);
     const durSec = periodDur.get(per) || Math.ceil(maxMs / 1000) || 60;
 
@@ -176,7 +177,9 @@ export function buildTimelineData(allEvents: MatchEvent[], playersList: Player[]
         onCourtSet.add(inId);
         // Se entrou durante um pedido de tempo em curso, o intervalo dele só abre
         // no fim_pausa (senão contaria o próprio tempo parado como jogado).
-        if (!paused) openStart.set(inId, sec);
+        // Uma entrada repetida de quem já está a contar não recomeça a contagem
+        // (mesma regra do replay).
+        if (!paused && !openStart.has(inId)) openStart.set(inId, sec);
       } else if (e.type === "cartao_vermelho") {
         cards.push({ sec, playerId: e.playerId!, kind: "vermelho" });
         if (e.playerId && openStart.has(e.playerId)) {
@@ -184,8 +187,10 @@ export function buildTimelineData(allEvents: MatchEvent[], playersList: Player[]
           arr.push([openStart.get(e.playerId)!, sec]);
           intervals.set(e.playerId, arr);
           openStart.delete(e.playerId);
-          onCourtSet.delete(e.playerId);
         }
+        // Expulso durante um pedido de tempo (contagem já fechada): sai da quadra
+        // na mesma, senão o fim_pausa reabria-lhe a contagem.
+        if (e.playerId) onCourtSet.delete(e.playerId);
       } else if (e.type === "cartao_amarelo") {
         cards.push({ sec, playerId: e.playerId!, kind: "amarelo" });
       } else if (e.type === "falta") {
