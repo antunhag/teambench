@@ -25,7 +25,7 @@ continua a ser de `docs/ARCHITECTURE.md` e `docs/SECURITY.md`.
 | A-1 | Alto | **Corrigido** | Jogo reaberto a meio e retomado ("Iniciar Parte N"): perdia-se o tempo entre o 1º apito e a retoma |
 | A-2 | Alto | **Parcialmente corrigido** | Três reconstruções de "quem está em quadra" com regras diferentes (replay, timeline, report) |
 | A-3 | Alto | Proposta (`/speckit-specify`) | Dois aparelhos da mesma conta escrevem o mesmo jogo sem aviso |
-| A-4 / S-L3 | Alto | **Corrigido (specs/010, branch; por publicar)** | Um item recusado bloqueia toda a fila de sincronização, sem aviso |
+| A-4 / S-L3 | Alto | **Corrigido (specs/010; publicado em 2026-11-07)** | Um item recusado bloqueia toda a fila de sincronização, sem aviso |
 | A-5 | Alto (hipótese) | Por verificar no navegador | Sem rede no arranque: plantel vazio e formato de reserva (pode terminar o jogo cedo demais) |
 | A-M1 | Médio | Proposta | "Desfazer" depois de sincronizar: o servidor mantém o evento; regras diferentes entre "Jogo ao vivo" e Consola |
 | A-M2 | Médio | Proposta | O Resumo junta servidor e local sem o filtro de pendentes |
