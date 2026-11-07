@@ -109,6 +109,16 @@ A 0028 foi aplicada em produção pelo dono do projeto em 2026-11-07. Impede int
 novas, mas não remove as que já existissem: o dono do projeto deve rever no painel do Supabase se `club_members` (e `team_members`/
 `team_access_log`) têm linhas inesperadas.
 
+### Convites dependem de "Confirm email" ligado
+
+`accept_invite`, `preview_invite` e `invites_select_own_email` confiam no email do token
+(`auth.jwt()->>'email'`) sem verificar se está confirmado. Isso só é seguro porque o Auth
+do Supabase tem **"Confirm email" ligado** (Authentication → Sign In / Providers → User
+Signups; confirmado em 2026-11-07). **Não desligar.** Se for desligado, qualquer pessoa
+pode criar uma conta com o email de um convidado e aceitar o convite dele. Nesse caso é
+preciso, antes, uma migração que exija `email_confirmed_at is not null` nessas funções
+(auditoria de 2026-11-07, S-H1).
+
 **Lição que vira regra** (Princípio II da constituição): nenhuma policy de RLS
 nova ou alterada é considerada pronta só porque "a migração correu sem erro" —
 precisa de leitura deliberada (via subagente `security-auditor` ou equivalente)

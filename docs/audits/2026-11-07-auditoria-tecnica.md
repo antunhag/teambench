@@ -16,7 +16,7 @@ continua a ser de `docs/ARCHITECTURE.md` e `docs/SECURITY.md`.
 | ID | Gravidade | Estado | Achado |
 |---|---|---|---|
 | S-C1 | Crítico | **Corrigido (0028 aplicada pelo dono em 2026-11-07)** | Qualquer conta autenticada podia inserir-se em `club_members` de qualquer clube, e daí tornar-se `team_admin` de todas as equipas desse clube |
-| S-H1 | Alto (condicional) | Por verificar no painel | Convites aceites com email não confirmado, se o Auth permitir registo sem confirmação |
+| S-H1 | Alto (condicional) | **Não se aplica**: "Confirm email" ligado (confirmado pelo dono em 2026-11-07) | Convites aceites com email não confirmado, se o Auth permitir registo sem confirmação |
 | S-M1 | Médio | **Corrigido** | Uma anulação inserida à mão na API tirava um golo (ou qualquer evento) do placar |
 | S-M2 | Médio | Proposta | A coluna `type` e `payload.type` podem divergir, o que esconde a linha do editor de registo |
 | S-M3 | Médio | Decisão de produto | `correcao:true` é declarado pelo cliente; a correção apaga o valor antigo (sem histórico) |
