@@ -105,7 +105,8 @@ e equipas de um clube alheio. A app não muda. Revista pelo `security-auditor` (
 ressalvas, todas incorporadas). Teste: `packages/db-tests/test/clubMembersSelfInsert.test.ts`
 (RLS avaliada com papel `authenticated`).
 
-A 0028 foi aplicada em produção pelo dono do projeto em 2026-11-07. Impede intrusões
+A 0028 foi aplicada em produção pelo dono do projeto em 2026-11-07. A verificação de
+intrusões anteriores (Admins de clube sem papel de `team_admin` no clube) veio vazia. Impede intrusões
 novas, mas não remove as que já existissem: o dono do projeto deve rever no painel do Supabase se `club_members` (e `team_members`/
 `team_access_log`) têm linhas inesperadas.
 

@@ -43,6 +43,8 @@ continua a ser de `docs/ARCHITECTURE.md` e `docs/SECURITY.md`.
   - Teste com RLS real (papel `authenticated`): `packages/db-tests/test/clubMembersSelfInsert.test.ts`.
   - Passou por uma segunda revisão do `security-auditor` (ver a secção seguinte).
   - Aplicada em produção pelo dono do projeto em 2026-11-07.
+    A consulta de verificação (Admins de clube que não são `team_admin` de nenhuma equipa do
+    clube) veio vazia: não há sinais de intrusão anterior.
 - **S-M1:** `eventosEfetivos` (em `annul.ts`) só aplica uma anulação a um tipo anulável ou a outra
   anulação. Teste em `annul.test.ts`.
 - **A-1:** `resumeOrStart` e `replayEvents` só iniciam a contagem de quem ainda não está a contar.
