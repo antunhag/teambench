@@ -59,6 +59,9 @@ export function classificarRecusa(err: unknown): Classificacao {
   if (msg.includes("correcao") || msg.includes("match_events: update")) return "alterado";
   if (code === "42501" || msg.includes("row-level security") || msg.includes("permission denied")) return "sem_permissao";
   if (code === "23503" || msg.includes("foreign key")) return "nao_existe";
+  // Erros transitórios do Postgres (ligação, serialização/deadlock, recursos,
+  // estado do operador, sistema, internos): não são do lance.
+  if (/^(08|40|53|54|55|57|58|XX)/.test(code)) return "geral";
   if (/^[0-9A-Z]{5}$/.test(code)) return "outro";
   return "geral";
 }

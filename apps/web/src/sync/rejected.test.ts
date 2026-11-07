@@ -99,9 +99,11 @@ describe("flush com um lance recusado", () => {
 
   it("depois de posto de lado, os lances novos vão num único envio", async () => {
     enqueue("A", item({ client_event_id: "mau" }));
+    enqueue("A", item({ client_event_id: "bom" }));
     const srv = servidor((id) => (id === "mau" ? RLS : null));
     const f = createOutboxFlusher("A", srv.client);
     await f.flush();
+    expect(recusados("A")).toEqual(["mau"]);
     enqueue("A", item({ client_event_id: "novo1" }));
     enqueue("A", item({ client_event_id: "novo2" }));
     srv.lotes.length = 0;
@@ -180,7 +182,7 @@ describe("nunca se perde um lance (SC-002)", () => {
 
   it("isolado por conta: os recusados de A não aparecem a B", async () => {
     enqueue("A", item({ client_event_id: "mau" }));
-    await createOutboxFlusher("A", servidor(() => RLS).client).flush();
+    await createOutboxFlusher("A", servidor(() => FK).client).flush();
     expect(recusados("A")).toEqual(["mau"]);
     expect(recusados("B")).toEqual([]);
   });
@@ -190,7 +192,7 @@ describe("voltar a tentar os recusados", () => {
   it("aceite numa nova tentativa: sai da lista", async () => {
     enqueue("A", item({ client_event_id: "mau" }));
     let permissao = false;
-    const srv = servidor(() => (permissao ? null : RLS));
+    const srv = servidor(() => (permissao ? null : FK));
     const f = createOutboxFlusher("A", srv.client);
     await f.flush();
     expect(recusados("A")).toEqual(["mau"]);
@@ -202,7 +204,7 @@ describe("voltar a tentar os recusados", () => {
 
   it("continua recusado: atualiza o motivo, não apaga", async () => {
     enqueue("A", item({ client_event_id: "mau" }));
-    let erro: unknown = RLS;
+    let erro: unknown = GUARDA;
     const f = createOutboxFlusher("A", servidor(() => erro).client);
     await f.flush();
     erro = FK;
@@ -269,3 +271,106 @@ describe("textoRecusados (contrato)", () => {
     expect(t.linhas).toEqual(["2 — o jogo ou o atleta já não existe", "1 — o servidor recusou o lance (detalhe: check [23514])"]);
   });
 });
+
+describe("revisão: sessão, cancelamento e erros transitórios (FR-005)", () => {
+  it("todos 'sem permissão' e nenhum aceite = sessão (anónima/outra conta): nada é posto de lado", async () => {
+    for (const id of ["e1", "e2", "e3"]) enqueue("A", item({ client_event_id: id }));
+    const r = await createOutboxFlusher("A", servidor(() => RLS).client).flush();
+    expect(r).toEqual({ status: "rejected" });
+    expect(ids("A")).toEqual(["e1", "e2", "e3"]);
+    expect(recusados("A")).toEqual([]);
+  });
+
+  it("status 401 da resposta = recusa geral, mesmo com código 42501", () => {
+    expect(classificarRecusa({ ...RLS, status: 401 })).toBe("geral");
+  });
+
+  it("o status HTTP da resposta chega à classificação", async () => {
+    enqueue("A", item({ client_event_id: "e1" }));
+    enqueue("A", item({ client_event_id: "e2" }));
+    const client: OutboxSupabaseClient = {
+      from() {
+        return {
+          select: () => ({ limit: () => Promise.resolve({ error: null }) }),
+          upsert: () => Promise.resolve({ error: { code: "23503", message: "fk" }, status: 401 }),
+        };
+      },
+    };
+    expect(await createOutboxFlusher("A", client).flush()).toEqual({ status: "rejected" });
+    expect(recusados("A")).toEqual([]);
+  });
+
+  it("erros transitórios do Postgres (deadlock, ligações, shutdown) são gerais", () => {
+    for (const code of ["40001", "40P01", "53300", "57P01", "08006", "XX000"]) {
+      expect(classificarRecusa({ code, message: "x" })).toBe("geral");
+    }
+  });
+
+  it("cancelamento (troca de conta) a meio do envio lance a lance: pára antes do pedido seguinte", async () => {
+    for (const id of ["mau", "e1", "e2"]) enqueue("A", item({ client_event_id: id }));
+    let cancelado = false;
+    const srv = servidor((id) => {
+      if (id === "mau") {
+        return GUARDA;
+      }
+      cancelado = true; // a conta muda depois do primeiro aceite
+      return null;
+    });
+    const r = await createOutboxFlusher("A", srv.client, () => cancelado).flush();
+    // e1 é aceite no pedido em que a conta muda; o ciclo pára antes do e2.
+    expect(r).toEqual({ status: "partial", synced: 1, rejected: 1, interrupted: true });
+    expect(ids("A")).toEqual(["e2"]);
+    expect(recusados("A")).toEqual(["mau"]);
+  });
+
+  it("controlador: sem rede ao abrir, a tentativa dos recusados não se gasta", async () => {
+    enqueue("A", item({ client_event_id: "mau" }));
+    await createOutboxFlusher("A", servidor(() => GUARDA).client).flush();
+    let rede = false;
+    let tentativas = 0;
+    const client: OutboxSupabaseClient = {
+      from() {
+        return {
+          select: () => ({ limit: () => Promise.resolve({ error: rede ? null : REDE }) }),
+          upsert: () => {
+            tentativas++;
+            return Promise.resolve({ error: GUARDA });
+          },
+        };
+      },
+    };
+    const t = 1_000_000;
+    const c = createOutboxSyncController("A", client, () => {}, () => t);
+    await c.runFlush(); // sem rede
+    expect(tentativas).toBe(0);
+    rede = true;
+    await c.runFlush(); // a rede voltou: tenta logo, sem esperar 5 min
+    expect(tentativas).toBe(1);
+  });
+
+  it("controlador: 'Tentar outra vez' durante um envio em curso aplica-se no fim dele", async () => {
+    enqueue("A", item({ client_event_id: "mau" }));
+    await createOutboxFlusher("A", servidor(() => GUARDA).client).flush();
+    let tentativas = 0;
+    let libertar!: () => void;
+    const bloqueio = new Promise<void>((r) => (libertar = r));
+    const client: OutboxSupabaseClient = {
+      from() {
+        return {
+          select: () => ({ limit: () => bloqueio.then(() => ({ error: null })) }),
+          upsert: () => {
+            tentativas++;
+            return Promise.resolve({ error: GUARDA });
+          },
+        };
+      },
+    };
+    const c = createOutboxSyncController("A", client, () => {}, () => 1);
+    const primeiro = c.runFlush();
+    await c.runFlush({ forceRejected: true }); // ignorado agora, guardado para depois
+    libertar();
+    await primeiro;
+    expect(tentativas).toBe(2); // tentativa ao arrancar + a do botão
+  });
+});
+

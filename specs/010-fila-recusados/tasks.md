@@ -25,12 +25,21 @@ Trabalho na branch `claude/fervent-fermi-q3zk57`. Sem migrações. Testes sem re
 
 ## Phase 4: US3, uma recusa geral não põe nada de lado (P1)
 
-- [x] T009 [US3] Testes em `apps/web/src/sync/rejected.test.ts`, cobrindo os 7 cenários do quickstart. Os 19 testes passam
+- [x] T009 [US3] Testes em `apps/web/src/sync/rejected.test.ts`, cobrindo os 7 cenários do quickstart e os casos da revisão. Os 26 testes passam
 
 ## Phase 5: Fecho
 
 - [x] T010 Atualizar `docs/ARCHITECTURE.md` com a secção "Fila de sincronização e lances recusados" (Princípio VI)
 - [x] T011 Verificar o ecrã num ambiente offline com Playwright e um Supabase simulado, em 4 medidas: tablet deitado e em pé, iPhone na vertical e na horizontal. Sem scroll horizontal, sem erros, e o botão "Tentar outra vez" funciona
-- [ ] T012 Revisão do `code-reviewer`, porque o diff mexe na sincronização. Corrigir os achados
-- [ ] T013 Portões de qualidade: `npm test`, typecheck dos 3 pacotes e build. Depois, commit e push para a branch
+- [x] T012 Revisão do `code-reviewer`, porque o diff mexe na sincronização. Corrigidos:
+  - B1: status 401 da resposta, cancelamento a meio do ciclo, "todos sem permissão sem nenhum aceite" tratado como sessão;
+  - R1: retrato dos recusados antes da leitura;
+  - R2: prazo de 15 s por pedido;
+  - R3: erros transitórios do Postgres tratados como gerais;
+  - R4: uma tentativa sem rede não conta;
+  - O1: toque em "Tentar outra vez" durante um envio em curso aplicado no fim;
+  - O5: acessibilidade da pastilha.
+
+  O4 fica para uma entrega futura: dispensar recusados permanentes, com confirmação
+- [x] T013 Portões de qualidade: `npm test`, typecheck dos 3 pacotes e build. Depois, commit e push para a branch
 - [ ] T014 Verificação manual do utilizador (quickstart "Manual"). A publicação em `main` é decisão do utilizador

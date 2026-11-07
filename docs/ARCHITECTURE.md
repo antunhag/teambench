@@ -197,15 +197,27 @@ upsert (idempotente por `client_event_id`). Desde 2026-11-07:
     volta a ser tentado depois;
   - **do lance** (guarda 0026 → "alterado", `42501` → "sem_permissao", `23503` →
     "nao_existe", outro SQLSTATE → "outro"): o envio passa a ser lance a lance.
+- O código HTTP da resposta entra na classificação (o `PostgrestError` não o traz): um
+  401 (pedido sem sessão válida) é sempre geral. Os erros transitórios do Postgres (`08`,
+  `40`, `53`, `54`, `55`, `57`, `58`, `XX`) também são gerais. Cada pedido tem um prazo de
+  15 s; um pedido pendurado conta como geral.
+- Se no envio lance a lance **nenhum** lance for aceite e **todos** forem "sem permissão",
+  o problema é quase de certeza a sessão (pedido anónimo, outra conta) e não os lances:
+  nada é posto de lado. Uma troca de conta (`cancel()` do controlador) pára o ciclo antes
+  do pedido seguinte.
 - No envio lance a lance, os aceites saem da fila e os recusados passam para
   `teambench.outbox.<ownerId>.recusados` (`moveToRejected`), deixando de bloquear os
   outros. Uma recusa geral a meio pára o ciclo e deixa o resto na fila. Escreve-se primeiro
   nos recusados e só depois se remove da fila: uma falha a meio duplica, nunca perde. O
   item guardado é exatamente o da fila (nunca recalculado).
 - Os recusados voltam a ser tentados (`retryRejected`) no arranque do controlador, a cada
-  5 min e no botão "Tentar outra vez"; só saem com uma resposta positiva do servidor. Nunca
-  são apagados pela app.
-- `useLiveMatch.checkRemote` conta-os como pendentes: ler o servidor nunca os esconde.
+  5 min e no botão "Tentar outra vez". Uma tentativa sem rede não conta, e um toque no botão
+  durante um envio em curso é aplicado no fim dele. Só saem com uma resposta positiva do
+  servidor e nunca são apagados pela app. Os recusados "alterado" e "nao_existe" nunca vão
+  ser aceites (invariante da fila e guarda 0026), por isso o aviso fica até haver uma forma
+  de os dispensar com confirmação (entrega futura).
+- `useLiveMatch.checkRemote` conta-os como pendentes, com um retrato dos recusados antes e
+  depois da leitura: ler o servidor nunca os esconde.
   Uma lista ilegível mantém todos os lances locais.
 - Aviso (`sync/RejectedNotice.tsx`) no ecrã principal e no "Jogo ao vivo"; na Consola, uma
   pastilha "⚠ N recusados" que abre o aviso. É mostrada também no iPhone, onde a pastilha

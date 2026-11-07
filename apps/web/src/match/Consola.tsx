@@ -393,8 +393,18 @@ export function Consola({ live, roster, opponent, onViewSummary, ourLabel, sync,
       </div>
       {lastLine}
       {sync.rejectedCount > 0 || sync.rejectedCorrupted ? (
-        <button type="button" className="cv-pill rejected" onClick={() => setSheet({ kind: "sync" })}>
-          ⚠ {sync.rejectedCorrupted ? "recusados ilegíveis" : `${sync.rejectedCount} recusado${sync.rejectedCount === 1 ? "" : "s"}`}
+        <button
+          type="button"
+          className="cv-pill rejected"
+          onClick={() => setSheet({ kind: "sync" })}
+          aria-label={
+            sync.rejectedCorrupted
+              ? "Lista de lances recusados ilegível, ver detalhes"
+              : `${sync.rejectedCount} ${sync.rejectedCount === 1 ? "lance recusado" : "lances recusados"} pelo servidor, ver detalhes`
+          }
+        >
+          <span aria-hidden="true">⚠ </span>
+          {sync.rejectedCorrupted ? "recusados ilegíveis" : `${sync.rejectedCount} recusado${sync.rejectedCount === 1 ? "" : "s"}`}
         </button>
       ) : (
         <span className={`cv-pill${sync.pending > 0 ? " pending" : ""}`}>{syncText}</span>

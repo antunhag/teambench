@@ -136,6 +136,10 @@ export function useLiveMatch(matchId: string, teamId: string, ownerId: string, f
       // retrato desapareceria do estado local (achado de revisão: o fim de
       // jogo a sumir "reabria" o jogo neste aparelho).
       const filaAntes = peekAll(ownerId);
+      // Retrato dos recusados ANTES da leitura: um recusado aceite pelo
+      // servidor durante a leitura (retryRejected) não está na resposta nem
+      // nos recusados depois — sem isto, desaparecia do estado local.
+      const recusadosAntes = peekRejected(ownerId);
       const query = supabase
         .from("match_events")
         .select("payload")
@@ -174,12 +178,14 @@ export function useLiveMatch(matchId: string, teamId: string, ownerId: string, f
             filaDepois.status === "ok" &&
             quarentena.status === "ok" &&
             quarentena.items.length === 0 &&
-            recusados.status === "ok"
+            recusados.status === "ok" &&
+            recusadosAntes.status === "ok"
           ) {
             pendentes = new Set([
               ...filaAntes.items.map((i) => i.client_event_id),
               ...filaDepois.items.map((i) => i.client_event_id),
               ...recusados.items.map((r) => r.item.client_event_id),
+              ...recusadosAntes.items.map((r) => r.item.client_event_id),
             ]);
             try {
               const aEsperaDeZona = localStorage.getItem(PENDING_PREFIX + matchId);

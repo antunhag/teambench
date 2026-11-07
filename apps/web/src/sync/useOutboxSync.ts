@@ -107,7 +107,9 @@ export function createOutboxSyncController(
   // null = ainda não tentou nesta execução: o primeiro runFlush (abrir a app,
   // trocar de conta) tenta logo os recusados.
   let lastRejectedRetry: number | null = null;
-  const flusher = createOutboxFlusher(ownerId, client);
+  // "Tentar outra vez" tocado durante um envio em curso: aplica-se no fim dele.
+  let pendingForce = false;
+  const flusher = createOutboxFlusher(ownerId, client, () => cancelled);
 
   function publish(syncing: boolean) {
     if (cancelled) return; // requisito 3: nunca publica depois de invalidada
@@ -118,15 +120,26 @@ export function createOutboxSyncController(
     if (cancelled) return; // requisito 3: nunca inicia nova etapa já invalidada
     // Um envio de cada vez por execução: o envio lance a lance (specs/010) pode
     // demorar mais do que o intervalo de 8 s.
-    if (running) return;
+    if (running) {
+      if (opts?.forceRejected) pendingForce = true;
+      return;
+    }
     running = true;
     publish(true);
     try {
-      await flusher.flush();
-      const t = now();
-      if (!cancelled && (opts?.forceRejected || lastRejectedRetry === null || t - lastRejectedRetry >= REJECTED_RETRY_MS)) {
-        lastRejectedRetry = t;
-        await flusher.retryRejected();
+      let force = !!opts?.forceRejected;
+      for (;;) {
+        const f = await flusher.flush();
+        // Sem rede/sessão: não gasta a tentativa dos recusados (FR-006, "ao abrir").
+        const semLigacao = f.status === "offline" || f.status === "rejected" || f.status === "error";
+        const t = now();
+        if (!cancelled && !semLigacao && (force || lastRejectedRetry === null || t - lastRejectedRetry >= REJECTED_RETRY_MS)) {
+          const r = await flusher.retryRejected();
+          if (r.status !== "offline" && r.status !== "error") lastRejectedRetry = t;
+        }
+        if (cancelled || !pendingForce) break;
+        pendingForce = false;
+        force = true;
       }
     } finally {
       running = false;

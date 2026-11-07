@@ -34,10 +34,12 @@ import { classificarRecusa, detalheDoErro } from "./rejection";
 
 // Superfície mínima do cliente Supabase de que este módulo depende —
 // permite injetar um cliente simulado nos testes sem montar o SDK inteiro.
+// `status` é o código HTTP da resposta (o PostgrestError não o traz): um 401
+// significa pedido sem sessão válida — recusa geral, nunca "sem permissão".
 export interface OutboxSupabaseClient {
   from(table: string): {
     select(columns: string): { limit(n: number): PromiseLike<{ error: unknown }> };
-    upsert(items: OutboxItem[], opts: { onConflict: string }): PromiseLike<{ error: unknown }>;
+    upsert(items: OutboxItem[], opts: { onConflict: string }): PromiseLike<{ error: unknown; status?: number }>;
   };
 }
 
@@ -47,7 +49,7 @@ export type FlushResult =
   | { status: "synced"; count: number }
   // Lote recusado e depois enviado lance a lance (specs/010): `synced` aceites,
   // `rejected` postos de lado como recusados; `interrupted` = uma recusa geral
-  // parou o ciclo e o resto ficou na fila, por enviar.
+  // (ou o cancelamento) parou o ciclo e o resto ficou na fila, por enviar.
   | { status: "partial"; synced: number; rejected: number; interrupted: boolean }
   // Lote recusado por um motivo geral (rede, sessão, servidor): nada mudou.
   | { status: "rejected" }
@@ -67,7 +69,35 @@ export interface OutboxFlusher {
   retryRejected(): Promise<RetryResult>;
 }
 
-export function createOutboxFlusher(ownerId: string, client: OutboxSupabaseClient): OutboxFlusher {
+/** Prazo de cada pedido: um fetch pendurado (wifi de pavilhão meio aberta) conta como recusa geral. */
+export const REQUEST_TIMEOUT_MS = 15_000;
+
+type Resposta = { error: unknown; status?: number };
+
+function comPrazo<T extends Resposta>(p: PromiseLike<T>): Promise<Resposta> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const prazo = new Promise<Resposta>((resolve) => {
+    timer = setTimeout(() => resolve({ error: { message: "timeout: o servidor não respondeu" } }), REQUEST_TIMEOUT_MS);
+  });
+  return Promise.race([Promise.resolve(p), prazo]).finally(() => clearTimeout(timer));
+}
+
+/** Junta o código HTTP da resposta ao erro, para a classificação (ver OutboxSupabaseClient). */
+function erroComStatus(r: Resposta): unknown {
+  return r.error && typeof r.error === "object" && r.status !== undefined ? { ...(r.error as object), status: r.status } : r.error;
+}
+
+export function createOutboxFlusher(
+  ownerId: string,
+  client: OutboxSupabaseClient,
+  // O controlador (useOutboxSync) cancela numa troca de conta/saída: o ciclo
+  // lance a lance pára antes do pedido seguinte, que já sairia com outra
+  // sessão (e receberia "sem permissão" para lances que não o são).
+  isCancelled: () => boolean = () => false
+): OutboxFlusher {
+  const ping = () => comPrazo(client.from("teams").select("id").limit(1));
+  const enviar = (items: OutboxItem[]) => comPrazo(client.from("match_events").upsert(items, { onConflict: "client_event_id" }));
+
   async function flush(): Promise<FlushResult> {
     try {
       const state = peekAll(ownerId);
@@ -81,13 +111,12 @@ export function createOutboxFlusher(ownerId: string, client: OutboxSupabaseClien
 
       // navigator.onLine mente em wifi sem internet de verdade — confirma com
       // um pedido real e barato antes de tentar enviar a fila toda.
-      const ping = await client.from("teams").select("id").limit(1);
-      if (ping.error) return { status: "offline" };
+      if ((await ping()).error) return { status: "offline" };
 
-      const { error } = await client.from("match_events").upsert(items, { onConflict: "client_event_id" });
-      if (error) {
+      const r = await enviar(items);
+      if (r.error) {
         // Recusa geral: não é culpa de nenhum lance — nada é posto de lado.
-        if (classificarRecusa(error) === "geral") return { status: "rejected" };
+        if (classificarRecusa(erroComStatus(r)) === "geral") return { status: "rejected" };
         return await oneByOne(items);
       }
 
@@ -112,23 +141,41 @@ export function createOutboxFlusher(ownerId: string, client: OutboxSupabaseClien
   }
 
   // Lote recusado por um motivo do lance: isola os culpados enviando um a um,
-  // pela ordem da fila. Cada aceite sai logo da fila; cada recusado do lance
-  // vai para a lista de recusados; uma recusa geral pára e deixa o resto.
+  // pela ordem da fila. Cada aceite sai logo da fila; uma recusa geral (ou o
+  // cancelamento) pára e deixa o resto. Os recusados só passam para a lista
+  // no fim: se NENHUM lance foi aceite e TODOS foram "sem permissão", é quase
+  // de certeza a sessão (pedido anónimo, outra conta) e não os lances —
+  // conta como recusa geral e nada é posto de lado (FR-005).
   async function oneByOne(items: OutboxItem[]): Promise<FlushResult> {
     let synced = 0;
-    let rejected = 0;
+    let interrupted = false;
+    const recusas: { item: OutboxItem; motivo: Exclude<ReturnType<typeof classificarRecusa>, "geral">; detalhe: string }[] = [];
     for (const it of items) {
-      const { error } = await client.from("match_events").upsert([it], { onConflict: "client_event_id" });
-      if (!error) {
+      if (isCancelled()) {
+        interrupted = true;
+        break;
+      }
+      const r = await enviar([it]);
+      if (!r.error) {
         removeByClientEventIds(ownerId, [it.client_event_id]);
         synced++;
         continue;
       }
-      const c = classificarRecusa(error);
-      if (c === "geral") return { status: "partial", synced, rejected, interrupted: true };
-      if (moveToRejected(ownerId, { item: it, motivo: c, detalhe: detalheDoErro(error), tentadoEm: Date.now() })) rejected++;
+      const c = classificarRecusa(erroComStatus(r));
+      if (c === "geral") {
+        interrupted = true;
+        break;
+      }
+      recusas.push({ item: it, motivo: c, detalhe: detalheDoErro(r.error) });
     }
-    return { status: "partial", synced, rejected, interrupted: false };
+    const pareceSessao = synced === 0 && recusas.length > 0 && recusas.every((x) => x.motivo === "sem_permissao");
+    if (pareceSessao) return { status: "rejected" };
+    let rejected = 0;
+    const agora = Date.now();
+    for (const x of recusas) {
+      if (moveToRejected(ownerId, { item: x.item, motivo: x.motivo, detalhe: x.detalhe, tentadoEm: agora })) rejected++;
+    }
+    return { status: "partial", synced, rejected, interrupted };
   }
 
   async function retryRejected(): Promise<RetryResult> {
@@ -147,20 +194,20 @@ export function createOutboxFlusher(ownerId: string, client: OutboxSupabaseClien
       if (after.status !== "ok") return { status: "corrupted" };
       if (after.items.length === 0) return { status: "empty" };
 
-      const ping = await client.from("teams").select("id").limit(1);
-      if (ping.error) return { status: "offline" };
+      if ((await ping()).error) return { status: "offline" };
 
       let accepted = 0;
-      for (const r of after.items) {
-        const { error } = await client.from("match_events").upsert([r.item], { onConflict: "client_event_id" });
-        if (!error) {
-          removeRejected(ownerId, [r.item.client_event_id]);
+      for (const rec of after.items) {
+        if (isCancelled()) return { status: "retried", accepted, stillRejected: after.items.length - accepted, interrupted: true };
+        const r = await enviar([rec.item]);
+        if (!r.error) {
+          removeRejected(ownerId, [rec.item.client_event_id]);
           accepted++;
           continue;
         }
-        const c = classificarRecusa(error);
+        const c = classificarRecusa(erroComStatus(r));
         if (c === "geral") return { status: "retried", accepted, stillRejected: after.items.length - accepted, interrupted: true };
-        updateRejected(ownerId, r.item.client_event_id, c, detalheDoErro(error), Date.now());
+        updateRejected(ownerId, rec.item.client_event_id, c, detalheDoErro(r.error), Date.now());
       }
       return { status: "retried", accepted, stillRejected: after.items.length - accepted, interrupted: false };
     } catch {

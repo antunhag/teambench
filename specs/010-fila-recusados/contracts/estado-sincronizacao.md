@@ -23,7 +23,7 @@ pastilha de sincronização da Consola.
 
 ## Consola (pastilha no topo)
 
-- Com recusados: "⚠ N recusado(s)", na cor de aviso.
+- Com recusados: "⚠ N recusado(s)" a vermelho, para se distinguir do âmbar de "por sincronizar". Visível também no iPhone. A área de toque tem 44 px ou mais, e o leitor de ecrã lê "N lances recusados pelo servidor, ver detalhes".
 - Tocar na pastilha mostra o texto completo e o botão.
 - Sem recusados: igual a hoje.
 
